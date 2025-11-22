@@ -844,7 +844,7 @@ let get_predeclared_ind_any n i =
     (fun (indk, indh) ->
       get_predeclared_ind indh n i |> Option.map (fun x -> (indk, indh, x)))
     [
-      (Eq, [ "eq" ]);
+      (Eq, [ "Eq" ]);
       (Nat, [ "Nat" ]);
       (Nat_le, [ "Nat"; "le" ]);
       (Or, [ "Or" ]);
@@ -1687,7 +1687,7 @@ let squashify n ind =
   let s = squashify n ind in
   squash_info := N.Map.add n s !squash_info
 
-let quot_name = N.append N.anon "quot"
+let quot_name = N.append N.anon "Quot"
 
 (* pairs of (name * number of univs) *)
 let quots = [ ("", 1); ("mk", 1); ("lift", 2); ("ind", 1) ]
@@ -1716,7 +1716,7 @@ let declare_quot () =
   Feedback.msg_info Pp.(str "quot registered")
 
 let declare_quot () =
-  if Rocqlib.has_ref "lean.quot" then declare_quot () else raise MissingQuot
+  if Rocqlib.has_ref "lean.Quot" then declare_quot () else raise MissingQuot
 
 let do_bk = function
   | "#BD" -> NotImplicit
