@@ -16,7 +16,7 @@ run-test: [make "-j%{jobs}%" "test"]
 install: [make "install"]
 depends: [
   "ocaml" {>= "4.09.0"}
-  "rocq-core" {= "dev"}
+  "rocq-core"
   "rocq-stdlib"
 ]
 
