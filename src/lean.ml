@@ -219,7 +219,7 @@ let lean_scheme env ~dep mind u s =
 
 let with_unsafe_univs f () =
   let flags = Global.typing_flags () in
-  Global.set_typing_flags { flags with check_universes = false };
+  Global.set_typing_flags { flags with check_eliminations = false };
   try
     let v = f () in
     Global.set_typing_flags flags;
