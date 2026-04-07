@@ -687,6 +687,24 @@ let get_predeclared_ind indn n i =
     | exception _ -> None
   else None
 
+(** Like [get_predeclared_ind] but looks for an inductive predeclared as a
+    definition (using a ".cumul" suffix on the registration). Returns the
+    ConstRef of the predeclared definition. *)
+let get_predeclared_ind_as_def indn n i =
+  if N.equal n (N.append_list N.anon indn) then
+    let ind_name = name_for_core n i in
+    let reg = "lean." ^ Id.to_string ind_name ^ ".cumul" in
+    match Rocqlib.lib_ref reg with
+    | ConstRef c -> Some (ind_name, c)
+    | _ ->
+      CErrors.user_err
+        Pp.(
+          str "Bad registration for "
+          ++ str reg
+          ++ str " expected a constant.")
+    | exception _ -> None
+  else None
+
 let get_predeclared_def defn n i =
   if N.equal n (N.append_list N.anon defn) then
     let def_name = name_for_core n i in
@@ -702,6 +720,7 @@ let get_predeclared_def defn n i =
 
 type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | Char
 type predeclared_def_kind = UInt32_size | Nat_isValidChar
+type predeclared_ind_as_def_kind = ULift_cumul
 
 let get_predeclared_cnames (k : predeclared_ind_kind) n =
   match k with
@@ -736,6 +755,22 @@ let get_predeclared_ind_some n i =
   | _ :: _ :: _ ->
     CErrors.user_err
       Pp.(str "Multiple predeclared inductive types for " ++ N.pp n)
+
+let get_predeclared_ind_as_def_any n i =
+  List.filter_map
+    (fun (k, h) ->
+      get_predeclared_ind_as_def h n i |> Option.map (fun x -> (k, h, x)))
+    [
+      (ULift_cumul, [ "ULift" ]);
+    ]
+
+let get_predeclared_ind_as_def_some n i =
+  match get_predeclared_ind_as_def_any n i with
+  | [] -> None
+  | [ x ] -> Some x
+  | _ :: _ :: _ ->
+    CErrors.user_err
+      Pp.(str "Multiple predeclared ind-as-def constants for " ++ N.pp n)
 
 let get_predeclared_def_any n i =
   List.filter_map
@@ -1011,32 +1046,40 @@ let rec to_constr =
         with_env_evm env uconv
           (fun env evd () ->
             let tc = Retyping.get_type_of env evd (EConstr.of_constr c) in
-            let tc, args =
-              EConstr.decompose_app evd (Reductionops.whd_all env evd tc)
+            let tc =
+              Reductionops.whd_all env evd tc
             in
-            let ((ind, _) as indu) =
-              Constr.destInd (EConstr.Unsafe.to_constr tc)
-            in
-            let mib, mip = Inductive.lookup_mind_specif (Global.env()) ind in
-            begin
-              match mip.mind_record with
-              | PrimRecord infos ->
-                let p, r =
-                  Declareops.inductive_make_projection ind mib ~proj_arg:field
-                in
-                (* unfolded?? *)
-                mkProj (Projection.make p false, r, c)
-              | NotRecord | FakeRecord ->
-                if
-                  mip.mind_relevance
-                  == EConstr.Unsafe.to_relevance EConstr.ERelevance.irrelevant
-                then
-                  CErrors.user_err
-                    Pp.(str "TODO projection for non record Prop inductive")
-                else
-                  CErrors.user_err
-                    Pp.(str "cannot project non record " ++ N.pp lean_ind)
-            end)
+            let tc_head, args = EConstr.decompose_app evd tc in
+            match EConstr.kind evd tc_head with
+            | Constr.Ind _ ->
+              (* Standard inductive: use normal projection *)
+              let ((ind, _) as indu) =
+                Constr.destInd (EConstr.Unsafe.to_constr tc_head)
+              in
+              let mib, mip = Inductive.lookup_mind_specif (Global.env()) ind in
+              begin
+                match mip.mind_record with
+                | PrimRecord infos ->
+                  let p, r =
+                    Declareops.inductive_make_projection ind mib ~proj_arg:field
+                  in
+                  (* unfolded?? *)
+                  mkProj (Projection.make p false, r, c)
+                | NotRecord | FakeRecord ->
+                  if
+                    mip.mind_relevance
+                    == EConstr.Unsafe.to_relevance EConstr.ERelevance.irrelevant
+                  then
+                    CErrors.user_err
+                      Pp.(str "TODO projection for non record Prop inductive")
+                  else
+                    CErrors.user_err
+                      Pp.(str "cannot project non record " ++ N.pp lean_ind)
+              end
+            | _ ->
+              (* Type is not an inductive (e.g., transparent cumulative ULift).
+                 Projection is the identity. *)
+              c)
           ()
       in
       ret c
@@ -1208,6 +1251,29 @@ and to_params uconv params =
   (acc, List.rev params)
 
 and declare_ind { name = n; params; ty; ctors; univs } i =
+  (* Handle inductives predeclared as definitions (e.g., ULift with cumulativity).
+     We check if there's a cumul registration for this specific instance. *)
+  match get_predeclared_ind_as_def_some n i with
+  | Some (ULift_cumul, _, _) ->
+    let def_name = name_for_core n i in
+    let cumul_reg nm = "lean." ^ Id.to_string (name_for_core nm i) ^ ".cumul" in
+    Feedback.msg_info Pp.(Id.print def_name ++ str " is predeclared (cumulative)");
+    let ulift_ref = Rocqlib.lib_ref (cumul_reg n) in
+    let inst = { ref = ulift_ref; algs = [] } in
+    add_declared n i inst;
+    (* Register ULift.up constructor *)
+    let cname = N.append n "up" in
+    add_declared cname i { ref = Rocqlib.lib_ref (cumul_reg cname); algs = [] };
+    (* Register ULift.down *)
+    let dname = N.append n "down" in
+    add_declared dname i { ref = Rocqlib.lib_ref (cumul_reg dname); algs = [] };
+    (* Register eliminator (Type scheme at j=2*i, SProp scheme at j=2*i+1) *)
+    let nrec = N.append n "rec" in
+    let rec_base = cumul_reg nrec in
+    add_declared nrec (2 * i) { ref = Rocqlib.lib_ref rec_base; algs = [] };
+    add_declared nrec ((2 * i) + 1) { ref = Rocqlib.lib_ref (rec_base ^ ".ind"); algs = [] };
+    inst
+  | None ->
   let mind, algs, ind_name, cnames, univs, squashy =
     match get_predeclared_ind_some n i with
     | Some (Eq, _, (ind_name, mind)) ->
