@@ -32,6 +32,6 @@ Print Scratch_useUp.
 Check Scratch_useUp Nat Nat_zero.
 
 (** Pointwise reduction: [ULift_up_cumul] is the identity so
-    [Scratch_useUp α x] reduces to [x]. *)
-Check fun (α : Type) (x : α) =>
-        eq_refl (Scratch_useUp α x) : Scratch_useUp α x = x.
+    [Scratch_useUp α x] is convertible with [x]. *)
+Goal forall (α : Type) (x : α), Scratch_useUp α x = x.
+Proof. reflexivity. Qed.
