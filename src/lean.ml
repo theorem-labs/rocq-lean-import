@@ -1258,20 +1258,35 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
     let def_name = name_for_core n i in
     let cumul_reg nm = "lean." ^ Id.to_string (name_for_core nm i) ^ ".cumul" in
     Feedback.msg_info Pp.(Id.print def_name ++ str " is predeclared (cumulative)");
+    (* The Rocq cumul definitions take four universes [r s s1 rs1] where
+       [s1] stands for Lean's [s+1] and [rs1] for Lean's [max(r+1, s+1)].
+       Lean provides two universes [r; s], so we supply two [algs] that
+       synthesise the missing two on every use.  For [ULift.rec] at scheme
+       j = 2*i (motive non-SProp), Lean also provides [motive] as the first
+       universe, shifting [r] and [s] to positions 1 and 2 in [Level.var].
+       For [ULift.rec] at j = 2*i+1 (motive SProp), [motive] is filtered
+       out by [int_of_univs] so the indices match the non-rec case. *)
+    let algs_of r_idx s_idx =
+      let r = Universe.make (Level.var r_idx) in
+      let s = Universe.make (Level.var s_idx) in
+      [ Universe.super s; Universe.sup (Universe.super r) (Universe.super s) ]
+    in
+    let algs_2 = algs_of 0 1 in
+    let algs_rec = algs_of 1 2 in
     let ulift_ref = Rocqlib.lib_ref (cumul_reg n) in
-    let inst = { ref = ulift_ref; algs = [] } in
+    let inst = { ref = ulift_ref; algs = algs_2 } in
     add_declared n i inst;
     (* Register ULift.up constructor *)
     let cname = N.append n "up" in
-    add_declared cname i { ref = Rocqlib.lib_ref (cumul_reg cname); algs = [] };
+    add_declared cname i { ref = Rocqlib.lib_ref (cumul_reg cname); algs = algs_2 };
     (* Register ULift.down *)
     let dname = N.append n "down" in
-    add_declared dname i { ref = Rocqlib.lib_ref (cumul_reg dname); algs = [] };
+    add_declared dname i { ref = Rocqlib.lib_ref (cumul_reg dname); algs = algs_2 };
     (* Register eliminator (Type scheme at j=2*i, SProp scheme at j=2*i+1) *)
     let nrec = N.append n "rec" in
     let rec_base = cumul_reg nrec in
-    add_declared nrec (2 * i) { ref = Rocqlib.lib_ref rec_base; algs = [] };
-    add_declared nrec ((2 * i) + 1) { ref = Rocqlib.lib_ref (rec_base ^ ".ind"); algs = [] };
+    add_declared nrec (2 * i) { ref = Rocqlib.lib_ref rec_base; algs = algs_rec };
+    add_declared nrec ((2 * i) + 1) { ref = Rocqlib.lib_ref (rec_base ^ ".ind"); algs = algs_2 };
     inst
   | None ->
   let mind, algs, ind_name, cnames, univs, squashy =
