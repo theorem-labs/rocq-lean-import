@@ -243,7 +243,37 @@ Register UInt32_size as lean.UInt32_size.
 
 Record Fin@{} (n : Nat) := Fin_mk { val : Nat; isLt : (val < n)%Nat }.
 Register Fin as lean.Fin.
-Record UInt32@{} := UInt32_mk { val0 : Fin UInt32_size }.
+
+(* [UInt32] shape changed in Lean 4.17 from [Fin UInt32_size] to
+   [BitVec 32]; [lean.UInt32] is the new default, [lean.UInt32.legacy]
+   the old.  Dispatcher in lean.ml picks based on the [#IND] ctor. *)
+
+Fixpoint Nat_add (n m : Nat) : Nat :=
+  match n with
+  | Nat_zero => m
+  | Nat_succ n => Nat_succ (Nat_add n m)
+  end.
+
+Fixpoint Nat_mul (n m : Nat) : Nat :=
+  match n with
+  | Nat_zero => Nat_zero
+  | Nat_succ n => Nat_add m (Nat_mul n m)
+  end.
+
+Fixpoint Nat_pow (b e : Nat) : Nat :=
+  match e with
+  | Nat_zero => Nat_succ Nat_zero
+  | Nat_succ e => Nat_mul b (Nat_pow b e)
+  end.
+Register Nat_pow as lean.Nat_pow.
+
+Record BitVec@{} (w : Nat) : Type := BitVec_mk { toFin : Fin (Nat_pow 2 w) }.
+Register BitVec as lean.BitVec.
+
+Record UInt32_legacy@{} := UInt32_legacy_mk { val0 : Fin UInt32_size }.
+Register UInt32_legacy as lean.UInt32.legacy.
+
+Record UInt32@{} := UInt32_mk { toBitVec : BitVec 32 }.
 Register UInt32 as lean.UInt32.
 
 
@@ -294,8 +324,11 @@ Section strings.
   Definition Nat_isValidChar (n : Nat) : SProp
     := n < 0xd800 \/ (0xdfff < n /\ n < 0x110000).
 
+  Record Char_legacy@{} := Char_legacy_mk
+  { val1_legacy : UInt32_legacy; valid_legacy : Nat_isValidChar val1_legacy.(val0).(val _) }.
+
   Record Char@{} := Char_mk
-  { val1 : UInt32; valid : Nat_isValidChar val1.(val0).(val _) }.
+  { val1 : UInt32; valid : Nat_isValidChar val1.(toBitVec).(toFin _).(val _) }.
 
   Definition check_N_isValidChar (n : N) : bool
     := ((n <? 0xd800) || ((0xdfff <? n) && (n <? 0x110000)))%N%bool.
@@ -303,8 +336,8 @@ Section strings.
   Definition Fin_mk_N (n : N) (val : N) (isLt : (val <? n)%N = true) : Fin (Nat_of_N n)
     := Fin_mk (Nat_of_N n) (Nat_of_N val) (Nat_lt_to_N val n isLt).
 
-  Definition UInt32_mk_N (val : N) (isLt : (val <? 0x100000000)%N = true) : UInt32
-    := UInt32_mk (Fin_mk_N 0x100000000 val isLt).
+  Definition UInt32_legacy_mk_N (val : N) (isLt : (val <? 0x100000000)%N = true) : UInt32_legacy
+    := UInt32_legacy_mk (Fin_mk_N 0x100000000 val isLt).
 
   Lemma Nat_isValidChar_mk_N (n : N) (isLt : check_N_isValidChar n = true)
     : Nat_isValidChar (Nat_of_N n).
@@ -330,21 +363,21 @@ Section strings.
     all: vm_compute; congruence.
   Qed.
 
-  Definition Char_mk_N (val : N) (isLt : ((val <? 0x100000000)%N && check_N_isValidChar val)%bool = true) : Char
-    := Char_mk (UInt32_mk_N val (proj1 (andb_prop _ _ isLt))) (Nat_isValidChar_mk_N val (proj2 (andb_prop _ _ isLt))).
+  Definition Char_legacy_mk_N (val : N) (isLt : ((val <? 0x100000000)%N && check_N_isValidChar val)%bool = true) : Char_legacy
+    := Char_legacy_mk (UInt32_legacy_mk_N val (proj1 (andb_prop _ _ isLt))) (Nat_isValidChar_mk_N val (proj2 (andb_prop _ _ isLt))).
 
-  Definition reflective_Char_mk (val : N)
+  Definition reflective_Char_legacy_mk (val : N)
     : if ((val <? 0x100000000)%N && check_N_isValidChar val)%bool
-      then Char
+      then Char_legacy
       else InvalidChar val
     := let isLt := ((val <? 0x100000000)%N && check_N_isValidChar val)%bool in
-       match isLt return ((val <? 0x100000000)%N && check_N_isValidChar val)%bool = isLt -> if isLt then Char else InvalidChar val with
-       | true => fun H => Char_mk_N val H
+       match isLt return ((val <? 0x100000000)%N && check_N_isValidChar val)%bool = isLt -> if isLt then Char_legacy else InvalidChar val with
+       | true => fun H => Char_legacy_mk_N val H
        | false => fun _ => invalid_char val
        end Logic.eq_refl.
 
-  Definition reflective_Char_mk_prim (val : Uint63.int)
-    := reflective_Char_mk (Z.to_N (Uint63.to_Z val)).
+  Definition reflective_Char_legacy_mk_prim (val : Uint63.int)
+    := reflective_Char_legacy_mk (Z.to_N (Uint63.to_Z val)).
 
 
   (* Definition reflective_UInt32_mk (val : N) : if (val <? 0x100000000)%N
@@ -396,4 +429,7 @@ End strings.
 
 Register Nat_isValidChar as lean.Nat_isValidChar.
 Register Char as lean.Char.
-Register reflective_Char_mk_prim as lean.Char.mk.reflective_prim.
+Register Char_legacy as lean.Char.legacy.
+Register reflective_Char_legacy_mk_prim as lean.Char.legacy.mk.reflective_prim.
+(* TODO: lean.Char.mk.reflective_prim for the BitVec Char; blocks
+   string literals in Lean >= 4.17 dumps. *)
