@@ -1797,15 +1797,36 @@ let declare_ind ind =
 let entry_name = function
 | Quot name | Def { name } | Ax { name } | Ind { name } -> name
 
+(* A name registered for the version-aware predeclared dispatch machinery
+   (UInt32/Char in particular) may legitimately be emitted twice: the
+   second [#IND] flips [get_predeclared_*] to a different Rocq reference.
+   We do not dedupe those; the dispatch logic handles them. *)
+let is_predeclared_dispatch_name n =
+  let has_prefix prefix = N.equal n (N.append_list N.anon prefix) in
+  has_prefix [ "UInt32" ] || has_prefix [ "Char" ]
+
+(* Duplicate entries can occur when lean4export is invoked with multiple
+   roots that share a transitive dependency: the shared declaration is
+   emitted once per root. Without this guard, re-processing a second
+   copy would declare a renamed parallel inductive/def and silently
+   overwrite the Lean->Rocq map, corrupting downstream references. *)
 let add_entry entry =
-  let () =
-    match entry with
-    | Quot quot_name -> declare_quot quot_name
-    | Def def -> declare_def def
-    | Ax ax -> declare_ax ax
-    | Ind ind -> declare_ind ind
-  in
-  entries := N.Map.add (entry_name entry) entry !entries
+  let name = entry_name entry in
+  match N.Map.find_opt name !entries with
+  | Some _ when not (is_predeclared_dispatch_name name) ->
+    Feedback.msg_warning
+      Pp.(
+        str "Skipping duplicate declaration for " ++ N.pp name
+        ++ str " (already declared earlier in the export).")
+  | _ ->
+    let () =
+      match entry with
+      | Quot quot_name -> declare_quot quot_name
+      | Def def -> declare_def def
+      | Ax ax -> declare_ax ax
+      | Ind ind -> declare_ind ind
+    in
+    entries := N.Map.add name entry !entries
 
 let rec is_arity = function
   | Sort _ -> true
