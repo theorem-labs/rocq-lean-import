@@ -1414,7 +1414,7 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
       let graph = uconv.graph in
       let univs, algs = univ_entry_gen uconv univs in
       let ind_name = name_for n i in
-      let record, fields, ctys =
+      let record, fields, ctys, needs_unsafe_univs_for_eta =
         match (indices, ctys) with
         | [], [ cty ] ->
           cty
@@ -1457,29 +1457,27 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
                    in
                    walk (npars + 1) cty'
                  in
+                 let has_relevant_field =
+                   List.exists
+                     (fun (na, _) ->
+                       na.Context.binder_relevance
+                       == EConstr.ERelevance.relevant)
+                     fields
+                 in
                  match (fields, Sorts.is_sprop sort, is_recursive) with
-                 | [], true, _ -> (None, [], ctys)
+                 | [], true, _ -> (None, [], ctys, false)
                  | _ :: _, false, false ->
-                   if
-                     List.exists
-                       (fun (na, _) ->
-                         na.Context.binder_relevance
-                         == EConstr.ERelevance.relevant)
-                       fields
-                   then (Some (Some [| default_proj_id |]), fields, [ cty' ])
-                   else (None, [], ctys)
-                 | [], false, _ -> (None, [], ctys)
+                   ( Some (Some [| default_proj_id |]),
+                     fields,
+                     [ cty' ],
+                     not has_relevant_field )
+                 | [], false, _ -> (None, [], ctys, false)
                  | _ :: _, true, false ->
-                   if
-                     List.for_all
-                       (fun (na, _) ->
-                         na.Context.binder_relevance
-                         == EConstr.ERelevance.irrelevant)
-                       fields
-                   then (Some (Some [| default_proj_id |]), fields, [ cty' ])
-                   else (None, [], ctys)
-                 | _ :: _, _, true -> (None, [], ctys))
-        | _ -> (None, [], ctys)
+                   if not has_relevant_field then
+                     (Some (Some [| default_proj_id |]), fields, [ cty' ], false)
+                   else (None, [], ctys, false)
+                 | _ :: _, _, true -> (None, [], ctys, false))
+        | _ -> (None, [], ctys, false)
       in
       let entry finite =
         {
@@ -1512,7 +1510,12 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
             []
         in
         let act () = try act BiFinite with e -> act Finite in
-        if squashy.lean_squashes || not coq_squashes then act ()
+        (* Newer Rocq gives eta to primitive records with no relevant fields
+           only while unsafe typing flags are active. *)
+        if
+          (squashy.lean_squashes || not coq_squashes)
+          && not needs_unsafe_univs_for_eta
+        then act ()
         else with_unsafe_univs act ()
       in
       assert (

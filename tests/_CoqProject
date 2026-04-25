@@ -11,3 +11,4 @@ ulift.v
 rec_single_ctor.v
 uint32_dispatch.v
 list_dup.v
+inhabited_sprop.v
