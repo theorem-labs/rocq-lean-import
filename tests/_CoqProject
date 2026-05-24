@@ -7,5 +7,4 @@ core.v
 init.v
 anomaly_print_projections.v
 pnni.v
-ulift_no_cumul.v
-ulift_cumul.v
+ulift.v
