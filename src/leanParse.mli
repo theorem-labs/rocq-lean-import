@@ -10,11 +10,7 @@ module RRange : sig
   val singleton : 'a -> 'a t
 end
 
-type parsing_state = {
-  names : LeanName.t RRange.t;
-  exprs : expr RRange.t;
-  univs : U.t RRange.t;
-}
+type parsing_state
 
 val empty_state : parsing_state
 val do_line : lcnt:int -> parsing_state -> string -> parsing_state * action option
