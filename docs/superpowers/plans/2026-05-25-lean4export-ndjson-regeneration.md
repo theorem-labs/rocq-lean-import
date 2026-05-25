@@ -14,7 +14,9 @@
 
 - Modify `rocq-lean-import.opam`: add `yojson` as an OCaml dependency for NDJSON decoding.
 - Modify `src/dune`: add `yojson` to the OCaml library dependencies.
+- Modify `Makefile`: pass the `yojson` findlib package to the generated Rocq makefile build.
 - Modify `src/lean_import.mlpack`: include the new parser module before `Lean`.
+- Modify `_CoqProject`: include the new parser module sources so `rocq makefile` emits build rules.
 - Modify `src/leanParse.mli`: expose parser helper types/functions shared by old and new parser modules.
 - Modify `src/leanParse.ml`: expose `RRange`, `pop_params`, `fix_ctor`, and `quot_name` through the existing interface without changing old-format behavior.
 - Create `src/leanParseNdjson.mli`: declare NDJSON parser state, format detection, line parsing, and state pretty-printing.
@@ -161,6 +163,8 @@ git commit -m "refactor: expose lean parser helpers"
 ## Task 3: Add The NDJSON Parser Skeleton And Format Metadata Handling
 
 **Files:**
+- Modify: `Makefile`
+- Modify: `_CoqProject`
 - Modify: `src/lean_import.mlpack`
 - Create: `src/leanParseNdjson.mli`
 - Create: `src/leanParseNdjson.ml`
@@ -178,7 +182,27 @@ Lean
 G_lean
 ```
 
-- [ ] **Step 2: Create the NDJSON parser interface**
+- [ ] **Step 2: Pass Yojson to the generated Rocq makefile build**
+
+Change `Makefile` so the submake invocation passes the Yojson findlib package:
+
+```make
+CAMLPKGS ?= -package yojson
+
+submake: Makefile.rocq
+	$(MAKE) $(MAKE_OPTS) -f Makefile.rocq CAMLPKGS="$(CAMLPKGS)" $(filter-out test%, $(MAKECMDGOALS))
+```
+
+- [ ] **Step 3: Add the new module to `_CoqProject`**
+
+Add the new parser sources near the other parser/source files:
+
+```text
+src/leanParseNdjson.ml
+src/leanParseNdjson.mli
+```
+
+- [ ] **Step 4: Create the NDJSON parser interface**
 
 Create `src/leanParseNdjson.mli`:
 
@@ -193,7 +217,7 @@ val do_line : lcnt:int -> parsing_state -> string -> parsing_state * action opti
 val pp_state : parsing_state -> Pp.t
 ```
 
-- [ ] **Step 3: Create the parser skeleton**
+- [ ] **Step 5: Create the parser skeleton**
 
 Create `src/leanParseNdjson.ml`:
 
@@ -266,7 +290,7 @@ let pp_state state =
   str "- " ++ int (RRange.length state.exprs) ++ str " expression nodes" ++ fnl ()
 ```
 
-- [ ] **Step 4: Run the build**
+- [ ] **Step 6: Run the build**
 
 Run:
 
@@ -276,10 +300,10 @@ make
 
 Expected: PASS, with the new parser module compiled but not yet used by `Lean Import`.
 
-- [ ] **Step 5: Commit the skeleton**
+- [ ] **Step 7: Commit the skeleton**
 
 ```bash
-git add src/lean_import.mlpack src/leanParseNdjson.mli src/leanParseNdjson.ml
+git add Makefile _CoqProject src/lean_import.mlpack src/leanParseNdjson.mli src/leanParseNdjson.ml
 git commit -m "feat: add ndjson parser skeleton"
 ```
 
