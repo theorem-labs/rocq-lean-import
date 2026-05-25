@@ -246,17 +246,25 @@ let parse_ctor_val ~lcnt state ctor_json =
   let ty = get_expr ~lcnt state (require_int ~lcnt "type" ctor_json) in
   (name, ty)
 
+let parse_ind_param_shape ~lcnt f =
+  try f ()
+  with Assert_failure _ ->
+    err ~lcnt "inductive parameter count does not match exported type"
+
 let parse_ind_val ~lcnt state ind_json ctor_jsons =
   let name = get_name ~lcnt state (require_int ~lcnt "name" ind_json) in
   line_msg ~lcnt name;
   let nparams = require_int ~lcnt "numParams" ind_json in
   let ty0 = get_expr ~lcnt state (require_int ~lcnt "type" ind_json) in
-  let params, ty = LeanParse.pop_params nparams ty0 in
+  let params, ty =
+    parse_ind_param_shape ~lcnt (fun () -> LeanParse.pop_params nparams ty0)
+  in
   let ctors =
     ctor_jsons
     |> List.map (parse_ctor_val ~lcnt state)
     |> List.map (fun (ctor_name, ctor_ty) ->
-      (ctor_name, LeanParse.fix_ctor name nparams ctor_ty))
+      (ctor_name, parse_ind_param_shape ~lcnt (fun () ->
+        LeanParse.fix_ctor name nparams ctor_ty)))
   in
   let univs = level_params ~lcnt state ind_json in
   Entry (Ind { name; params; ty; ctors; univs })
