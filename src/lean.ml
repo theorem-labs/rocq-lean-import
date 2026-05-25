@@ -1854,6 +1854,35 @@ let do_line state l =
        prtime t0 t1);
     Exninfo.iraise e
 
+let do_prefix_line state l =
+  let do_prefix_line () =
+    match state.pstate with
+    | OldParser _ -> state
+    | NdjsonParser pstate ->
+      let pstate = LeanParseNdjson.do_prefix_line pstate ~lcnt:!lcnt l in
+      { state with pstate = NdjsonParser pstate }
+  in
+  match !timeout with
+  | None -> do_prefix_line ()
+  | Some t ->
+    (match Control.timeout (float_of_int t) do_prefix_line () with
+    | Ok v -> v
+    | Error info -> Exninfo.iraise (TimedOut, info))
+
+let do_prefix_line state l =
+  let t0 = System.get_time () in
+  match do_prefix_line state l with
+  | state ->
+    let t1 = System.get_time () in
+    prtime t0 t1;
+    state
+  | exception e ->
+    let e = Exninfo.capture e in
+    (if fst e <> TimedOut then
+       let t1 = System.get_time () in
+       prtime t0 t1);
+    Exninfo.iraise e
+
 let before_from = function None -> false | Some from -> !lcnt < from
 let freeze () = (Lib.Interp.freeze (), Summary.Interp.freeze_summaries ())
 
@@ -1880,7 +1909,7 @@ let rec do_input state ~from ~until ch =
         incr lcnt;
         do_input state ~from ~until ch
       | NdjsonParser _ ->
-        let state, _ = do_line state l in
+        let state = do_prefix_line state l in
         incr lcnt;
         do_input state ~from ~until ch)
     | l ->
@@ -1952,14 +1981,21 @@ let lean_obj =
 let import ~from ~until f =
   lcnt := 1;
   let initial_pstate =
+    let rec first_non_empty_line ch =
+      match input_line ch with
+      | l ->
+        if String.trim l = "" then first_non_empty_line ch
+        else Some l
+      | exception End_of_file -> None
+    in
     let ch = open_in f in
-    match input_line ch with
-    | l ->
+    match first_non_empty_line ch with
+    | Some l ->
       close_in ch;
       if LeanParseNdjson.is_ndjson_line l then NdjsonParser LeanParseNdjson.empty_state
       else OldParser !pstate
-    | exception End_of_file ->
-      close_in_noerr ch;
+    | None ->
+      close_in ch;
       OldParser !pstate
     | exception e ->
       close_in_noerr ch;

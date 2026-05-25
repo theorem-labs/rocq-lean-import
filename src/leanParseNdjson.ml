@@ -283,7 +283,7 @@ let parse_meta ~lcnt state json =
   if version <> "3.1.0" then err ~lcnt ("unsupported export format " ^ version);
   ({ state with seen_meta = true }, None)
 
-let do_line ~lcnt state l =
+let parse_line ~prefix ~lcnt state l =
   let l = String.trim l in
   if l = "" then (state, None)
   else
@@ -294,8 +294,8 @@ let do_line ~lcnt state l =
     match member "meta" json with
     | Some _ -> parse_meta ~lcnt state json
     | None when not state.seen_meta -> err ~lcnt "expected metadata object before export records"
-    | None -> (
-      match
+    | None ->
+      let fields =
         ( member "str" json,
           member "num" json,
           member "succ" json,
@@ -309,7 +309,8 @@ let do_line ~lcnt state l =
           member "opaque" json,
           member "quot" json,
           member "inductive" json )
-      with
+      in
+      (match fields with
       | Some _, None, None, None, None, None, None, None, None, None, None, None, None
       | None, Some _, None, None, None, None, None, None, None, None, None, None, None ->
         parse_name ~lcnt state json
@@ -321,16 +322,27 @@ let do_line ~lcnt state l =
       | None, None, None, None, None, None, Some _, None, None, None, None, None, None ->
         parse_expr ~lcnt state json
       | None, None, None, None, None, None, None, Some payload, None, None, None, None, None ->
-        parse_axiom ~lcnt state payload
+        if prefix then (state, None) else parse_axiom ~lcnt state payload
       | None, None, None, None, None, None, None, None, Some payload, None, None, None, None
       | None, None, None, None, None, None, None, None, None, Some payload, None, None, None
       | None, None, None, None, None, None, None, None, None, None, Some payload, None, None ->
-        parse_deflike ~lcnt state payload
+        if prefix then (state, None) else parse_deflike ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, None, Some payload, None ->
-        parse_quot ~lcnt state payload
+        if prefix then (state, None) else parse_quot ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, None, None, Some payload ->
-        parse_inductive ~lcnt state payload
-      | _ -> err ~lcnt "unsupported NDJSON record")
+        if prefix then (state, None) else parse_inductive ~lcnt state payload
+      | _ ->
+        if prefix then
+          match fields with
+          | None, None, None, None, None, None, None, _, _, _, _, _, _ -> (state, None)
+          | _ -> err ~lcnt "unsupported NDJSON record"
+        else err ~lcnt "unsupported NDJSON record")
+
+let do_prefix_line ~lcnt state l =
+  fst (parse_line ~prefix:true ~lcnt state l)
+
+let do_line ~lcnt state l =
+  parse_line ~prefix:false ~lcnt state l
 
 let pp_state state =
   let open Pp in

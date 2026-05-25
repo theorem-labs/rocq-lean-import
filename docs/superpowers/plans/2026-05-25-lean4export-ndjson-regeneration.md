@@ -706,21 +706,31 @@ let state, oentry = do_line state l in
 Also preserve ranged-import behavior in the earlier `before_from` branch:
 old-format dumps may still skip prefix lines without parsing because their parser
 state is persisted through summaries, but NDJSON dumps must parse skipped prefix
-lines with `do_line state l` and ignore the returned action. This rebuilds the
-name, level, expression, and metadata tables before the first imported line while
-still avoiding `add_entry` for lines before `from`.
+lines with a prefix-only parser path and ignore declaration/action records. This
+rebuilds the metadata, name, level, and expression tables before the first
+imported line while still avoiding `add_entry` and avoiding declaration
+validation for lines before `from`.
 
 - [ ] **Step 5: Add format detection when opening the file**
+
+Format detection must scan to the first non-empty physical line before deciding
+which parser to use. Blank lines before NDJSON metadata must not cause fallback
+to the old parser.
 
 Replace the body of `import` with:
 
 ```ocaml
 let import ~from ~until f =
   lcnt := 1;
-  let ch = open_in f in
-  let first_line =
-    try Some (input_line ch) with End_of_file -> None
+  let rec first_non_empty_line ch =
+    match input_line ch with
+    | l ->
+      if String.trim l = "" then first_non_empty_line ch
+      else Some l
+    | exception End_of_file -> None
   in
+  let ch = open_in f in
+  let first_line = first_non_empty_line ch in
   close_in ch;
   let initial_parser =
     match first_line with
