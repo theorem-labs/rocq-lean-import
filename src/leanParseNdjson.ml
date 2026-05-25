@@ -241,6 +241,33 @@ let parse_quot ~lcnt state payload =
   line_msg ~lcnt LeanParse.quot_name;
   (state, Some (Entry (Quot LeanParse.quot_name)))
 
+let parse_ctor_val ~lcnt state ctor_json =
+  let name = get_name ~lcnt state (require_int ~lcnt "name" ctor_json) in
+  let ty = get_expr ~lcnt state (require_int ~lcnt "type" ctor_json) in
+  (name, ty)
+
+let parse_ind_val ~lcnt state ind_json ctor_jsons =
+  let name = get_name ~lcnt state (require_int ~lcnt "name" ind_json) in
+  line_msg ~lcnt name;
+  let nparams = require_int ~lcnt "numParams" ind_json in
+  let ty0 = get_expr ~lcnt state (require_int ~lcnt "type" ind_json) in
+  let params, ty = LeanParse.pop_params nparams ty0 in
+  let ctors =
+    ctor_jsons
+    |> List.map (parse_ctor_val ~lcnt state)
+    |> List.map (fun (ctor_name, ctor_ty) ->
+      (ctor_name, LeanParse.fix_ctor name nparams ctor_ty))
+  in
+  let univs = level_params ~lcnt state ind_json in
+  Entry (Ind { name; params; ty; ctors; univs })
+
+let parse_inductive ~lcnt state payload =
+  let types = require_list ~lcnt "types" payload in
+  let ctors = require_list ~lcnt "ctors" payload in
+  match types with
+  | [ ind_json ] -> (state, Some (parse_ind_val ~lcnt state ind_json ctors))
+  | _ -> err ~lcnt "mutual inductive groups are not supported by the current importer model"
+
 let parse_meta ~lcnt state json =
   let meta = require_member ~lcnt "meta" json in
   let format = require_member ~lcnt "format" meta in
@@ -272,26 +299,29 @@ let do_line ~lcnt state l =
           member "def" json,
           member "thm" json,
           member "opaque" json,
-          member "quot" json )
+          member "quot" json,
+          member "inductive" json )
       with
-      | Some _, None, None, None, None, None, None, None, None, None, None, None
-      | None, Some _, None, None, None, None, None, None, None, None, None, None ->
+      | Some _, None, None, None, None, None, None, None, None, None, None, None, None
+      | None, Some _, None, None, None, None, None, None, None, None, None, None, None ->
         parse_name ~lcnt state json
-      | None, None, Some _, None, None, None, None, None, None, None, None, None
-      | None, None, None, Some _, None, None, None, None, None, None, None, None
-      | None, None, None, None, Some _, None, None, None, None, None, None, None
-      | None, None, None, None, None, Some _, None, None, None, None, None, None ->
+      | None, None, Some _, None, None, None, None, None, None, None, None, None, None
+      | None, None, None, Some _, None, None, None, None, None, None, None, None, None
+      | None, None, None, None, Some _, None, None, None, None, None, None, None, None
+      | None, None, None, None, None, Some _, None, None, None, None, None, None, None ->
         parse_level ~lcnt state json
-      | None, None, None, None, None, None, Some _, None, None, None, None, None ->
+      | None, None, None, None, None, None, Some _, None, None, None, None, None, None ->
         parse_expr ~lcnt state json
-      | None, None, None, None, None, None, None, Some payload, None, None, None, None ->
+      | None, None, None, None, None, None, None, Some payload, None, None, None, None, None ->
         parse_axiom ~lcnt state payload
-      | None, None, None, None, None, None, None, None, Some payload, None, None, None
-      | None, None, None, None, None, None, None, None, None, Some payload, None, None
-      | None, None, None, None, None, None, None, None, None, None, Some payload, None ->
+      | None, None, None, None, None, None, None, None, Some payload, None, None, None, None
+      | None, None, None, None, None, None, None, None, None, Some payload, None, None, None
+      | None, None, None, None, None, None, None, None, None, None, Some payload, None, None ->
         parse_deflike ~lcnt state payload
-      | None, None, None, None, None, None, None, None, None, None, None, Some payload ->
+      | None, None, None, None, None, None, None, None, None, None, None, Some payload, None ->
         parse_quot ~lcnt state payload
+      | None, None, None, None, None, None, None, None, None, None, None, None, Some payload ->
+        parse_inductive ~lcnt state payload
       | _ -> err ~lcnt "unsupported NDJSON record")
 
 let pp_state state =
