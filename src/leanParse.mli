@@ -16,8 +16,6 @@ val empty_state : parsing_state
 val do_line : lcnt:int -> parsing_state -> string -> parsing_state * action option
 val pp_state : parsing_state -> Pp.t
 
-val do_bk : string -> binder_kind
-val replace_ind : LeanName.t -> int -> expr -> expr
 val pop_params : int -> expr -> (binder_kind * LeanName.t * expr) list * expr
 val fix_ctor : LeanName.t -> int -> expr -> expr
 val quot_name : LeanName.t

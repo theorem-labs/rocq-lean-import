@@ -16,7 +16,7 @@
 - Modify `src/dune`: add `yojson` to the OCaml library dependencies.
 - Modify `src/lean_import.mlpack`: include the new parser module before `Lean`.
 - Modify `src/leanParse.mli`: expose parser helper types/functions shared by old and new parser modules.
-- Modify `src/leanParse.ml`: expose `RRange`, `replace_ind`, `pop_params`, `fix_ctor`, and `quot_name` through the existing interface without changing old-format behavior.
+- Modify `src/leanParse.ml`: expose `RRange`, `pop_params`, `fix_ctor`, and `quot_name` through the existing interface without changing old-format behavior.
 - Create `src/leanParseNdjson.mli`: declare NDJSON parser state, format detection, line parsing, and state pretty-printing.
 - Create `src/leanParseNdjson.ml`: decode Lean 4 export format `3.1.0` records into `LeanExpr.action`.
 - Modify `src/lean.ml`: split input parsing by detected format, preserve old parser behavior, and route NDJSON lines through `LeanParseNdjson`.
@@ -124,8 +124,6 @@ val empty_state : parsing_state
 val do_line : lcnt:int -> parsing_state -> string -> parsing_state * action option
 val pp_state : parsing_state -> Pp.t
 
-val do_bk : string -> binder_kind
-val replace_ind : LeanName.t -> int -> expr -> expr
 val pop_params : int -> expr -> (binder_kind * LeanName.t * expr) list * expr
 val fix_ctor : LeanName.t -> int -> expr -> expr
 val quot_name : LeanName.t
@@ -136,7 +134,7 @@ val quot_name : LeanName.t
 Run this command:
 
 ```bash
-rg -n 'module RRange|let do_bk|let rec replace_ind|let rec pop_params|let fix_ctor|let quot_name' src/leanParse.ml
+rg -n 'module RRange|let rec pop_params|let fix_ctor|let quot_name' src/leanParse.ml
 ```
 
 Expected output includes one top-level definition for each exported helper.
