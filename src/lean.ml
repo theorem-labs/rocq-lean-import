@@ -1874,9 +1874,15 @@ let rec do_input state ~from ~until ch =
       finish state;
       if not (until = None) then CErrors.user_err Pp.(str "unexpected EOF!");
       state
-    | _ when before_from from ->
-      incr lcnt;
-      do_input state ~from ~until ch
+    | l when before_from from ->
+      (match state.pstate with
+      | OldParser _ ->
+        incr lcnt;
+        do_input state ~from ~until ch
+      | NdjsonParser _ ->
+        let state, _ = do_line state l in
+        incr lcnt;
+        do_input state ~from ~until ch)
     | l ->
       let state, oentry = do_line state l in
       (match (just_parse (), oentry) with

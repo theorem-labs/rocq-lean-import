@@ -703,6 +703,13 @@ with:
 let state, oentry = do_line state l in
 ```
 
+Also preserve ranged-import behavior in the earlier `before_from` branch:
+old-format dumps may still skip prefix lines without parsing because their parser
+state is persisted through summaries, but NDJSON dumps must parse skipped prefix
+lines with `do_line state l` and ignore the returned action. This rebuilds the
+name, level, expression, and metadata tables before the first imported line while
+still avoiding `add_entry` for lines before `from`.
+
 - [ ] **Step 5: Add format detection when opening the file**
 
 Replace the body of `import` with:
