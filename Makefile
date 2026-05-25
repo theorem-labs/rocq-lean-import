@@ -1,6 +1,10 @@
 MAKE_OPTS:= --no-builtin-rules
 CAMLPKGS ?= -package yojson
 
+.PHONY: regenerate-dumps
+regenerate-dumps:
+	./scripts/regenerate-dumps.sh
+
 TEST_GOALS:=$(filter test%, $(MAKECMDGOALS))
 
 .PHONY: submake
