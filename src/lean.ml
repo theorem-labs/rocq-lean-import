@@ -1744,10 +1744,18 @@ let { Goptions.get = print_squashes } =
     ~key:[ "Lean"; "Print"; "Squash"; "Info" ]
     ~value:false ()
 
+type parser_state =
+  | OldParser of LeanParse.parsing_state
+  | NdjsonParser of LeanParseNdjson.parsing_state
+
 type input_state = {
-  pstate : LeanParse.parsing_state;
+  pstate : parser_state;
   skips : int;
 }
+
+let pp_parser_state = function
+  | OldParser state -> LeanParse.pp_state state
+  | NdjsonParser state -> LeanParseNdjson.pp_state state
 
 let finish state =
   let max_univs, cnt =
@@ -1785,7 +1793,7 @@ let finish state =
             str " (including quot)."
           else str ".")
       ++ fnl () ++
-      LeanParse.pp_state state.pstate ++
+      pp_parser_state state.pstate ++
       (if state.skips > 0 then str "Skipped " ++ int state.skips ++ fnl ()
        else mt ())
       ++ str "Max universe instance length "
@@ -1816,7 +1824,15 @@ let () =
 exception TimedOut
 
 let do_line state l =
-  let do_line () = LeanParse.do_line state ~lcnt:!lcnt l in
+  let do_line () =
+    match state.pstate with
+    | OldParser pstate ->
+      let pstate, oentry = LeanParse.do_line pstate ~lcnt:!lcnt l in
+      ({ state with pstate = OldParser pstate }, oentry)
+    | NdjsonParser pstate ->
+      let pstate, oentry = LeanParseNdjson.do_line pstate ~lcnt:!lcnt l in
+      ({ state with pstate = NdjsonParser pstate }, oentry)
+  in
   match !timeout with
   | None -> do_line ()
   | Some t ->
@@ -1862,8 +1878,7 @@ let rec do_input state ~from ~until ch =
       incr lcnt;
       do_input state ~from ~until ch
     | l ->
-      let pstate, oentry = do_line state.pstate l in
-      let state = { state with pstate } in
+      let state, oentry = do_line state l in
       (match (just_parse (), oentry) with
       | true, _ | false, None ->
         incr lcnt;
@@ -1930,9 +1945,26 @@ let lean_obj =
 
 let import ~from ~until f =
   lcnt := 1;
+  let initial_pstate =
+    let ch = open_in f in
+    match input_line ch with
+    | l ->
+      close_in ch;
+      if LeanParseNdjson.is_ndjson_line l then NdjsonParser LeanParseNdjson.empty_state
+      else OldParser !pstate
+    | exception End_of_file ->
+      close_in_noerr ch;
+      OldParser !pstate
+    | exception e ->
+      close_in_noerr ch;
+      raise e
+  in
   (* silence the definition messages from Coq *)
   let { pstate = pstatev } =
     Flags.silently (fun () ->
-        do_input { pstate = !pstate; skips = 0 } ~from ~until (open_in f)) ()
+        do_input { pstate = initial_pstate; skips = 0 } ~from ~until (open_in f)) ()
   in
-  Lib.add_leaf (lean_obj (pstatev, !sets, !declared, !entries, !squash_info, !height_cache))
+  let old_pstatev =
+    match pstatev with OldParser pstatev -> pstatev | NdjsonParser _ -> !pstate
+  in
+  Lib.add_leaf (lean_obj (old_pstatev, !sets, !declared, !entries, !squash_info, !height_cache))
