@@ -13,3 +13,4 @@ src/g_lean.ml
 META*
 
 *.log.out
+.worktrees/
