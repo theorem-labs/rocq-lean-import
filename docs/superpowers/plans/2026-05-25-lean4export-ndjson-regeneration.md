@@ -1197,7 +1197,7 @@ chmod +x scripts/regenerate-dumps.sh
 
 - [ ] **Step 4: Add the Make target**
 
-Add this target near the top of `Makefile`:
+Add this target after the existing `submake` target in `Makefile`, preserving `submake` as the first non-special target so plain `make` continues to run the default Rocq build:
 
 ```make
 .PHONY: regenerate-dumps
