@@ -133,10 +133,17 @@ let parse_level ~lcnt state json =
   | _ -> err ~lcnt "bad level record"
 
 let parse_nat_lit ~lcnt = function
-  | `String n -> (
-    try Z.of_string n
-    with Invalid_argument _ | Failure _ -> err ~lcnt "bad natural literal")
-  | `Int n -> Z.of_int n
+  | `String n ->
+    let n =
+      try Z.of_string n
+      with Invalid_argument _ | Failure _ -> err ~lcnt "bad natural literal"
+    in
+    if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
+    n
+  | `Int n ->
+    let n = Z.of_int n in
+    if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
+    n
   | _ -> err ~lcnt "bad natural literal"
 
 let parse_expr ~lcnt state json =
