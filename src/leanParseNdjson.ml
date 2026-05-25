@@ -49,6 +49,11 @@ let require_bool ~lcnt name json =
   | `Bool b -> b
   | _ -> err ~lcnt ("field " ^ name ^ " must be a boolean")
 
+let forbid_member ~lcnt name json =
+  match member name json with
+  | Some _ -> err ~lcnt ("unexpected field " ^ name)
+  | None -> ()
+
 let require_list ~lcnt name json =
   match require_member ~lcnt name json with
   | `List xs -> xs
@@ -227,14 +232,45 @@ let parse_axiom ~lcnt state payload =
   let univs = level_params ~lcnt state payload in
   (state, Some (Entry (Ax { name; ty; univs })))
 
-let parse_deflike ~lcnt state payload =
-  ignore (require_bool ~lcnt "isUnsafe" payload);
+let require_reducibility_hint ~lcnt payload =
+  match require_member ~lcnt "hints" payload with
+  | `String ("opaque" | "abbrev") -> ()
+  | `Assoc fields -> (
+    match List.assoc_opt "regular" fields with
+    | Some (`Int _) -> ()
+    | _ -> err ~lcnt "field hints must be opaque, abbrev, or regular")
+  | _ -> err ~lcnt "field hints must be opaque, abbrev, or regular"
+
+let require_safety ~lcnt payload =
+  match require_member ~lcnt "safety" payload with
+  | `String ("unsafe" | "safe" | "partial") -> ()
+  | _ -> err ~lcnt "field safety must be unsafe, safe, or partial"
+
+let parse_deflike_common ~lcnt state payload =
   let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
   line_msg ~lcnt name;
   let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
   let body = get_expr ~lcnt state (require_int ~lcnt "value" payload) in
   let univs = level_params ~lcnt state payload in
   (state, Some (Entry (Def { name; ty; body; univs })))
+
+let parse_def ~lcnt state payload =
+  forbid_member ~lcnt "isUnsafe" payload;
+  require_reducibility_hint ~lcnt payload;
+  require_safety ~lcnt payload;
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
+
+let parse_thm ~lcnt state payload =
+  forbid_member ~lcnt "isUnsafe" payload;
+  forbid_member ~lcnt "safety" payload;
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
+
+let parse_opaque ~lcnt state payload =
+  ignore (require_bool ~lcnt "isUnsafe" payload);
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
 
 let parse_quot ~lcnt state payload =
   ignore (require_string ~lcnt "kind" payload);
@@ -323,10 +359,12 @@ let parse_line ~prefix ~lcnt state l =
         parse_expr ~lcnt state json
       | None, None, None, None, None, None, None, Some payload, None, None, None, None, None ->
         if prefix then (state, None) else parse_axiom ~lcnt state payload
-      | None, None, None, None, None, None, None, None, Some payload, None, None, None, None
-      | None, None, None, None, None, None, None, None, None, Some payload, None, None, None
+      | None, None, None, None, None, None, None, None, Some payload, None, None, None, None ->
+        if prefix then (state, None) else parse_def ~lcnt state payload
+      | None, None, None, None, None, None, None, None, None, Some payload, None, None, None ->
+        if prefix then (state, None) else parse_thm ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, Some payload, None, None ->
-        if prefix then (state, None) else parse_deflike ~lcnt state payload
+        if prefix then (state, None) else parse_opaque ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, None, Some payload, None ->
         if prefix then (state, None) else parse_quot ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, None, None, Some payload ->

@@ -475,13 +475,28 @@ let parse_axiom ~lcnt state payload =
   let univs = level_params ~lcnt state payload in
   (state, Some (Entry (Ax { name; ty; univs })))
 
-let parse_deflike ~lcnt state payload =
+let parse_deflike_common ~lcnt state payload =
   let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
   Feedback.msg_info Pp.(str "line " ++ int lcnt ++ str ": " ++ N.pp name);
   let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
   let body = get_expr ~lcnt state (require_int ~lcnt "value" payload) in
   let univs = level_params ~lcnt state payload in
   (state, Some (Entry (Def { name; ty; body; univs })))
+
+let parse_def ~lcnt state payload =
+  ignore (require_member ~lcnt "hints" payload);
+  ignore (require_string ~lcnt "safety" payload);
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
+
+let parse_thm ~lcnt state payload =
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
+
+let parse_opaque ~lcnt state payload =
+  ignore (require_bool ~lcnt "isUnsafe" payload);
+  ignore (require_list ~lcnt "all" payload);
+  parse_deflike_common ~lcnt state payload
 
 let parse_quot ~lcnt state payload =
   ignore (require_string ~lcnt "kind" payload);
@@ -517,9 +532,9 @@ Replace the final unsupported-record branch in `do_line` with:
       | None, None, None, None, None, Some _, None, None, None, None, None, None -> parse_level ~lcnt state json
       | None, None, None, None, None, None, Some _, None, None, None, None, None -> parse_expr ~lcnt state json
       | None, None, None, None, None, None, None, Some payload, None, None, None, None -> parse_axiom ~lcnt state payload
-      | None, None, None, None, None, None, None, None, Some payload, None, None, None -> parse_deflike ~lcnt state payload
-      | None, None, None, None, None, None, None, None, None, Some payload, None, None -> parse_deflike ~lcnt state payload
-      | None, None, None, None, None, None, None, None, None, None, Some payload, None -> parse_deflike ~lcnt state payload
+      | None, None, None, None, None, None, None, None, Some payload, None, None, None -> parse_def ~lcnt state payload
+      | None, None, None, None, None, None, None, None, None, Some payload, None, None -> parse_thm ~lcnt state payload
+      | None, None, None, None, None, None, None, None, None, None, Some payload, None -> parse_opaque ~lcnt state payload
       | None, None, None, None, None, None, None, None, None, None, None, Some payload -> parse_quot ~lcnt state payload
       | _ -> err ~lcnt "unsupported NDJSON record"
 ```

@@ -1,5 +1,10 @@
 {"meta":{"exporter":{"name":"lean4export","version":"test"},"lean":{"githash":"test","version":"v4.30.0-rc2"},"format":{"version":"3.1.0"}}}
 {"str":{"pre":0,"str":"Nat"},"in":1}
 {"str":{"pre":1,"str":"zero"},"in":2}
+{"str":{"pre":0,"str":"Scratch"},"in":3}
+{"str":{"pre":3,"str":"defExample"},"in":4}
+{"str":{"pre":3,"str":"thmExample"},"in":5}
 {"const":{"name":2,"us":[]},"ie":0}
 {"axiom":{"name":2,"levelParams":[],"type":0,"isUnsafe":false}}
+{"def":{"name":4,"levelParams":[],"type":0,"value":0,"hints":"opaque","safety":"safe","all":[]}}
+{"thm":{"name":5,"levelParams":[],"type":0,"value":0,"all":[]}}
