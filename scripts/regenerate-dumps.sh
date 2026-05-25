@@ -4,8 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$ROOT/lean/fixtures/manifest.toml"
 CACHE="${LEAN4EXPORT_CACHE:-$ROOT/.cache/lean4export}"
-REF="master"
-TOOLCHAIN="leanprover/lean4:v4.30.0-rc2"
 
 usage() {
   cat <<'USAGE'
@@ -22,29 +20,6 @@ if [[ "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-for tool in git lake lean elan; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "error: missing required tool: $tool" >&2
-    exit 1
-  fi
-done
-
-mkdir -p "$(dirname "$CACHE")"
-if [[ ! -d "$CACHE/.git" ]]; then
-  git clone https://github.com/leanprover/lean4export "$CACHE"
-fi
-
-git -C "$CACHE" fetch origin "$REF"
-git -C "$CACHE" checkout FETCH_HEAD
-
-ACTUAL_TOOLCHAIN="$(tr -d '\r\n' < "$CACHE/lean-toolchain")"
-if [[ "$ACTUAL_TOOLCHAIN" != "$TOOLCHAIN" ]]; then
-  echo "error: lean4export toolchain mismatch: expected $TOOLCHAIN, got $ACTUAL_TOOLCHAIN" >&2
-  exit 1
-fi
-
-(cd "$CACHE" && lake build)
-
 ALL=false
 if [[ "${1:-}" == "--all" ]]; then
   ALL=true
@@ -52,6 +27,28 @@ if [[ "${1:-}" == "--all" ]]; then
 fi
 
 requested=("$@")
+
+manifest_value() {
+  local key="$1"
+  awk -v key="$key" '
+    $1 == key && $2 == "=" {
+      value=$0
+      sub(/^[^=]+=[[:space:]]*/, "", value)
+      gsub(/"/, "", value)
+      print value
+      exit
+    }
+  ' "$MANIFEST"
+}
+
+REPOSITORY="$(manifest_value lean4export_repository)"
+COMMIT="$(manifest_value lean4export_commit)"
+TOOLCHAIN="$(manifest_value lean_toolchain)"
+
+if [[ -z "$REPOSITORY" || -z "$COMMIT" || -z "$TOOLCHAIN" ]]; then
+  echo "error: manifest missing lean4export_repository, lean4export_commit, or lean_toolchain" >&2
+  exit 1
+fi
 
 emit_entries() {
   awk '
@@ -81,37 +78,121 @@ selected() {
   [[ "$ALL" == true || "$default" == true ]]
 }
 
+selected_entries=()
+matched_requested=()
+
+while IFS='|' read -r name output kind module default; do
+  if selected "$name" "$default"; then
+    selected_entries+=("$name|$output|$kind|$module|$default")
+    if (( ${#requested[@]} > 0 )); then
+      matched_requested+=("$name")
+    fi
+  fi
+done < <(emit_entries)
+
+for req in "${requested[@]}"; do
+  matched=false
+  for name in "${matched_requested[@]}"; do
+    if [[ "$req" == "$name" ]]; then
+      matched=true
+      break
+    fi
+  done
+  if [[ "$matched" == false ]]; then
+    echo "error: unknown dump requested: $req" >&2
+    exit 1
+  fi
+done
+
+if (( ${#selected_entries[@]} == 0 )); then
+  echo "error: no dumps selected" >&2
+  exit 1
+fi
+
+for tool in git lake lean elan; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "error: missing required tool: $tool" >&2
+    exit 1
+  fi
+done
+
+mkdir -p "$(dirname "$CACHE")"
+if [[ ! -d "$CACHE/.git" ]]; then
+  git clone "$REPOSITORY" "$CACHE"
+fi
+
+if ! git -C "$CACHE" cat-file -e "$COMMIT^{commit}" 2>/dev/null; then
+  git -C "$CACHE" fetch origin "$COMMIT"
+fi
+git -C "$CACHE" checkout "$COMMIT"
+
+ACTUAL_TOOLCHAIN="$(tr -d '\r\n' < "$CACHE/lean-toolchain")"
+if [[ "$ACTUAL_TOOLCHAIN" != "$TOOLCHAIN" ]]; then
+  echo "error: lean4export toolchain mismatch: expected $TOOLCHAIN, got $ACTUAL_TOOLCHAIN" >&2
+  exit 1
+fi
+
+(cd "$CACHE" && lake build)
+
 LOCAL_LAKE="$ROOT/lean/fixtures/lakefile.lean"
 if [[ ! -f "$LOCAL_LAKE" ]]; then
   echo "error: missing local fixture Lake file: $LOCAL_LAKE" >&2
   exit 1
 fi
 
-while IFS='|' read -r name output kind module default; do
-  if ! selected "$name" "$default"; then
-    continue
-  fi
+generate_entry() {
+  local name="$1"
+  local output="$2"
+  local kind="$3"
+  local module="$4"
+  local out outdir tmp
+
   out="$ROOT/$output"
-  mkdir -p "$(dirname "$out")"
-  case "$kind" in
-    upstream_module)
-      (cd "$CACHE" && lake env .lake/build/bin/lean4export "$module") > "$out"
+  outdir="$(dirname "$out")"
+  mkdir -p "$outdir"
+  tmp="$(mktemp "$outdir/.${name}.XXXXXX.ndjson")"
+  trap '[[ -z "${tmp:-}" ]] || rm -f "$tmp"' RETURN
+
+  if ! case "$kind" in
+      upstream_module)
+        (cd "$CACHE" && lake env .lake/build/bin/lean4export "$module") > "$tmp"
+        ;;
+      local_module)
+        (cd "$ROOT/lean/fixtures" && lake env "$CACHE/.lake/build/bin/lean4export" "$module") > "$tmp"
       ;;
-    local_module)
-      (cd "$ROOT/lean/fixtures" && lake env "$CACHE/.lake/build/bin/lean4export" "$module") > "$out"
-      ;;
-    *)
-      echo "error: unsupported dump kind for $name: $kind" >&2
-      exit 1
-      ;;
-  esac
-  if [[ ! -s "$out" ]]; then
+      *)
+        echo "error: unsupported dump kind for $name: $kind" >&2
+        false
+        ;;
+    esac
+  then
+    rm -f "$tmp"
+    tmp=""
+    trap - RETURN
+    return 1
+  fi
+
+  if [[ ! -s "$tmp" ]]; then
     echo "error: generated dump is empty: $output" >&2
+    rm -f "$tmp"
+    tmp=""
+    trap - RETURN
     exit 1
   fi
-  if ! head -n 1 "$out" | grep -q '"meta"'; then
+  if ! head -n 1 "$tmp" | grep -q '"meta"'; then
     echo "error: generated dump lacks NDJSON metadata: $output" >&2
+    rm -f "$tmp"
+    tmp=""
+    trap - RETURN
     exit 1
   fi
+  mv "$tmp" "$out"
+  tmp=""
+  trap - RETURN
   echo "generated $output"
-done < <(emit_entries)
+}
+
+for entry in "${selected_entries[@]}"; do
+  IFS='|' read -r name output kind module default <<< "$entry"
+  generate_entry "$name" "$output" "$kind" "$module"
+done

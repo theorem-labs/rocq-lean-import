@@ -834,7 +834,9 @@ Create `lean/fixtures/manifest.toml`:
 ```toml
 [toolchain]
 lean4export_repository = "https://github.com/leanprover/lean4export"
+# Documentation ref only; regeneration checks out lean4export_commit.
 lean4export_ref = "master"
+lean4export_commit = "12581a6b680d8478175596338eb2d53383a323e3"
 lean_toolchain = "leanprover/lean4:v4.30.0-rc2"
 export_format = "3.1.0"
 
@@ -1027,7 +1029,14 @@ git commit -m "testdata: add lean fixture regeneration sources"
 - Create: `lean/fixtures/lean-toolchain`
 - Create: `lean/fixtures/lakefile.lean`
 - Modify: `Makefile`
+- Modify: `lean/fixtures/manifest.toml`
 - Test: `scripts/regenerate-dumps.sh --help`
+
+Reliability requirements:
+- `lean/fixtures/manifest.toml` pins `lean4export_commit`; `lean4export_ref` is documentation only.
+- The script checks out the pinned commit instead of a moving branch head.
+- Requested dump names are validated against the manifest before Lean tooling is required. Unknown names fail with `error: unknown dump requested: <name>`, and selecting zero dumps is an error.
+- Exports are written to a temporary file in the target output directory, validated there, and atomically moved into place only after validation succeeds. Temporary files are removed on failure so a failed export does not truncate an existing dump.
 
 - [ ] **Step 1: Create the regeneration script**
 
@@ -1214,12 +1223,12 @@ Run:
 scripts/regenerate-dumps.sh ulift
 ```
 
-Expected: `dumps/ulift.ndjson` is generated and starts with a `meta` JSON object. If Lean tooling is not available, install the missing Lean toolchain dependency and rerun this step before committing.
+Expected: `dumps/ulift.ndjson` is generated and starts with a `meta` JSON object. If Lean tooling is not available in the environment, record the exact missing-tool error and do not include a regenerated dump.
 
 - [ ] **Step 7: Commit manifest regeneration**
 
 ```bash
-git add Makefile scripts/regenerate-dumps.sh lean/fixtures/lean-toolchain lean/fixtures/lakefile.lean dumps/ulift.ndjson
+git add Makefile scripts/regenerate-dumps.sh lean/fixtures/lean-toolchain lean/fixtures/lakefile.lean lean/fixtures/manifest.toml
 git commit -m "tooling: regenerate dumps from fixture manifest"
 ```
 

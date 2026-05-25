@@ -1,6 +1,8 @@
 [toolchain]
 lean4export_repository = "https://github.com/leanprover/lean4export"
+# Documentation ref only; regeneration checks out lean4export_commit.
 lean4export_ref = "master"
+lean4export_commit = "12581a6b680d8478175596338eb2d53383a323e3"
 lean_toolchain = "leanprover/lean4:v4.30.0-rc2"
 export_format = "3.1.0"
 
