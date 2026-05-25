@@ -52,7 +52,7 @@ let do_line ~lcnt state l =
   else
     let json =
       try Json.from_string l
-      with Json.Json_error msg -> err ~lcnt msg
+      with Yojson.Json_error msg -> err ~lcnt msg
     in
     match member "meta" json with
     | Some _ -> parse_meta ~lcnt state json
