@@ -39,6 +39,201 @@ let require_string ~lcnt name json =
   | `String s -> s
   | _ -> err ~lcnt ("field " ^ name ^ " must be a string")
 
+let require_int ~lcnt name json =
+  match require_member ~lcnt name json with
+  | `Int i -> i
+  | _ -> err ~lcnt ("field " ^ name ^ " must be an integer")
+
+let require_bool ~lcnt name json =
+  match require_member ~lcnt name json with
+  | `Bool b -> b
+  | _ -> err ~lcnt ("field " ^ name ^ " must be a boolean")
+
+let require_list ~lcnt name json =
+  match require_member ~lcnt name json with
+  | `List xs -> xs
+  | _ -> err ~lcnt ("field " ^ name ^ " must be an array")
+
+let as_int ~lcnt = function
+  | `Int i -> i
+  | _ -> err ~lcnt "expected integer"
+
+let get_name ~lcnt state i =
+  try RRange.get state.names i
+  with Not_found -> err ~lcnt ("unknown name id " ^ string_of_int i)
+
+let get_expr ~lcnt state i =
+  try RRange.get state.exprs i
+  with Not_found -> err ~lcnt ("unknown expression id " ^ string_of_int i)
+
+let get_univ ~lcnt state i =
+  try RRange.get state.univs i
+  with Not_found -> err ~lcnt ("unknown level id " ^ string_of_int i)
+
+let expect_next ~lcnt kind expected actual =
+  if expected <> actual then
+    err
+      ~lcnt
+      (kind ^ " id " ^ string_of_int actual ^ " is not the next expected id "
+     ^ string_of_int expected)
+
+let binders ~lcnt = function
+  | "default" -> NotImplicit
+  | "implicit" -> Maximal
+  | "strictImplicit" -> NonMaximal
+  | "instImplicit" -> Typeclass
+  | b -> err ~lcnt ("unknown Lean binderInfo " ^ b)
+
+let parse_name ~lcnt state json =
+  let next = require_int ~lcnt "in" json in
+  expect_next ~lcnt "name" (RRange.length state.names) next;
+  match (member "str" json, member "num" json) with
+  | Some payload, None ->
+    let pre = require_int ~lcnt "pre" payload in
+    let str = require_string ~lcnt "str" payload in
+    let base = get_name ~lcnt state pre in
+    ({ state with names = RRange.append state.names (N.append base str) }, None)
+  | None, Some payload ->
+    let pre = require_int ~lcnt "pre" payload in
+    let i = require_int ~lcnt "i" payload in
+    let base = get_name ~lcnt state pre in
+    ( {
+        state with
+        names = RRange.append state.names (N.raw_append base (string_of_int i));
+      },
+      None )
+  | _ -> err ~lcnt "bad name record"
+
+let parse_level ~lcnt state json =
+  let next = require_int ~lcnt "il" json in
+  expect_next ~lcnt "level" (RRange.length state.univs) next;
+  match (member "succ" json, member "max" json, member "imax" json, member "param" json) with
+  | Some (`Int base), None, None, None ->
+    ({ state with univs = RRange.append state.univs (U.Succ (get_univ ~lcnt state base)) }, None)
+  | None, Some (`List [ a; b ]), None, None ->
+    ( {
+        state with
+        univs =
+          RRange.append
+            state.univs
+            (U.Max (get_univ ~lcnt state (as_int ~lcnt a), get_univ ~lcnt state (as_int ~lcnt b)));
+      },
+      None )
+  | None, None, Some (`List [ a; b ]), None ->
+    ( {
+        state with
+        univs =
+          RRange.append
+            state.univs
+            (U.IMax (get_univ ~lcnt state (as_int ~lcnt a), get_univ ~lcnt state (as_int ~lcnt b)));
+      },
+      None )
+  | None, None, None, Some (`Int n) ->
+    ({ state with univs = RRange.append state.univs (U.UNamed (get_name ~lcnt state n)) }, None)
+  | _ -> err ~lcnt "bad level record"
+
+let parse_nat_lit ~lcnt = function
+  | `String n -> (
+    try Z.of_string n
+    with Invalid_argument _ | Failure _ -> err ~lcnt "bad natural literal")
+  | `Int n -> Z.of_int n
+  | _ -> err ~lcnt "bad natural literal"
+
+let parse_expr ~lcnt state json =
+  let next = require_int ~lcnt "ie" json in
+  expect_next ~lcnt "expression" (RRange.length state.exprs) next;
+  let expr =
+    match
+      ( member "bvar" json,
+        member "sort" json,
+        member "const" json,
+        member "app" json,
+        member "lam" json,
+        member "forallE" json,
+        member "letE" json,
+        member "proj" json,
+        member "natVal" json,
+        member "strVal" json,
+        member "mdata" json )
+    with
+    | Some (`Int n), None, None, None, None, None, None, None, None, None, None -> Bound n
+    | None, Some (`Int u), None, None, None, None, None, None, None, None, None ->
+      Sort (get_univ ~lcnt state u)
+    | None, None, Some payload, None, None, None, None, None, None, None, None ->
+      let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
+      let us =
+        require_list ~lcnt "us" payload
+        |> List.map (fun u -> get_univ ~lcnt state (as_int ~lcnt u))
+      in
+      Const (name, us)
+    | None, None, None, Some payload, None, None, None, None, None, None, None ->
+      App
+        ( get_expr ~lcnt state (require_int ~lcnt "fn" payload),
+          get_expr ~lcnt state (require_int ~lcnt "arg" payload) )
+    | None, None, None, None, Some payload, None, None, None, None, None, None ->
+      Lam
+        ( binders ~lcnt (require_string ~lcnt "binderInfo" payload),
+          get_name ~lcnt state (require_int ~lcnt "name" payload),
+          get_expr ~lcnt state (require_int ~lcnt "type" payload),
+          get_expr ~lcnt state (require_int ~lcnt "body" payload) )
+    | None, None, None, None, None, Some payload, None, None, None, None, None ->
+      Pi
+        ( binders ~lcnt (require_string ~lcnt "binderInfo" payload),
+          get_name ~lcnt state (require_int ~lcnt "name" payload),
+          get_expr ~lcnt state (require_int ~lcnt "type" payload),
+          get_expr ~lcnt state (require_int ~lcnt "body" payload) )
+    | None, None, None, None, None, None, Some payload, None, None, None, None ->
+      Let
+        {
+          name = get_name ~lcnt state (require_int ~lcnt "name" payload);
+          ty = get_expr ~lcnt state (require_int ~lcnt "type" payload);
+          v = get_expr ~lcnt state (require_int ~lcnt "value" payload);
+          rest = get_expr ~lcnt state (require_int ~lcnt "body" payload);
+        }
+    | None, None, None, None, None, None, None, Some payload, None, None, None ->
+      Proj
+        ( get_name ~lcnt state (require_int ~lcnt "typeName" payload),
+          require_int ~lcnt "idx" payload,
+          get_expr ~lcnt state (require_int ~lcnt "struct" payload) )
+    | None, None, None, None, None, None, None, None, Some n, None, None ->
+      Nat (parse_nat_lit ~lcnt n)
+    | None, None, None, None, None, None, None, None, None, Some (`String s), None ->
+      String s
+    | None, None, None, None, None, None, None, None, None, None, Some payload ->
+      get_expr ~lcnt state (require_int ~lcnt "expr" payload)
+    | _ -> err ~lcnt "bad expression record"
+  in
+  ({ state with exprs = RRange.append state.exprs expr }, None)
+
+let level_params ~lcnt state payload =
+  require_list ~lcnt "levelParams" payload
+  |> List.map (fun n -> get_name ~lcnt state (as_int ~lcnt n))
+
+let line_msg ~lcnt name =
+  Feedback.msg_info Pp.(str "line " ++ int lcnt ++ str ": " ++ N.pp name)
+
+let parse_axiom ~lcnt state payload =
+  ignore (require_bool ~lcnt "isUnsafe" payload);
+  let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
+  line_msg ~lcnt name;
+  let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
+  let univs = level_params ~lcnt state payload in
+  (state, Some (Entry (Ax { name; ty; univs })))
+
+let parse_deflike ~lcnt state payload =
+  ignore (require_bool ~lcnt "isUnsafe" payload);
+  let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
+  line_msg ~lcnt name;
+  let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
+  let body = get_expr ~lcnt state (require_int ~lcnt "value" payload) in
+  let univs = level_params ~lcnt state payload in
+  (state, Some (Entry (Def { name; ty; body; univs })))
+
+let parse_quot ~lcnt state payload =
+  ignore (require_string ~lcnt "kind" payload);
+  line_msg ~lcnt LeanParse.quot_name;
+  (state, Some (Entry (Quot LeanParse.quot_name)))
+
 let parse_meta ~lcnt state json =
   let meta = require_member ~lcnt "meta" json in
   let format = require_member ~lcnt "format" meta in
@@ -57,7 +252,40 @@ let do_line ~lcnt state l =
     match member "meta" json with
     | Some _ -> parse_meta ~lcnt state json
     | None when not state.seen_meta -> err ~lcnt "expected metadata object before export records"
-    | None -> err ~lcnt "unsupported NDJSON record"
+    | None -> (
+      match
+        ( member "str" json,
+          member "num" json,
+          member "succ" json,
+          member "max" json,
+          member "imax" json,
+          member "param" json,
+          member "ie" json,
+          member "axiom" json,
+          member "def" json,
+          member "thm" json,
+          member "opaque" json,
+          member "quot" json )
+      with
+      | Some _, None, None, None, None, None, None, None, None, None, None, None
+      | None, Some _, None, None, None, None, None, None, None, None, None, None ->
+        parse_name ~lcnt state json
+      | None, None, Some _, None, None, None, None, None, None, None, None, None
+      | None, None, None, Some _, None, None, None, None, None, None, None, None
+      | None, None, None, None, Some _, None, None, None, None, None, None, None
+      | None, None, None, None, None, Some _, None, None, None, None, None, None ->
+        parse_level ~lcnt state json
+      | None, None, None, None, None, None, Some _, None, None, None, None, None ->
+        parse_expr ~lcnt state json
+      | None, None, None, None, None, None, None, Some payload, None, None, None, None ->
+        parse_axiom ~lcnt state payload
+      | None, None, None, None, None, None, None, None, Some payload, None, None, None
+      | None, None, None, None, None, None, None, None, None, Some payload, None, None
+      | None, None, None, None, None, None, None, None, None, None, Some payload, None ->
+        parse_deflike ~lcnt state payload
+      | None, None, None, None, None, None, None, None, None, None, None, Some payload ->
+        parse_quot ~lcnt state payload
+      | _ -> err ~lcnt "unsupported NDJSON record")
 
 let pp_state state =
   let open Pp in
