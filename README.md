@@ -20,7 +20,11 @@ opam install coq-lean-import
 You need Lean [exported files](https://github.com/leanprover/lean/blob/master/doc/export_format.md)
 as input.
 
-For use with Lean 4, you can use [lean4export](https://github.com/leanprover/lean4export).
+For use with Lean 4, use [lean4export](https://github.com/leanprover/lean4export).
+Current maintained fixtures target the Lean toolchain pinned by `lean4export`
+master and the Lean 4 NDJSON export format `3.1.0`. Maintained regeneration
+uses `lean/fixtures/manifest.toml` to pin both the `lean4export` commit and
+toolchain.
 
 For use with Lean 3, see [commit ce8ed08172d3247d992dacab08e0e8f59864a57b](https://github.com/coq-community/rocq-lean-import/commits/ce8ed08172d3247d992dacab08e0e8f59864a57b), which is compatible with Coq 8.20 and Lean 3, or [commit c513cee4f5edf8e8a06ba553ca58de5142cffde6](https://github.com/coq-community/rocq-lean-import/commits/c513cee4f5edf8e8a06ba553ca58de5142cffde6) which is compatible with Lean 3 and [coq/coq@a00be77](https://github.com/coq/coq/commit/a00be7706fad3eebbaec3d77ba2bb5cba516fb2b).
 
@@ -32,6 +36,29 @@ For your convenience, I have uploaded a few examples:
   This is the whole Lean stdlib, totalling 10244 definitions and inductives.
 - [mathlib.out.zip](dumps/mathlib.out.zip) (211MB compressed to 56MB, NB: uses git lfs)
   All mathlib (AFAICT): 66400 definitions and inductives (the way I counted may differ a bit from the way Lean counts).
+
+## Regenerating Lean 4 dumps
+
+Maintained Lean 4 fixtures are described in `lean/fixtures/manifest.toml`.
+Upstream-backed fixtures name Lean modules from the toolchain pinned by
+`lean4export`; local regression fixtures live under `lean/fixtures/`.
+
+To regenerate the default fixture set:
+
+```sh
+make regenerate-dumps
+```
+
+To regenerate a specific fixture:
+
+```sh
+scripts/regenerate-dumps.sh ulift
+```
+
+The script requires `elan`, `lean`, `lake`, and `git`. It builds the pinned
+`lean4export` commit, verifies the pinned `lean-toolchain`, exports the selected
+modules, writes generated dumps atomically, and checks that generated dumps
+start with NDJSON metadata.
 
 Then start Coq and run
 
