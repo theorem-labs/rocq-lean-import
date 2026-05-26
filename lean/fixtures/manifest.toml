@@ -1,0 +1,78 @@
+[toolchain]
+lean4export_repository = "https://github.com/leanprover/lean4export"
+# Documentation ref only; regeneration checks out lean4export_commit.
+lean4export_ref = "master"
+lean4export_commit = "12581a6b680d8478175596338eb2d53383a323e3"
+lean_toolchain = "leanprover/lean4:v4.30.0-rc2"
+export_format = "3.1.0"
+
+[[dump]]
+name = "core"
+output = "dumps/core.ndjson"
+kind = "upstream_module"
+module = "Init.Core"
+default = true
+
+[[dump]]
+name = "init"
+output = "dumps/init.ndjson"
+kind = "upstream_module"
+module = "Init"
+default = true
+
+[[dump]]
+name = "stdlib"
+output = "dumps/stdlib.ndjson"
+kind = "upstream_module"
+module = "Std"
+default = false
+expensive = true
+
+[[dump]]
+name = "ulift"
+output = "dumps/ulift.ndjson"
+kind = "local_module"
+module = "Ulift"
+default = true
+
+[[dump]]
+name = "pnni"
+output = "dumps/pnni.ndjson"
+kind = "local_module"
+module = "Pnni"
+default = true
+
+[[dump]]
+name = "anomaly_print_projections"
+output = "dumps/anomaly_print_projections.ndjson"
+kind = "local_module"
+module = "AnomalyPrintProjections"
+default = true
+
+[[dump]]
+name = "bin_tree"
+output = "dumps/bin_tree.ndjson"
+kind = "local_module"
+module = "BinTree"
+default = true
+
+[[dump]]
+name = "list"
+output = "dumps/list.ndjson"
+kind = "local_module"
+module = "List"
+default = true
+
+[[dump]]
+name = "logic"
+output = "dumps/logic.ndjson"
+kind = "local_module"
+module = "Logic"
+default = true
+
+[[dump]]
+name = "quot"
+output = "dumps/quot.ndjson"
+kind = "local_module"
+module = "Quot"
+default = true
