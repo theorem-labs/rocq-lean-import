@@ -13,3 +13,7 @@ src/g_lean.ml
 META*
 
 *.log.out
+
+# decompressed from dumps/*.ndjson.zip by the tests
+/dumps/init.ndjson
+/dumps/stdlib.ndjson
