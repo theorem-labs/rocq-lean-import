@@ -1,6 +1,6 @@
 # file	features	base_entry	own_entry	status	commits
-tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	open	-
-tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	open	-
+tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
+tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
 tests/lean434_char.v	F6	BitVec.ofNatLT	-	open	-
 tests/lean434_strings.v	string-literals	Nat.pow_pos._f	-	open	-
 tests/lean434_nested.v	autoParam nested-inductive	Nat.pow_pos._f	-	open	-
