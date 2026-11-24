@@ -16,7 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-9.2-cut:
+  # A job id may not hold a '.'; the name is what GitHub shows as the check.
+  build_9_2_cut:
+    name: build-9.2-cut
     if: github.event_name == 'push' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 180
