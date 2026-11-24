@@ -2,6 +2,14 @@ open LeanExpr
 
 type parsing_state
 
+type path = Legacy | New
+(** The path an export takes: [New] for Lean 4.17.0 and later, read
+    from the metadata [lean.version]; [Legacy] for an earlier version, for an
+    unreadable or absent version (with a warning), and before any metadata. *)
+
+val path : parsing_state -> path
+(** The path the first metadata line of the export chose. *)
+
 exception Refused of {
   state : parsing_state;
   entry : LeanName.t option;

@@ -299,6 +299,49 @@ equality type (we can't use the one from Coq's standard library since
 it's not polymorphic). Declaring the eliminators for equality is still
 done by `Lean Import`.
 
+## Predeclared constants and the path of an export
+
+Besides equality and the quotient, `src/Lean.v` predeclares a few Lean
+types and definitions, and `Lean Import` binds the export's entry of
+each to the predeclared one instead of declaring it: `Eq`, `Nat`,
+`Nat.le`, `Or`, `And`, `Fin`, `ULift` (with
+`ULiftCumulativeRegistration`, see `src/ULiftCumulativeRegistration.v`)
+and, on the legacy path only, `BitVec`, `UInt32`, `Char`, `UInt32.size`,
+`Nat.isValidChar` and `Nat.pow`.
+
+An NDJSON export takes the new path when its metadata line gives
+`lean.version` 4.17.0 or later (a leading `v` and a suffix after `-`,
+as in `4.17.0-rc1`, are ignored), and the legacy path for an earlier
+version. An export in the old text format takes the legacy path. An
+NDJSON export whose metadata has no `lean` object or no
+`MAJOR.MINOR.PATCH` version takes the legacy path with a warning that
+names the field and its value. The path is chosen before the first
+entry, from the metadata only.
+
+On the new path `BitVec`, `UInt32`, `Char`, `UInt32.size`,
+`Nat.isValidChar` and `Nat.pow` are imported from their own entries, as
+Lean defines them, and a string literal is translated as the term
+Lean's kernel unfolds it to: `String.ofList` applied to a list of
+`Char.ofNat <code point>` (Lean 4.34's `string_lit_to_constructor`;
+Lean 4.25 and earlier used `String.mk` there, so a literal in such an
+export is refused unless it declares `String.ofList`). A repeated
+`UInt32` or `Char` entry is skipped as a duplicate, like any other
+entry. On the legacy path a second `UInt32` or `Char` entry may switch
+between the pre-4.17 records `UInt32_legacy`/`Char_legacy` and
+`UInt32`/`Char`.
+
+On either path each entry bound to a predeclared constant is first
+checked against it, after the translation the importer gives any entry:
+an inductive type's parameter count, type, constructor count and
+constructor types, and a definition's declared type (its value is not
+read: the predeclared one is kept). Types are compared by conversion,
+up to cumulativity: `src/Lean.v` declares in `Set` types that the
+importer translates from Lean's `Type` to `Type@{Set+1}`. An entry that
+differs is refused with a message `The export's <name> does not agree
+with the predeclared <constant>: ...` that gives the difference. The
+constructors of the export are bound, by their export names, to the
+predeclared constructors in order.
+
 ## Additional note on recursors
 
 Coq autogenerates recursors for inductives types called (for an

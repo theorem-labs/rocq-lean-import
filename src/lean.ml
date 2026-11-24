@@ -740,17 +740,22 @@ type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | BitVec
 type predeclared_def_kind = UInt32_size | Nat_isValidChar | Nat_pow
 type predeclared_ind_as_def_kind = ULift_cumul
 
-let get_predeclared_cnames (k : predeclared_ind_kind) n =
-  match k with
-  | Eq -> [ N.append n "refl" ]
-  | Nat -> [ N.append n "zero"; N.append n "succ" ]
-  | Nat_le -> [ N.append n "refl"; N.append n "step" ]
-  | Or -> [ N.append n "inl"; N.append n "inr" ]
-  | And -> [ N.append n "intro" ]
-  | Fin -> [ N.append n "mk" ]
-  | UInt32 -> [ N.append n "mk" ]
-  | BitVec -> [ N.append n "mk" ]
-  | Char -> [ N.append n "mk" ]
+(* The path of the export being imported ([LeanParseNdjson.export_path]).
+   [do_input] sets it from the parser before it declares each entry: what
+   [LeanParseNdjson.path] read from the NDJSON metadata, the legacy path for
+   the old text format. *)
+let current_path = ref LeanParseNdjson.Legacy
+
+let on_new_path () = !current_path = LeanParseNdjson.New
+
+(* The members of the predeclared tables below that only the legacy path
+   predeclares: the new path imports each from its own export entry, as Lean
+   defines it. *)
+let legacy_only_predeclared =
+  [ [ "BitVec" ]; [ "UInt32" ]; [ "Char" ]; [ "UInt32"; "size" ]; [ "Nat"; "isValidChar" ];
+    [ "Nat"; "pow" ] ]
+
+let predeclared_on_path h = not (on_new_path () && List.mem h legacy_only_predeclared)
 
 (* Fin-headed ctor -> pre-4.17 [.legacy] record; otherwise default. *)
 let get_predeclared_uint32 ctors n i =
@@ -778,7 +783,8 @@ let get_predeclared_ind_any ?(ctors = []) ?(uint32_is_legacy = false) n i =
   let std indh = get_predeclared_ind indh n i in
   List.filter_map
     (fun (indk, indh, lookup) ->
-      lookup () |> Option.map (fun x -> (indk, indh, x)))
+      if not (predeclared_on_path indh) then None
+      else lookup () |> Option.map (fun x -> (indk, indh, x)))
     [
       (Eq, [ "Eq" ], fun () -> std [ "Eq" ]);
       (Nat, [ "Nat" ], fun () -> std [ "Nat" ]);
@@ -818,7 +824,8 @@ let get_predeclared_ind_as_def_some n i =
 let get_predeclared_def_any n i =
   List.filter_map
     (fun (defk, defh) ->
-      get_predeclared_def defh n i |> Option.map (fun x -> (defk, defh, x)))
+      if not (predeclared_on_path defh) then None
+      else get_predeclared_def defh n i |> Option.map (fun x -> (defk, defh, x)))
     [
       (UInt32_size, [ "UInt32"; "size" ]);
       (Nat_isValidChar, [ "Nat"; "isValidChar" ]);
@@ -1047,6 +1054,70 @@ let mk_string char string list char_uinst mkChar s =
   let ls = mk_list list char_uinst char chars in
   Constr.(mkApp (mkConstructU ((string, 1), UVars.Instance.empty), [| ls |]))
 
+(* On the new path, a string literal is translated as the term Lean's kernel
+   unfolds it to (Lean v4.34.0, src/kernel/inductive.cpp:1368-1380,
+   [string_lit_to_constructor], whose constants are set at lines 1394-1402):
+   [String.ofList] applied to the list [List.cons.{0} Char (Char.ofNat c)] ...
+   [List.nil.{0} Char] of the literal's code points [c], each a natural number
+   literal. [to_constr] translates it like any other Lean term, so it uses the
+   export's own [String.ofList], [List], [Char] and [Char.ofNat]. Lean's
+   strings are well-formed UTF-8: a literal that is not is refused. *)
+let string_lit_expr s =
+  let const path us = Const (N.append_list N.anon path, us) in
+  let char = const [ "Char" ] [] in
+  (* [U.Prop] is Lean's universe level 0, as in the exports. *)
+  let list_ctor k = App (const [ "List"; k ] [ U.Prop ], char) in
+  let cons c rest =
+    App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanExpr.Nat (Z.of_int c))), rest)
+  in
+  (* The code points of [s] from byte [i] on, prepended in reverse to [acc]. *)
+  let rec rev_code_points i acc =
+    if i >= String.length s then acc
+    else
+      let d = String.get_utf_8_uchar s i in
+      if not (Uchar.utf_decode_is_valid d) then
+        CErrors.user_err
+          Pp.(str "String literal is not well-formed UTF-8 at byte " ++ int i ++ str ".")
+      else
+        rev_code_points (i + Uchar.utf_decode_length d)
+          (Uchar.to_int (Uchar.utf_decode_uchar d) :: acc)
+  in
+  App
+    ( const [ "String"; "ofList" ] [],
+      List.fold_left (fun rest c -> cons c rest) (list_ctor "nil") (rev_code_points 0 []) )
+
+(* The Rocq term of the instantiation [inst] at the Rocq universes [univs] of
+   the Lean universes that are not SProp (see [int_of_univs]): its [algs] are
+   instantiated with them. *)
+let instance_term inst univs uconv =
+  let subst l =
+    let u =
+      match Level.var_index l with
+      | None -> Universe.make l
+      | Some n -> List.nth univs n
+    in
+    Some u
+  in
+  let extra =
+    List.map
+      (fun alg -> simplify_universe (UnivSubst.subst_univs_universe subst alg))
+      inst.algs
+  in
+  let univs = List.concat [ univs; extra ] in
+  let uconv, univs =
+    CList.fold_left_map (fun uconv u -> to_univ_level u uconv) uconv univs
+  in
+  let u = Instance.of_array ([||], Array.of_list univs) in
+  (uconv, Constr.mkRef (inst.ref, u))
+
+(* What [check_predeclared] compares with a predeclared constant: the entry of
+   a definition, or the entry of an inductive type with the number of
+   parameters of the predeclared inductive ([None] for a type predeclared as a
+   definition) and the predeclared constructors, in order. *)
+type predeclared_check =
+  | Check_def of def
+  | Check_ind of { ind : ind; nparams : int option; ctors : instantiation list }
+
 let lcnt = ref 0
 
 let line_msg name =
@@ -1166,6 +1237,7 @@ let rec to_constr =
           ()
       in
       ret (nat_int nat double i)
+    | String s when on_new_path () -> to_constr env (string_lit_expr s)
     | String s ->
       (* instantiate (N.append N.anon "Char") [] >>= fun char -> *)
       (* let (_, charu) = Constr.destInd char in *)
@@ -1216,26 +1288,7 @@ and instantiate n univs uconv =
   (* TODO what happens when is_large_elim and the motive is instantiated with Prop? *)
   let univs = List.map (to_universe uconv.map) univs in
   let i, univs = int_of_univs univs in
-  let inst = ensure_exists n i in
-  let subst l =
-    let u =
-      match Level.var_index l with
-      | None -> Universe.make l
-      | Some n -> List.nth univs n
-    in
-    Some u
-  in
-  let extra =
-    List.map
-      (fun alg -> simplify_universe (UnivSubst.subst_univs_universe subst alg))
-      inst.algs
-  in
-  let univs = List.concat [ univs; extra ] in
-  let uconv, univs =
-    CList.fold_left_map (fun uconv u -> to_univ_level u uconv) uconv univs
-  in
-  let u = Instance.of_array ([||], Array.of_list univs) in
-  (uconv, Constr.mkRef (inst.ref, u))
+  instance_term (ensure_exists n i) univs uconv
 
 and ensure_exists n i =
   try !declared |> N.Map.find n |> Int.Map.find i
@@ -1251,14 +1304,108 @@ and ensure_exists n i =
     | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared")
     | exception Not_found -> CErrors.user_err Pp.(str "missing " ++ N.pp n))
 
-and declare_def { name = n; ty; body; univs; } i =
+(* Whether the export's entry agrees with the predeclared constant [pred] the
+   importer binds it to at instance [i], on either path. The entry is translated as the importer translates any entry,
+   and [pred] is taken at the same universes, as [instantiate] takes it. For a
+   definition ([Check_def]) its declared type is compared, not its value:
+   the predeclared value is kept. For an inductive type ([Check_ind]) its
+   parameter count, its type, its constructor count and each constructor's type
+   (in the order of the predeclared constructors) are compared. Types are
+   compared by conversion up to cumulativity ([Conversion.conv_leq], Rocq
+   kernel/conversion.mli:56, which compares with the universes of its [env]):
+   the predeclared type may live in a smaller universe, as src/Lean.v declares
+   in [Set] the types that the importer translates from Lean's [Type] to
+   [Type@{Set+1}]. A difference refuses the entry, with a message that names
+   the entry, the predeclared constant and the difference. *)
+and check_predeclared check i (pred : instantiation) =
+  let name, univs =
+    match check with
+    | Check_def def -> (def.name, def.univs)
+    | Check_ind { ind; _ } -> (ind.name, ind.univs)
+  in
+  let uconv = start_uconv univs i in
+  let rocq_univs =
+    snd (int_of_univs (List.map (fun u -> to_universe uconv.map (U.UNamed u)) univs))
+  in
+  let refuse difference =
+    CErrors.user_err
+      Pp.(
+        str "The export's " ++ N.pp name ++ str " does not agree with the predeclared "
+        ++ Printer.pr_global pred.ref ++ str ": " ++ difference ++ str ".")
+  in
+  (* [what] of the entry, [export], against the type of [inst]. *)
+  let compare_type uconv what export inst =
+    let uconv, c = instance_term inst rocq_univs uconv in
+    let env = Environ.set_universes uconv.graph (Global.env ()) in
+    let evd = Evd.from_env env in
+    let predeclared =
+      EConstr.to_constr evd (Retyping.get_type_of env evd (EConstr.of_constr c))
+    in
+    match Conversion.conv_leq env predeclared export with
+    | Ok () -> uconv
+    | Error () ->
+      let pr = Printer.pr_constr_env env evd in
+      refuse
+        Pp.(
+          what ++ spc () ++ pr export ++ spc () ++ str "is not convertible with" ++ spc ()
+          ++ pr predeclared ++ str ", the type of " ++ Printer.pr_global inst.ref)
+  in
+  match check with
+  | Check_def { ty; _ } ->
+    let uconv, ty = to_constr empty_env ty uconv in
+    ignore (compare_type uconv (Pp.str "its declared type") ty pred)
+  | Check_ind { ind = { params; ty; ctors; _ }; nparams; ctors = pred_ctors } ->
+    let count what export predeclared =
+      if export <> predeclared then
+        refuse
+          Pp.(
+            str "the export gives it " ++ int export ++ str " " ++ str what
+            ++ str ", the predeclared one has " ++ int predeclared)
+    in
+    Option.iter (count "parameters" (List.length params)) nparams;
+    let (env_params, uconv), params = to_params uconv params in
+    let uconv, ty = to_constr env_params ty uconv in
+    let full_ty = Term.it_mkProd_or_LetIn ty params in
+    let uconv = compare_type uconv (Pp.str "its type") full_ty pred in
+    count "constructors" (List.length ctors) (List.length pred_ctors);
+    (* The constructor types, translated as [declare_ind] translates those of a
+       new inductive type: in the context of the type and its parameters. *)
+    let _, sort =
+      Reduction.dest_arity
+        (Environ.set_rel_context_val env_params
+           (Environ.set_universes uconv.graph (Global.env ())))
+        ty
+    in
+    let env_ind =
+      Environ.push_rel_context_val
+        (LocalAssum
+           (Context.make_annot (N.to_name name) (Sorts.relevance_of_sort sort), full_ty))
+        empty_env
+    in
+    let env_ind_params =
+      Context.Rel.fold_outside Environ.push_rel_context_val params ~init:env_ind
+    in
+    let uconv, ind_term = instance_term pred rocq_univs uconv in
+    ignore
+      (List.fold_left2
+         (fun uconv (cname, cty) cinst ->
+           let uconv, cty = to_constr env_ind_params cty uconv in
+           let cty = Vars.subst1 ind_term (Term.it_mkProd_or_LetIn cty params) in
+           compare_type uconv
+             Pp.(str "the type of its constructor " ++ N.pp cname ++ str ",")
+             cty cinst)
+         uconv ctors pred_ctors)
+
+and declare_def ({ name = n; ty; body; univs; } as def) i =
   let ref, algs =
     match get_predeclared_def_some n i with
     | Some ((UInt32_size | Nat_isValidChar | Nat_pow), _, (def_name, c)) ->
       (* Hack to let the user predeclare some constants
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print def_name ++ str " is predeclared");
-      (GlobRef.ConstRef c, [])
+      let ref = GlobRef.ConstRef c in
+      check_predeclared (Check_def def) i { ref; algs = [] };
+      (ref, [])
     | None ->
       let uconv = start_uconv univs i in
       let uconv, ty = to_constr empty_env ty uconv in
@@ -1317,7 +1464,7 @@ and to_params uconv params =
   in
   (acc, List.rev params)
 
-and declare_ind { name = n; params; ty; ctors; univs } i =
+and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
   (* Handle inductives predeclared as definitions (e.g., ULift with cumulativity).
      We check if there's a cumul registration for this specific instance. *)
   match get_predeclared_ind_as_def_some n i with
@@ -1342,10 +1489,11 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
     let algs_rec = algs_of 1 2 in
     let ulift_ref = Rocqlib.lib_ref (cumul_reg n) in
     let inst = { ref = ulift_ref; algs = algs_2 } in
+    let up = { ref = Rocqlib.lib_ref (cumul_reg (N.append n "up")); algs = algs_2 } in
+    check_predeclared (Check_ind { ind; nparams = None; ctors = [ up ] }) i inst;
     add_declared n i inst;
-    (* Register ULift.up constructor *)
-    let cname = N.append n "up" in
-    add_declared cname i { ref = Rocqlib.lib_ref (cumul_reg cname); algs = algs_2 };
+    (* The export's constructor (Lean's [ULift.up]), bound to ULift_up_cumul. *)
+    List.iter (fun (cname, _) -> add_declared cname i up) ctors;
     (* Register ULift.down *)
     let dname = N.append n "down" in
     add_declared dname i { ref = Rocqlib.lib_ref (cumul_reg dname); algs = algs_2 };
@@ -1371,13 +1519,26 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
             Names.GlobRef.CanOrd.equal uint32_ref legacy_ref
           with _ -> false))
   in
+  (* The predeclared [mind] checked against the entry: the export's names of
+     its constructors. *)
+  let check_predeclared_mind mind =
+    let mib = Global.lookup_mind mind in
+    let pred_ctors =
+      List.init (Array.length mib.mind_packets.(0).mind_consnames) (fun k ->
+          { ref = GlobRef.ConstructRef ((mind, 0), k + 1); algs = [] })
+    in
+    check_predeclared
+      (Check_ind { ind; nparams = Some mib.mind_nparams; ctors = pred_ctors })
+      i { ref = GlobRef.IndRef (mind, 0); algs = [] };
+    List.map fst ctors
+  in
   let mind, algs, ind_name, cnames, univs, squashy =
     match get_predeclared_ind_some ~ctors ~uint32_is_legacy n i with
     | Some (Eq, _, (ind_name, mind)) ->
       (* Hack to let the user predeclare eq and quot before running Lean Import
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cname = N.append n "refl" in
+      let cnames = check_predeclared_mind mind in
       let squashy =
         { maybe_prop = true; always_prop = true; lean_squashes = false }
       in
@@ -1391,16 +1552,16 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
         | 1 -> UContext.empty
         | _ -> assert false
       in
-      (mind, [], ind_name, [ cname ], univs, squashy)
+      (mind, [], ind_name, cnames, univs, squashy)
     | Some
-        ( ((Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char) as k),
+        ( (Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char),
           _,
           (ind_name, mind) ) ->
       (* Hack to let the user predeclare various types before running Lean Import
          TODO make a more general Register-like API? *)
       (* this case is for the ones without universes*)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cnames = get_predeclared_cnames k n in
+      let cnames = check_predeclared_mind mind in
       let squashy = N.Map.get n !squash_info in
       (mind, [], ind_name, cnames, UContext.empty, squashy)
     | None ->
@@ -1838,10 +1999,12 @@ let entry_name = function
 (* A name registered for the version-aware predeclared dispatch machinery
    (UInt32/Char in particular) may legitimately be emitted twice: the
    second [#IND] flips [get_predeclared_*] to a different Rocq reference.
-   We do not dedupe those; the dispatch logic handles them. *)
+   We do not dedupe those; the dispatch logic handles them. Only the legacy
+   path predeclares them: on the new path a repeated [UInt32] or [Char] is a
+   duplicate like any other entry. *)
 let is_predeclared_dispatch_name n =
   let has_prefix prefix = N.equal n (N.append_list N.anon prefix) in
-  has_prefix [ "UInt32" ] || has_prefix [ "Char" ]
+  (not (on_new_path ())) && (has_prefix [ "UInt32" ] || has_prefix [ "Char" ])
 
 (* Duplicate entries can occur when lean4export is invoked with multiple
    roots that share a transitive dependency: the shared declaration is
@@ -2121,6 +2284,11 @@ let rec do_input state ~from ~until ch =
           incr lcnt;
           do_input state ~from ~until ch
         | false, Some (Entry entry) ->
+          (* The path the export's metadata chose before its first entry. *)
+          current_path :=
+            (match state.pstate with
+            | OldParser _ -> LeanParseNdjson.Legacy
+            | NdjsonParser pstate -> LeanParseNdjson.path pstate);
           (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
           let st = freeze () in
           (match add_entry_in_time entry with

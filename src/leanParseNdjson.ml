@@ -3,6 +3,8 @@ module N = LeanName
 module Json = Yojson.Safe
 module RRange = LeanParseShared.RRange
 
+type path = Legacy | New
+
 type parsing_state = {
   names : N.t RRange.t;
   exprs : expr RRange.t;
@@ -12,6 +14,8 @@ type parsing_state = {
   refused_exprs : Int.Set.t;
   refused_univs : Int.Set.t;
   seen_meta : bool;
+  (* The path the first metadata line chose (see [export_path]). *)
+  path : path;
 }
 
 let empty_state =
@@ -23,7 +27,10 @@ let empty_state =
     refused_exprs = Int.Set.empty;
     refused_univs = Int.Set.empty;
     seen_meta = false;
+    path = Legacy;
   }
+
+let path state = state.path
 
 exception Refused of {
   state : parsing_state;
@@ -336,12 +343,53 @@ let parse_inductive ~lcnt state payload =
   | [ ind_json ] -> (state, Some (parse_ind_val ~lcnt state ind_json ctors))
   | _ -> err ~lcnt "mutual inductive groups are not supported by the current importer model"
 
+(* [MAJOR.MINOR.PATCH] at the start of [v], after one optional leading [v],
+   followed by nothing or by a suffix after [-] ([4.17.0-rc1]). *)
+let version_triple v =
+  let v = if String.length v > 0 && v.[0] = 'v' then String.sub v 1 (String.length v - 1) else v in
+  let core = match String.index_opt v '-' with Some k -> String.sub v 0 k | None -> v in
+  let number s =
+    if s <> "" && String.for_all (fun c -> '0' <= c && c <= '9') s then int_of_string_opt s
+    else None
+  in
+  match List.map number (String.split_on_char '.' core) with
+  | [ Some major; Some minor; Some patch ] -> Some (major, minor, patch)
+  | _ -> None
+
+(* The path of an export, from its metadata [meta.lean.version]. Lean
+   4.17.0 and later take the new path; an earlier version takes the legacy one.
+   A metadata object with no [lean] object, no [version] string, or a version
+   that does not start with [MAJOR.MINOR.PATCH] takes the legacy path, as before
+   this choice existed, with a warning that names the field and its value. *)
+let export_path ~lcnt meta =
+  let legacy field value =
+    Feedback.msg_warning
+      Pp.(
+        str "NDJSON metadata at line " ++ int lcnt ++ str ": field " ++ str field ++ str " is "
+        ++ str value
+        ++ str "; without a Lean version MAJOR.MINOR.PATCH in lean.version the export takes the legacy path.");
+    Legacy
+  in
+  match member "lean" meta with
+  | None -> legacy "lean" "absent"
+  | Some (`Assoc _ as lean) -> (
+    match member "version" lean with
+    | None -> legacy "lean.version" "absent"
+    | Some (`String v as value) -> (
+      match version_triple v with
+      | Some triple -> if triple >= (4, 17, 0) then New else Legacy
+      | None -> legacy "lean.version" (Json.to_string value))
+    | Some value -> legacy "lean.version" (Json.to_string value))
+  | Some value -> legacy "lean" (Json.to_string value)
+
 let parse_meta ~lcnt state json =
   let meta = require_member ~lcnt "meta" json in
   let format = require_member ~lcnt "format" meta in
   let version = require_string ~lcnt "version" format in
   if version <> "3.1.0" then err ~lcnt ("unsupported export format " ^ version);
-  ({ state with seen_meta = true }, None)
+  (* The first metadata line chooses the path, before the first entry. *)
+  let path = if state.seen_meta then state.path else export_path ~lcnt meta in
+  ({ state with seen_meta = true; path }, None)
 
 let parse_line ~prefix ~lcnt state l =
   let l = String.trim l in
