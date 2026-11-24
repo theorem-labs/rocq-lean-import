@@ -19,7 +19,7 @@ Redirect "entry_timeout_unset.log" Succeed Timeout 60 Lean Import "../dumps/lean
 (* T8: the surrounding command limit is shorter than the entry limit. *)
 Set Lean Entry Timeout 10.
 Set Lean Error Mode "Skip".
-Redirect "entry_timeout_outer.log" Fail Timeout 1 Lean Import "../dumps/lean434/timeout_cases.ndjson".
+Redirect "entry_timeout_outer.log" Fail Timeout 5 Lean Import "../dumps/lean434/timeout_cases.ndjson".
 
 (* T4: Stop leaves the events after the timed entry unread. *)
 Set Lean Entry Timeout 1.
