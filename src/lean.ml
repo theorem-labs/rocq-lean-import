@@ -964,9 +964,37 @@ let nat_int_binary nat double i =
   in
   construct_nat (List.rev binary_representation)
 
+(* A literal [i] from [max_nat_int] on is [Nat_succ] applied [r] times to the
+   binary form of [i - r], with [r] in 1..[lit_segment] chosen so that [i - r]
+   is congruent to [lit_segment / 2] modulo [lit_segment]. Within a segment the
+   predecessor of a literal is then, term for term, the literal one below.
+
+   This matters to the kernel's conversion. Matching a literal against
+   [Nat_succ] yields its predecessor; when that is a closed term, two of them are
+   compared structurally ([fast_test]). When it comes from reducing
+   [Nat_double], it is a closure of [double]'s fixpoint, and two such closures
+   are compared one [Nat_succ] at a time, each a non-tail call: the depth is the
+   value (2^27 for [-(-x) = x] at x = -134217728), which no stack holds.
+
+   [lit_segment] is small because the cost of some conversions grows quickly
+   with the number [r] of leading [Nat_succ]: importing
+   dumps/lean434/linear.ndjson (fixedVar = 100000000) takes 3.7 s with [r] = 8
+   and 10.9 s with [r] = 16, and one entry runs past 60 s with [r] = 32 or with
+   the plain binary form. *)
+let lit_segment = 8
+
 let nat_int nat double i =
   assert (Z.leq Z.zero i);
-  if Z.leq max_nat_int i then nat_int_binary nat double i
+  if Z.leq max_nat_int i then begin
+    let half = Z.of_int (lit_segment / 2) in
+    let seg = Z.of_int lit_segment in
+    let r = 1 + Z.to_int (Z.rem (Z.sub (Z.pred i) half) seg) in
+    let xS = Constr.mkConstructU ((nat, 2), UVars.Instance.empty) in
+    let rec succs k c =
+      if k = 0 then c else succs (k - 1) (Constr.mkApp (xS, [| c |]))
+    in
+    succs r (nat_int_binary nat double (Z.sub i (Z.of_int r)))
+  end
   else begin
     while Z.lt !max_known_int i do
       one_more_int nat

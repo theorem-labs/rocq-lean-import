@@ -364,6 +364,28 @@ a message `The export's <name> does not agree with the predeclared
 export are bound, by their export names, to the predeclared
 constructors in order.
 
+## Natural number literals
+
+Lean's `Nat` is imported as the unary type `Nat` of `src/Lean.v`, on
+either path. A literal below 5000 becomes `Nat_succ` applied to the
+literal one below (shared between literals). A literal `i` of 5000 or
+more becomes `Nat_succ` applied `r` times (1 to 8) to the binary form
+of `i - r` (`Nat_double` and `Nat_succ` over its bits), with `r` chosen
+so that `i - r` is 4 modulo 8. Within a block of 8 the predecessor of
+such a literal is, term for term, the literal one below, so the kernel
+compares the predecessors of two equal literals without unfolding
+`Nat_double`: comparing `-(-x)` with `x` for `x = -134217728` otherwise
+needs a stack as deep as the value. Before this form a literal of 5000
+or more was the binary form of `i` itself; a tool that reads the
+translated terms must accept up to 8 leading `Nat_succ`.
+
+Lean's kernel computes `Nat` arithmetic on literals with GMP. Rocq's
+kernel reduces Lean's own `Nat.add`, `Nat.sub`, `Nat.mul` and `Nat.pow`
+on these unary terms one `Nat_succ` at a time, so a proof that Lean's
+kernel checks by computing with large numbers (`decide` on `Int`
+values near 2^33 or above, for example) does not end in Rocq in any
+useful time.
+
 ## Additional note on recursors
 
 Coq autogenerates recursors for inductives types called (for an
