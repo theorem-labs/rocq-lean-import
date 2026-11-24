@@ -37,6 +37,7 @@ select the legacy path.
 | `timeout.ndjson` | `lean4export RLI434Timeout -- RLI434T.fast RLI434T.slow_sum RLI434T.slower_sum RLI434T.after_slow RLI434T.needs_slow RLI434T.needs_slower` | `a8411c6f9c9063724895df8329bafdd0ba2934eec791bc9ba1c9ea5c5a527029` |
 | `bitvec_only.ndjson` | `lean4export Init -- BitVec` | `6033908788afecb40929ff381d0168ff72490107be0fa2324f22b3b041f1350a` |
 | `predeclared.ndjson` | `lean4export Init -- Char UInt32.size Nat.isValidChar Nat.pow Or And ULift` | `656869c1a35b48fc2fdcc0a16e7040020c59a3f3e0d6aa318ee52b39cfd82307` |
+| `uint32_transport.ndjson` | `lean4export Init -- UInt32.ofNatLT UInt32.toNat_shiftLeft UInt32.toNat_ofNatLT` | `1e148f466807605cd3f6a4dffb3a3784e148056a81f46a804f65ba0d9e6ab53e` |
 | `src/RLI434AutoParam.lean` | Lean source for `autoparam.ndjson`. | `89c539317c51db6115c38ff997cc826a68989dfec1a15e4de4e3e5c62f62b927` |
 | `src/RLI434BigInt.lean` | Lean source for `bigint.ndjson`. | `c5e679bfcfb6bd2bd37eed68d1535d885b53d0ec7724a05c4c1d6212093985c8` |
 | `src/RLI434Strings.lean` | Lean source for the ZIP member `strings.ndjson`. | `1ede0487aaf9edc69d6c7b1214adb1505fc7d51a108bbe8f5997f0107c4f053d` |
@@ -50,6 +51,8 @@ excludes all source lines outside the range.
 
 | File | Source and edits | SHA-256 |
 | --- | --- | --- |
+| `char_pow_zero.ndjson` | `char.ndjson`, line 1053 (expression 796, the inner `lam` of `Nat.pow`'s value): change `lam.body` from 795 to 6 (`Nat.zero`), so `Nat.pow m n` is `Nat.zero`. | `534bd1a39762532445125de031e94b09274b76728adfdb9f478b8dabbea5e861` |
+| `char_size_2pow31.ndjson` | `char.ndjson`, line 1226 (expression 932, the literal of `UInt32.size`): change `natVal` from `"4294967296"` to `"2147483648"`, so `UInt32.size` is 2^31. | `21356220f3698e05c6af3891fa683f92b468fbf088a3fdf6fdadbba3e08c39a6` |
 | `negative_fin_field.ndjson` | `bitvec_only.ndjson` lines 1–233 with line 1 `meta.lean` replaced by `{"version":"4.16.9"}`. Add expressions on lines 234–236. These copy the constructor products from expression 157 and replace binder 3 type with Nat (expression 1). Append the original line 234 with `ctors[0].type` set to `180`. | `257953d16cdf946fc976b812c68a934a4079b4c773479009f93e6403989d61ef` |
 | `negative_fin_sort.ndjson` | `bitvec_only.ndjson` lines 1–233. Add level 5 (`succ` of level 1) on line 234, the sort `Sort 2` (expression 178) on line 235 and `Nat → Sort 2` (expression 179, binder `n`) on line 236. Append the original line 234 (`Fin`) with `types[0].type` set to `179`, so that `Fin` is in `Type 1` instead of `Type`. | `d8e3230d375db3bc9d17fac887803f66e702c903ffa6c841a2a95efad8628a9f` |
 | `negative_le_field.ndjson` | `bitvec_only.ndjson` lines 1–181. Add expressions on lines 182–184. These copy the constructor products from expression 83 and replace binder 3 type with Nat (expression 1). Append the original line 182 with `ctors[1].type` set to `138`. | `68be0632e5c8b0a3767d9848e9906f479644b8c43faf6d8e0fe738f8cee4239e` |

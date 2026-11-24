@@ -386,6 +386,73 @@ kernel checks by computing with large numbers (`decide` on `Int`
 values near 2^33 or above, for example) does not end in Rocq in any
 useful time.
 
+## Transport of proof arguments across Nat literals
+
+Lean `Prop` is `SProp` here, so a proof argument whose type differs
+from the expected one only at closed `Nat` terms of equal value can be
+cast without changing anything a computation sees. On the new path,
+before the value of a definition or theorem is declared, `Lean Import`
+does that where the kernel would otherwise compare the two terms one
+`Nat_succ` at a time. Lean v4.34.0's `Char.ofNatAux`, for example,
+passes a proof of `n < UInt32.size` where `BitVec.ofNatLT 32` expects
+`n < 2 ^ 32`; Lean's kernel computes `2 ^ 32` with GMP, Rocq's would
+unfold Lean's `Nat.pow`, `Nat.mul` and `Nat.add` 2^32 times.
+
+What it changes:
+
+- An argument of an application, or the value of a theorem itself,
+  whose type is an `SProp` type that differs from the expected type
+  only at closed `Nat` terms of equal value of 4096 or more, becomes
+  `sprop_transport P x y e p` (`src/Lean.v`): `p` is Lean's proof, `P`
+  the expected type with the place abstracted, and `e : x = y` a
+  generated lemma. A closed `Nat` term is a literal, a constant whose
+  value is a closed `Nat` term (`UInt32.size`), or the export's
+  `Nat.add`, `Nat.mul`, `Nat.pow`, `HAdd.hAdd`, `HMul.hMul`,
+  `HPow.hPow` (at Lean's `Nat` instances) or `OfNat.ofNat Nat` applied
+  to closed `Nat` terms. Two terms that unfold to the same literal
+  (`UInt32.size` and `4294967296`) are left to the kernel, which
+  converts them without arithmetic.
+- The lemma `<entry>__nat_eq_<k>` (`Char_ofNatAux__nat_eq_1 :
+  UInt32.size = 2 ^ 32`, say) is declared before the entry, as a
+  constant the kernel checks like any other. Its proof goes through
+  Rocq's binary `N` (`toN` and the lemmas after it in `src/Lean.v`,
+  proved by induction): the export's own `Nat.add`, `Nat.mul` and
+  `Nat.pow`, whose defining equations the kernel checks by
+  `Logic.eq_refl` on open terms, a step per bit of each literal, and
+  each binary computation checked on literals. A later argument with
+  the same two terms reuses the lemma. The values the importer
+  computes only find the places: a wrong one gives a lemma the kernel
+  refuses, which is logged (`line N: NAME: the generated lemma ... is
+  refused by the kernel: ...`) and not used.
+- The import's output has one line per entry whose value changes:
+  `line N: NAME: <k> argument(s) transported (<lemmas>)`.
+
+What it does not change: an entry's declared type (its statement),
+the non-`SProp` arguments (the data, which stay Lean's terms, so that
+Lean's `rfl` lemmas about them still check), any kernel check, and
+the axioms: no imported entry becomes an axiom, the `toN` lemmas of
+`src/Lean.v` are closed under the global context, `Nat_eq_of_toN`
+and `sprop_transport` rely only on the definitional UIP of `eq` (as
+every entry that names `eq` does), and a generated lemma relies on no
+axiom (`Print Assumptions`). An entry where nothing needs a cast is
+declared with Lean's own value, exactly as without the transport; a
+cheap scan for the export's `Nat` operations and large literals in
+the entry and the types of the constants it names decides which
+entries are looked at. Two closed `Nat` terms of different values
+give no lemma: the kernel refuses the entry as before. If the kernel
+refuses a transported value, the import logs it (`line N: NAME: the
+transported value is refused, Lean's value is declared: ...`) and
+declares Lean's value instead.
+
+Limits: only on the new path; only proof (`SProp`) positions. A
+mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size
+:= x.toBitVec.toFin` (`Init/Data/UInt/BasicAux.lean:141`), is left to
+the kernel. The places are found in the types the arguments and the
+function have as written, not after unfolding a constant, and the
+operations are the six above: `Nat.sub`, `Nat.div`, `Nat.mod`,
+`Nat.ble` and `Nat.beq` (`decide` on large numbers) are not covered.
+Values are computed up to 1024 bits.
+
 ## Additional note on recursors
 
 Coq autogenerates recursors for inductives types called (for an
