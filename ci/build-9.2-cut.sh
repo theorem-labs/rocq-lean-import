@@ -826,8 +826,8 @@ main() {
   SCRATCH_DIRS+=("$WORK")
 
   # Inventory checks, in the default mode, --handoff and --revert-fix (S1-S4, S3b, S10-S13): every row of the
-  # inventory is readable and agrees with tests/_CoqProject (an open or fixed row's test is listed there, a
-  # listed row's is not), a fixed row names commits that are ancestors of HEAD, every tests/lean434_*.v has a
+  # inventory is readable and agrees with tests/_CoqProject (every row's test is listed there: a listed row's
+  # test checks that its feature's entry is refused, so the suite passes), a fixed row names commits that are ancestors of HEAD, every tests/lean434_*.v has a
   # row, and every member of the predeclared tables of src/lean.ml has its marker in tests/predeclared.v;
   # --handoff also fails on an open row. A missing or empty inventory skips the checks while the head has no
   # tests/lean434_*.v. --import and --check run on trees without history (S23), and --source-at measures an
@@ -881,11 +881,8 @@ main() {
           else
             first_line[${row_file[i]}]=${row_line[i]}
           fi
-          if [[ $st != listed && ${row_inproj[i]} != yes ]]; then
+          if [[ ${row_inproj[i]} != yes ]]; then
             fails+=("${row_file[i]}: status $st, but tests/_CoqProject does not list it ($where)")
-          fi
-          if [[ $st == listed && ${row_inproj[i]} == yes ]]; then
-            fails+=("${row_file[i]}: status listed, but tests/_CoqProject lists it ($where)")
           fi
           if [[ $st == fixed && ${row_commits[i]} == - ]]; then
             fails+=("$where: status fixed, but the row names no commit")

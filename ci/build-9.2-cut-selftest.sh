@@ -191,7 +191,7 @@ st_template() { # the repository every case copies: base, three fix commits, the
   printf -- '-Q src LeanImport\n' >"$t/_CoqProject"
   printf 'dumps/*.ndjson.zip filter=lfs diff=lfs merge=lfs -text\n' >"$t/.gitattributes"
   printf '{}\n' >"$t/dumps/small.ndjson"
-  printf -- '-Q ../src LeanImport\n-R . Test\n\ncore.v\nlean434_a.v\nlean434_b.v\nlean434_opt.v\n' >"$t/tests/_CoqProject"
+  printf -- '-Q ../src LeanImport\n-R . Test\n\ncore.v\nlean434_a.v\nlean434_b.v\nlean434_c.v\nlean434_opt.v\n' >"$t/tests/_CoqProject"
   for f in core lean434_a lean434_b lean434_c lean434_opt; do printf '(* stand-in test %s *)\n' "$f" >"$t/tests/$f.v"; done
   printf 'tests at base\n' >"$t/tests/marker"
   st_predeclared "${ST_MEMBERS[@]}" >"$t/$PREDECLARED_TEST"
@@ -331,13 +331,14 @@ st_rows() {
   done
   st_row S1
 
-  # S1b: a listed row whose test tests/_CoqProject lists fails the checks; no test runs.
+  # S1b: a listed row's test checks that its feature's entry is refused, so it runs in the suite too: a listed
+  # row whose test tests/_CoqProject does not list fails the checks; no test runs.
   st_new S1b
-  printf 'lean434_c.v\n' >>"$ST_REPO/tests/_CoqProject"
-  st_commit "list c"
+  sed -i '/^lean434_c\.v$/d' "$ST_REPO/tests/_CoqProject"
+  st_commit "unlist c"
   st_run --
   st_rc nonzero
-  st_has 'tests/lean434_c.v: status listed, but tests/_CoqProject lists it'
+  st_has 'tests/lean434_c.v: status listed, but tests/_CoqProject does not list it'
   st_not_ran
   st_row S1b
 
