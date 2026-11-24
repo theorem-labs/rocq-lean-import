@@ -17,3 +17,4 @@ META*
 # decompressed from dumps/*.ndjson.zip by the tests
 /dumps/init.ndjson
 /dumps/stdlib.ndjson
+/dumps/lean434/strings.ndjson

@@ -3,6 +3,9 @@
 
 -R . Test
 
+# Capture the errors consumed by Fail in Redirect logs.
+-arg -test-mode
+
 core.v
 init.v
 anomaly_print_projections.v
@@ -22,3 +25,15 @@ ndjson_ulift.v
 ndjson_core.v
 ndjson_init.v
 ndjson_stdlib.v
+lean434_bitvec_uint32.v
+lean434_pow.v
+lean434_char.v
+lean434_strings.v
+lean434_nested.v
+lean434_linear.v
+lean434_bigint.v
+entry_timeout.v
+entry_timeout_parse.v
+path_choice.v
+predeclared.v
+negative_controls.v

@@ -1,0 +1,28 @@
+# Log file, polarity, literal substring (tab-separated).
+# n1
+negative_controls_n1.log.out	+	Error at line 1014 (for Nat.pow_succ)
+negative_controls_n1.log.out	+	Done!
+# n2
+negative_controls_n2.log.out	+	Error at line 1014 (for Nat.pow_succ)
+negative_controls_n2.log.out	+	Done!
+# n3_new
+negative_controls_n3_new.log.out	+	Error at line 185 (for Nat.le)
+negative_controls_n3_new.log.out	+	Done!
+# n3_legacy
+negative_controls_n3_legacy.log.out	+	Error at line 237 (for Fin)
+negative_controls_n3_legacy.log.out	+	Done!
+# n4_legacy
+negative_controls_n4_legacy.log.out	+	Error at line 1215 (for UInt32.size)
+negative_controls_n4_legacy.log.out	+	Done!
+# n4_new
+negative_controls_n4_new.log.out	+	Error at line 184 (for Nat.le)
+negative_controls_n4_new.log.out	+	Done!
+# n5
+negative_controls_n5.log.out	+	Error at line 869 (for Nat.pow_zero)
+negative_controls_n5.log.out	+	Done!
+negative_controls_n5.log.out	-	(for Nat.pow)
+# n6
+negative_controls_n6.log.out	+	Error at line 879 (for sizeIsFive)
+negative_controls_n6.log.out	-	Control.Timeout
+negative_controls_n6.log.out	+	Done!
+negative_controls_n6.log.out	-	(for UInt32.size)

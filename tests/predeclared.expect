@@ -1,0 +1,51 @@
+# Log file, polarity, literal substring (tab-separated).
+predeclared_eq.log.out	+	Skipping: Error at line
+predeclared_eq.log.out	+	(for Eq)
+predeclared_eq.log.out	+	Skipped 1
+predeclared_nat.log.out	+	Skipping: Error at line
+predeclared_nat.log.out	+	(for Nat)
+predeclared_nat.log.out	+	Skipped 1
+predeclared_nat_le.log.out	+	Skipping: Error at line
+predeclared_nat_le.log.out	+	(for Nat.le)
+predeclared_nat_le.log.out	+	Skipped 1
+predeclared_or.log.out	+	Skipping: Error at line
+predeclared_or.log.out	+	(for Or)
+predeclared_or.log.out	+	Skipped 1
+predeclared_and.log.out	+	Skipping: Error at line
+predeclared_and.log.out	+	(for And)
+predeclared_and.log.out	+	Skipped 1
+predeclared_fin.log.out	+	Skipping: Error at line
+predeclared_fin.log.out	+	(for Fin)
+predeclared_fin.log.out	+	Skipped 1
+predeclared_uint32.log.out	+	Skipping: Error at line
+predeclared_uint32.log.out	+	(for UInt32)
+predeclared_uint32.log.out	+	Skipped 1
+predeclared_bitvec.log.out	+	Skipping: Error at line
+predeclared_bitvec.log.out	+	(for BitVec)
+predeclared_bitvec.log.out	+	Skipped 1
+predeclared_char.log.out	+	Skipping: Error at line
+predeclared_char.log.out	+	(for Char)
+predeclared_char.log.out	+	Skipped 1
+predeclared_ulift.log.out	+	Skipping: Error at line
+predeclared_ulift.log.out	+	(for ULift)
+predeclared_ulift.log.out	+	Skipped 1
+predeclared_uint32_size.log.out	+	Skipping: Error at line
+predeclared_uint32_size.log.out	+	(for UInt32.size)
+predeclared_uint32_size.log.out	+	Skipped 1
+predeclared_nat_isvalidchar.log.out	+	Skipping: Error at line
+predeclared_nat_isvalidchar.log.out	+	(for Nat.isValidChar)
+predeclared_nat_isvalidchar.log.out	+	Skipped 1
+predeclared_nat_pow.log.out	+	Skipping: Error at line
+predeclared_nat_pow.log.out	+	(for Nat.pow)
+predeclared_nat_pow.log.out	+	Skipped 1
+predeclared_absent.log.out	+	- 0 entries (0 possible instances).
+predeclared_duplicate.log.out	+	Skipping duplicate declaration for UInt32
+predeclared_duplicate.log.out	-	Error at line
+predeclared_locate_BitVec.log.out	+	Test.predeclared.BitVec
+predeclared_locate_UInt32.log.out	+	Test.predeclared.UInt32
+predeclared_locate_Char.log.out	+	Test.predeclared.Char
+predeclared_locate_UInt32_size.log.out	+	Test.predeclared.UInt32_size
+predeclared_locate_Nat_isValidChar.log.out	+	Test.predeclared.Nat_isValidChar
+predeclared_locate_Nat_pow.log.out	+	Test.predeclared.Nat_pow
+predeclared_locate_Nat_add.log.out	+	Test.predeclared.Nat_add
+predeclared_locate_Nat_mul.log.out	+	Test.predeclared.Nat_mul

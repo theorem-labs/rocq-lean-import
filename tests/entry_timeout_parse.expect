@@ -1,0 +1,90 @@
+# Log file, polarity, literal substring (tab-separated).
+# mutual
+entry_timeout_parse_mutual.log.out	+	Skipping: Error at line 52 (for line-52)
+entry_timeout_parse_mutual.log.out	+	NDJSON parse error at line 52:
+entry_timeout_parse_mutual.log.out	+	mutual inductive groups
+entry_timeout_parse_mutual.log.out	+	line 133: RLI434T.fast
+entry_timeout_parse_mutual.log.out	+	Done!
+entry_timeout_parse_mutual.log.out	+	Skipped 1
+# id
+entry_timeout_parse_id.log.out	+	Skipping: Error at line 132 (for line-132)
+entry_timeout_parse_id.log.out	+	NDJSON parse error at line 132:
+entry_timeout_parse_id.log.out	+	unknown expression id 9999
+entry_timeout_parse_id.log.out	+	Skipping: Error at line 133 (for line-133)
+entry_timeout_parse_id.log.out	+	expression id 90
+entry_timeout_parse_id.log.out	+	line 136: RLIIndependent
+entry_timeout_parse_id.log.out	+	Done!
+entry_timeout_parse_id.log.out	+	Skipped 2
+# no_meta
+entry_timeout_parse_no_meta.log.out	+	Skipping: Error at line 1 (for line-1)
+entry_timeout_parse_no_meta.log.out	+	Skipping: Error at line 2 (for line-2)
+entry_timeout_parse_no_meta.log.out	+	expected metadata object before export records
+entry_timeout_parse_no_meta.log.out	+	- 0 entries
+entry_timeout_parse_no_meta.log.out	+	Done!
+entry_timeout_parse_no_meta.log.out	+	Skipped 2
+# bad_format
+entry_timeout_parse_bad_format.log.out	+	Skipping: Error at line 1 (for line-1)
+entry_timeout_parse_bad_format.log.out	+	Skipping: Error at line 3 (for line-3)
+entry_timeout_parse_bad_format.log.out	+	unsupported export format 9.9.9
+entry_timeout_parse_bad_format.log.out	+	expected metadata object before export records
+entry_timeout_parse_bad_format.log.out	+	- 0 entries
+entry_timeout_parse_bad_format.log.out	+	Done!
+entry_timeout_parse_bad_format.log.out	+	Skipped 3
+# truncated
+entry_timeout_parse_truncated.log.out	+	line 131: RLI434T.fast
+entry_timeout_parse_truncated.log.out	+	Skipping: Error at line 132 (for line-132)
+entry_timeout_parse_truncated.log.out	+	NDJSON parse error at line 132:
+entry_timeout_parse_truncated.log.out	+	Done!
+entry_timeout_parse_truncated.log.out	+	Skipped 1
+# empty
+entry_timeout_parse_empty.log.out	+	- 0 entries (0 possible instances).
+entry_timeout_parse_empty.log.out	+	- 1 universe expressions
+entry_timeout_parse_empty.log.out	+	- 1 names
+entry_timeout_parse_empty.log.out	+	- 0 expression nodes
+entry_timeout_parse_empty.log.out	+	Done!
+entry_timeout_parse_empty.log.out	-	Skipped
+# messages
+entry_timeout_parse_messages.log.out	+	Skipping: Error at line 131 (for 
+entry_timeout_parse_messages.log.out	+	NDJSON parse error at line 131: no field hints
+entry_timeout_parse_messages.log.out	+	unsupported NDJSON record
+entry_timeout_parse_messages.log.out	+	line 133: RLI434T.fast
+entry_timeout_parse_messages.log.out	+	Done!
+entry_timeout_parse_messages.log.out	+	Skipped 2
+entry_timeout_parse_stop_mutual.log.out	+	Error at line 52 (for line-52)
+entry_timeout_parse_stop_mutual.log.out	+	mutual inductive groups
+entry_timeout_parse_stop_mutual.log.out	-	Skipping:
+entry_timeout_parse_stop_mutual.log.out	-	RLI434T.fast
+entry_timeout_parse_stop_id.log.out	+	Error at line 132 (for line-132)
+entry_timeout_parse_stop_id.log.out	+	unknown expression id 9999
+entry_timeout_parse_stop_id.log.out	-	Skipping:
+entry_timeout_parse_stop_id.log.out	-	RLIIndependent
+entry_timeout_parse_stop_no_meta.log.out	+	Error at line 1 (for line-1)
+entry_timeout_parse_stop_no_meta.log.out	+	expected metadata object before export records
+entry_timeout_parse_stop_no_meta.log.out	-	Skipping:
+entry_timeout_parse_stop_no_meta.log.out	-	Error at line 2
+entry_timeout_parse_stop_bad_format.log.out	+	Error at line 1 (for line-1)
+entry_timeout_parse_stop_bad_format.log.out	+	unsupported export format 9.9.9
+entry_timeout_parse_stop_bad_format.log.out	-	Skipping:
+entry_timeout_parse_stop_bad_format.log.out	-	expected metadata object before export records
+entry_timeout_parse_stop_truncated.log.out	+	Error at line 132 (for line-132)
+entry_timeout_parse_stop_truncated.log.out	+	NDJSON parse error
+entry_timeout_parse_stop_truncated.log.out	-	Skipping:
+entry_timeout_parse_fail_mutual.log.out	+	Error at line 52 (for line-52)
+entry_timeout_parse_fail_mutual.log.out	+	mutual inductive groups
+entry_timeout_parse_fail_mutual.log.out	-	Skipping:
+entry_timeout_parse_fail_mutual.log.out	-	RLI434T.fast
+entry_timeout_parse_fail_id.log.out	+	Error at line 132 (for line-132)
+entry_timeout_parse_fail_id.log.out	+	unknown expression id 9999
+entry_timeout_parse_fail_id.log.out	-	Skipping:
+entry_timeout_parse_fail_id.log.out	-	RLIIndependent
+entry_timeout_parse_fail_no_meta.log.out	+	Error at line 1 (for line-1)
+entry_timeout_parse_fail_no_meta.log.out	+	expected metadata object before export records
+entry_timeout_parse_fail_no_meta.log.out	-	Skipping:
+entry_timeout_parse_fail_no_meta.log.out	-	Error at line 2
+entry_timeout_parse_fail_bad_format.log.out	+	Error at line 1 (for line-1)
+entry_timeout_parse_fail_bad_format.log.out	+	unsupported export format 9.9.9
+entry_timeout_parse_fail_bad_format.log.out	-	Skipping:
+entry_timeout_parse_fail_bad_format.log.out	-	expected metadata object before export records
+entry_timeout_parse_fail_truncated.log.out	+	Error at line 132 (for line-132)
+entry_timeout_parse_fail_truncated.log.out	+	NDJSON parse error
+entry_timeout_parse_fail_truncated.log.out	-	Skipping:
