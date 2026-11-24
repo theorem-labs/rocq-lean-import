@@ -19,3 +19,5 @@ entry_timeout_skip.log.out	+	Timed out after 1 s (Lean Entry Timeout)
 entry_timeout_skip.log.out	+	Skipping: Error at line 2229 (for RLI434T.needs_slower)
 entry_timeout_skip.log.out	+	missing RLI434T.slower_sum
 entry_timeout_skip.log.out	+	Done!
+entry_timeout_inductive.log.out	+	Error at line 2202 (for RLI434T.SlowBox)
+entry_timeout_inductive.log.out	+	Timed out after 1 s (Lean Entry Timeout)

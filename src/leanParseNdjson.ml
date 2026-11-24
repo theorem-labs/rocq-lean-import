@@ -14,8 +14,10 @@ type parsing_state = {
   refused_exprs : Int.Set.t;
   refused_univs : Int.Set.t;
   seen_meta : bool;
-  (* The path the first metadata line chose (see [export_path]). *)
+  (* The path the first metadata line chose, and the Lean version it read
+     (see [export_path]). *)
   path : path;
+  version : (int * int * int) option;
 }
 
 let empty_state =
@@ -28,15 +30,28 @@ let empty_state =
     refused_univs = Int.Set.empty;
     seen_meta = false;
     path = Legacy;
+    version = None;
   }
 
 let path state = state.path
+let version state = state.version
 
 exception Refused of {
   state : parsing_state;
   entry : N.t option;
   error : Exninfo.iexn;
 }
+
+(* [refusing ~state ~entry f] runs [f], which parses (part of) a line. A
+   failure of [f] refuses the line: it raises [Refused] with [state ()] and
+   [entry]. A [Refused] from [f] passes unchanged, and so does an asynchronous
+   exception (an interrupt, a timeout), which ends the import instead. *)
+let refusing ~state ~entry f =
+  try f () with
+  | Refused _ as e -> raise e
+  | e when not (CErrors.is_async e) ->
+    let e = Exninfo.capture e in
+    raise (Refused { state = state (); entry; error = e })
 
 let is_ndjson_line l =
   let l = String.trim l in
@@ -117,11 +132,7 @@ let expect_next ~lcnt kind expected actual =
    expression line whose id is the next one.  When [f] fails, the refusal
    carries [placeholder ()], the state with a stand-in for that id: the ids
    after it stay in sequence, and a line that uses it is refused in turn. *)
-let next_id ~placeholder f =
-  try f ()
-  with e when not (CErrors.is_async e) ->
-    let e = Exninfo.capture e in
-    raise (Refused { state = placeholder (); entry = None; error = e })
+let next_id ~placeholder f = refusing ~state:placeholder ~entry:None f
 
 let binders ~lcnt = function
   | "default" -> NotImplicit
@@ -250,10 +261,7 @@ let line_msg ~lcnt name =
    the entry. *)
 let declaring ~lcnt state name f =
   line_msg ~lcnt name;
-  try f ()
-  with e when not (CErrors.is_async e) ->
-    let e = Exninfo.capture e in
-    raise (Refused { state; entry = Some name; error = e })
+  refusing ~state:(fun () -> state) ~entry:(Some name) f
 
 let parse_axiom ~lcnt state payload =
   ignore (require_bool ~lcnt "isUnsafe" payload);
@@ -356,11 +364,12 @@ let version_triple v =
   | [ Some major; Some minor; Some patch ] -> Some (major, minor, patch)
   | _ -> None
 
-(* The path of an export, from its metadata [meta.lean.version]. Lean
-   4.17.0 and later take the new path; an earlier version takes the legacy one.
-   A metadata object with no [lean] object, no [version] string, or a version
-   that does not start with [MAJOR.MINOR.PATCH] takes the legacy path, as before
-   this choice existed, with a warning that names the field and its value. *)
+(* The path of an export and its Lean version [MAJOR.MINOR.PATCH], from its
+   metadata [meta.lean.version]. Lean 4.17.0 and later take the new path; an
+   earlier version takes the legacy one. A metadata object with no [lean]
+   object, no [version] string, or a version that does not start with
+   [MAJOR.MINOR.PATCH] has no version and takes the legacy path, as before this
+   choice existed, with a warning that names the field and its value. *)
 let export_path ~lcnt meta =
   let legacy field value =
     Feedback.msg_warning
@@ -368,7 +377,7 @@ let export_path ~lcnt meta =
         str "NDJSON metadata at line " ++ int lcnt ++ str ": field " ++ str field ++ str " is "
         ++ str value
         ++ str "; without a Lean version MAJOR.MINOR.PATCH in lean.version the export takes the legacy path.");
-    Legacy
+    (Legacy, None)
   in
   match member "lean" meta with
   | None -> legacy "lean" "absent"
@@ -377,7 +386,7 @@ let export_path ~lcnt meta =
     | None -> legacy "lean.version" "absent"
     | Some (`String v as value) -> (
       match version_triple v with
-      | Some triple -> if triple >= (4, 17, 0) then New else Legacy
+      | Some triple -> ((if triple >= (4, 17, 0) then New else Legacy), Some triple)
       | None -> legacy "lean.version" (Json.to_string value))
     | Some value -> legacy "lean.version" (Json.to_string value))
   | Some value -> legacy "lean" (Json.to_string value)
@@ -385,11 +394,13 @@ let export_path ~lcnt meta =
 let parse_meta ~lcnt state json =
   let meta = require_member ~lcnt "meta" json in
   let format = require_member ~lcnt "format" meta in
-  let version = require_string ~lcnt "version" format in
-  if version <> "3.1.0" then err ~lcnt ("unsupported export format " ^ version);
+  let format_version = require_string ~lcnt "version" format in
+  if format_version <> "3.1.0" then err ~lcnt ("unsupported export format " ^ format_version);
   (* The first metadata line chooses the path, before the first entry. *)
-  let path = if state.seen_meta then state.path else export_path ~lcnt meta in
-  ({ state with seen_meta = true; path }, None)
+  if state.seen_meta then (state, None)
+  else
+    let path, version = export_path ~lcnt meta in
+    ({ state with seen_meta = true; path; version }, None)
 
 let parse_line ~prefix ~lcnt state l =
   let l = String.trim l in
@@ -429,16 +440,13 @@ let parse_line ~prefix ~lcnt state l =
       | None ->
         if prefix then (state, None) else err ~lcnt "unsupported NDJSON record"
 
+(* A line is refused with the state it was read with, except for a name, level
+   or expression line, which leaves a placeholder for its id (see [next_id]). *)
 let do_prefix_line ~lcnt state l =
-  try fst (parse_line ~prefix:true ~lcnt state l)
-  with Refused { error; _ } -> Exninfo.iraise error
+  fst (refusing ~state:(fun () -> state) ~entry:None (fun () -> parse_line ~prefix:true ~lcnt state l))
 
 let do_line ~lcnt state l =
-  try parse_line ~prefix:false ~lcnt state l with
-  | Refused _ as e -> raise e
-  | e when not (CErrors.is_async e) ->
-    let e = Exninfo.capture e in
-    raise (Refused { state; entry = None; error = e })
+  refusing ~state:(fun () -> state) ~entry:None (fun () -> parse_line ~prefix:false ~lcnt state l)
 
 let pp_state state =
   let open Pp in

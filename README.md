@@ -97,6 +97,21 @@ By default `Lean Import` fails at the first error. With `Set Lean Error
 Mode "Stop".` it succeeds instead, which allows inspecting the state from
 just before the failing entry (see `Lean Error Mode` below).
 
+# How do I run the tests?
+
+`make test` builds the plugin and runs each test of `tests/_CoqProject`
+(`make -k test` runs every one even after a failure). Two of the exports
+the tests read, `dumps/init.ndjson.zip` and `dumps/stdlib.ndjson.zip`, are
+Git LFS objects: in a clone made without Git LFS they are small pointer
+files, and `tests/Makefile`, which extracts each archive next to it on the
+first run, fails on them. Fetch them first:
+
+~~~sh
+git lfs install
+git lfs pull --include 'dumps/init.ndjson.zip,dumps/stdlib.ndjson.zip'
+make test
+~~~
+
 # How does it work?
 
 The basic idea is to translate Lean `Prop` to Coq `SProp`, inductives
@@ -321,13 +336,16 @@ entry, from the metadata only.
 On the new path `BitVec`, `UInt32`, `Char`, `UInt32.size`,
 `Nat.isValidChar` and `Nat.pow` are imported from their own entries, as
 Lean defines them, and a string literal is translated as the term
-Lean's kernel unfolds it to: `String.ofList` applied to a list of
-`Char.ofNat <code point>` (Lean 4.34's `string_lit_to_constructor`;
-Lean 4.25 and earlier used `String.mk` there, so a literal in such an
-export is refused unless it declares `String.ofList`). A repeated
-`UInt32` or `Char` entry is skipped as a duplicate, like any other
-entry. On the legacy path a second `UInt32` or `Char` entry may switch
-between the pre-4.17 records `UInt32_legacy`/`Char_legacy` and
+Lean's kernel unfolds it to (its `string_lit_to_constructor`): the
+string constructor applied to a list of `Char.ofNat <code point>`.
+The constructor is `String.mk` for an export of Lean 4.17.0 to 4.25.x
+and `String.ofList` from Lean 4.26.0 on, as the metadata's
+`lean.version` says; an export that does not declare that constructor
+is refused at its first literal (`missing String.ofList`). On either
+path a literal must be well-formed UTF-8, as Lean's strings are. A
+repeated `UInt32` or `Char` entry is skipped as a duplicate, like any
+other entry. On the legacy path a second `UInt32` or `Char` entry may
+switch between the pre-4.17 records `UInt32_legacy`/`Char_legacy` and
 `UInt32`/`Char`.
 
 On either path each entry bound to a predeclared constant is first
@@ -335,12 +353,16 @@ checked against it, after the translation the importer gives any entry:
 an inductive type's parameter count, type, constructor count and
 constructor types, and a definition's declared type (its value is not
 read: the predeclared one is kept). Types are compared by conversion,
-up to cumulativity: `src/Lean.v` declares in `Set` types that the
-importer translates from Lean's `Type` to `Type@{Set+1}`. An entry that
-differs is refused with a message `The export's <name> does not agree
-with the predeclared <constant>: ...` that gives the difference. The
-constructors of the export are bound, by their export names, to the
-predeclared constructors in order.
+except the sort of an inductive type, which must be exactly the one the
+predeclared type stands for: `src/Lean.v` declares in `Set` the types
+Lean declares in `Type`, so a type predeclared in `Set` accepts only
+`Type@{Set+1}`, the importer's translation of Lean's `Type` (not `Type
+1` or above), and a type predeclared in `SProp` accepts only `SProp`,
+the translation of Lean's `Prop`. An entry that differs is refused with
+a message `The export's <name> does not agree with the predeclared
+<constant>: ...` that gives the difference. The constructors of the
+export are bound, by their export names, to the predeclared
+constructors in order.
 
 ## Additional note on recursors
 
@@ -485,10 +507,13 @@ inductive type.
 
 A string option: `"Fail"` (the default), `"Stop"` or `"Skip"`. It decides
 what `Lean Import` does with a line it refuses: a line whose entry it cannot
-declare, or a line it cannot parse. The refusal reads `Error at line N (for
-NAME)`, followed by the line and the error. NAME is the entry's name. For a
-line that cannot be parsed, it is the name the NDJSON parser read before the
-error, else `line-N`.
+declare, or a line it cannot parse. A line before the first line to import
+(`Lean Import "file" FROM` starts at line FROM) is parsed for its names,
+levels and expressions only; when it cannot be parsed, it is refused like
+any other line. The refusal reads `Error at line N (for NAME)`, followed by the
+line and the error. NAME is the entry's name. For a line that cannot be
+parsed, it is the name the NDJSON parser read before the error, else
+`line-N`.
 
 - `Fail`: the import stops there and `Lean Import` fails with the refusal.
 - `Stop`: the import stops there and `Lean Import` succeeds, keeping what it
@@ -517,8 +542,11 @@ entries which do not depend on something that takes more than 10s.
 
 The value must be a positive number of seconds. `Unset Lean Entry Timeout.`
 removes the limit. The limit does not bound parsing the entry's line (see
-`Lean Line Timeout`), and an enclosing `Timeout` shorter than it still ends
-the command.
+`Lean Line Timeout`). An enclosing `Timeout` shorter than the limit fires
+first: in `Skip` mode, when it fires while an entry is being declared, that
+entry is refused like any other error and the import runs to its end; Rocq
+then prints `Timeout!` when the command returns (see the note under `Lean
+Error Mode`).
 
 An importer without this option only warns that the option is unknown and
 imports with no limit. A file that sets it should therefore first run `Set

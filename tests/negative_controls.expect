@@ -11,6 +11,10 @@ negative_controls_n3_new.log.out	+	Done!
 # n3_legacy
 negative_controls_n3_legacy.log.out	+	Error at line 237 (for Fin)
 negative_controls_n3_legacy.log.out	+	Done!
+# fin_sort
+negative_controls_fin_sort.log.out	+	Error at line 237 (for Fin)
+negative_controls_fin_sort.log.out	+	a type predeclared in Set accepts only
+negative_controls_fin_sort.log.out	+	Done!
 # n4_legacy
 negative_controls_n4_legacy.log.out	+	Error at line 1215 (for UInt32.size)
 negative_controls_n4_legacy.log.out	+	Done!

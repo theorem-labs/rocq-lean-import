@@ -676,19 +676,23 @@ let name_for n i =
     let base = if i = 0 then base else Id.of_string (Id.to_string base ^ "_") in
     Namegen.next_global_ident_away (Global.safe_env ()) base Id.Set.empty
 
+(* The predeclared lookups below read the registrations with
+   [Rocqlib.lib_ref_opt]: a name that is not registered is not predeclared, and
+   no handler can mistake another failure of the lookup (a [Control.Timeout] of
+   the Lean Entry Timeout) for a missing registration. *)
 let get_predeclared_ind_suffixed indn suffix n i =
   if N.equal n (N.append_list N.anon indn) then
     let ind_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string ind_name ^ suffix in
-    match Rocqlib.lib_ref reg with
-    | IndRef (ind, 0) -> Some (ind_name, ind)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (IndRef (ind, 0)) -> Some (ind_name, ind)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for "
           ++ str reg
           ++ str " expected an inductive.")
-    | exception _ -> None
   else None
 
 let get_predeclared_ind indn n i = get_predeclared_ind_suffixed indn "" n i
@@ -712,56 +716,56 @@ let get_predeclared_ind_as_def indn n i =
   if N.equal n (N.append_list N.anon indn) then
     let ind_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string ind_name ^ ".cumul" in
-    match Rocqlib.lib_ref reg with
-    | ConstRef c -> Some (ind_name, c)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (ConstRef c) -> Some (ind_name, c)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for "
           ++ str reg
           ++ str " expected a constant.")
-    | exception _ -> None
   else None
 
 let get_predeclared_def defn n i =
   if N.equal n (N.append_list N.anon defn) then
     let def_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string def_name in
-    match Rocqlib.lib_ref reg with
-    | ConstRef c -> Some (def_name, c)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (ConstRef c) -> Some (def_name, c)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for " ++ str reg ++ str " expected a constant.")
-    | exception _ -> None
   else None
 
 type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char
 type predeclared_def_kind = UInt32_size | Nat_isValidChar | Nat_pow
 type predeclared_ind_as_def_kind = ULift_cumul
 
-(* The path of the export being imported ([LeanParseNdjson.export_path]).
-   [do_input] sets it from the parser before it declares each entry: what
-   [LeanParseNdjson.path] read from the NDJSON metadata, the legacy path for
-   the old text format. *)
+(* The path of the export being imported ([LeanParseNdjson.export_path]) and
+   its Lean version. [do_input] sets both from the parser before it declares
+   each entry: what [LeanParseNdjson.path] and [LeanParseNdjson.version] read
+   from the NDJSON metadata; the legacy path and no version for the old text
+   format. *)
 let current_path = ref LeanParseNdjson.Legacy
+let current_version : (int * int * int) option ref = ref None
 
 let on_new_path () = !current_path = LeanParseNdjson.New
 
-(* The members of the predeclared tables below that only the legacy path
-   predeclares: the new path imports each from its own export entry, as Lean
-   defines it. *)
-let legacy_only_predeclared =
-  [ [ "BitVec" ]; [ "UInt32" ]; [ "Char" ]; [ "UInt32"; "size" ]; [ "Nat"; "isValidChar" ];
-    [ "Nat"; "pow" ] ]
+(* The paths a row of the predeclared tables below applies on: both, or only
+   the legacy path (the new path imports that entry from the export, as Lean
+   defines it). *)
+type predeclared_paths = Both_paths | Legacy_path_only
 
-let predeclared_on_path h = not (on_new_path () && List.mem h legacy_only_predeclared)
+let on_current_path = function
+  | Both_paths -> true
+  | Legacy_path_only -> not (on_new_path ())
 
 (* Fin-headed ctor -> pre-4.17 [.legacy] record; otherwise default. *)
-let get_predeclared_uint32 ctors n i =
-  let try_suffixed suffix =
-    get_predeclared_ind_suffixed [ "UInt32" ] suffix n i
-  in
+let get_predeclared_uint32 ~ctors indh n i =
+  let try_suffixed suffix = get_predeclared_ind_suffixed indh suffix n i in
   match ctor_first_field_head ctors with
   | Some head when N.equal head (N.append_list N.anon [ "Fin" ]) ->
     (match try_suffixed ".legacy" with
@@ -769,32 +773,34 @@ let get_predeclared_uint32 ctors n i =
      | None -> try_suffixed "")
   | _ -> try_suffixed ""
 
-let get_predeclared_char ~uint32_is_legacy n i =
-  let try_suffixed suffix =
-    get_predeclared_ind_suffixed [ "Char" ] suffix n i
-  in
+let get_predeclared_char ~uint32_is_legacy indh n i =
+  let try_suffixed suffix = get_predeclared_ind_suffixed indh suffix n i in
   if uint32_is_legacy then
     match try_suffixed ".legacy" with
     | Some _ as r -> r
     | None -> try_suffixed ""
   else try_suffixed ""
 
+(* Each row: the kind, the Lean name, the paths the row applies on and the
+   lookup of the predeclared inductive type for that name. *)
 let get_predeclared_ind_any ?(ctors = []) ?(uint32_is_legacy = false) n i =
   let std indh = get_predeclared_ind indh n i in
+  let uint32 indh = get_predeclared_uint32 ~ctors indh n i in
+  let char indh = get_predeclared_char ~uint32_is_legacy indh n i in
   List.filter_map
-    (fun (indk, indh, lookup) ->
-      if not (predeclared_on_path indh) then None
-      else lookup () |> Option.map (fun x -> (indk, indh, x)))
+    (fun (indk, indh, paths, lookup) ->
+      if not (on_current_path paths) then None
+      else lookup indh |> Option.map (fun x -> (indk, indh, x)))
     [
-      (Eq, [ "Eq" ], fun () -> std [ "Eq" ]);
-      (Nat, [ "Nat" ], fun () -> std [ "Nat" ]);
-      (Nat_le, [ "Nat"; "le" ], fun () -> std [ "Nat"; "le" ]);
-      (Or, [ "Or" ], fun () -> std [ "Or" ]);
-      (And, [ "And" ], fun () -> std [ "And" ]);
-      (Fin, [ "Fin" ], fun () -> std [ "Fin" ]);
-      (UInt32, [ "UInt32" ], fun () -> get_predeclared_uint32 ctors n i);
-      (BitVec, [ "BitVec" ], fun () -> std [ "BitVec" ]);
-      (Char, [ "Char" ], fun () -> get_predeclared_char ~uint32_is_legacy n i);
+      (Eq, [ "Eq" ], Both_paths, std);
+      (Nat, [ "Nat" ], Both_paths, std);
+      (Nat_le, [ "Nat"; "le" ], Both_paths, std);
+      (Or, [ "Or" ], Both_paths, std);
+      (And, [ "And" ], Both_paths, std);
+      (Fin, [ "Fin" ], Both_paths, std);
+      (UInt32, [ "UInt32" ], Legacy_path_only, uint32);
+      (BitVec, [ "BitVec" ], Legacy_path_only, std);
+      (Char, [ "Char" ], Legacy_path_only, char);
     ]
 
 let get_predeclared_ind_some ?(ctors = []) ?(uint32_is_legacy = false) n i =
@@ -821,15 +827,16 @@ let get_predeclared_ind_as_def_some n i =
     CErrors.user_err
       Pp.(str "Multiple predeclared ind-as-def constants for " ++ N.pp n)
 
+(* Each row: the kind, the Lean name and the paths the row applies on. *)
 let get_predeclared_def_any n i =
   List.filter_map
-    (fun (defk, defh) ->
-      if not (predeclared_on_path defh) then None
+    (fun (defk, defh, paths) ->
+      if not (on_current_path paths) then None
       else get_predeclared_def defh n i |> Option.map (fun x -> (defk, defh, x)))
     [
-      (UInt32_size, [ "UInt32"; "size" ]);
-      (Nat_isValidChar, [ "Nat"; "isValidChar" ]);
-      (Nat_pow, [ "Nat"; "pow" ]);
+      (UInt32_size, [ "UInt32"; "size" ], Legacy_path_only);
+      (Nat_isValidChar, [ "Nat"; "isValidChar" ], Legacy_path_only);
+      (Nat_pow, [ "Nat"; "pow" ], Legacy_path_only);
     ]
 
 let get_predeclared_def_some n i =
@@ -844,9 +851,9 @@ let mk_char_prim = "Char.mk.reflective_prim"
 let mk_char_prim_legacy = "Char.legacy.mk.reflective_prim"
 
 let lookup_char_prim_ref () =
-  match Rocqlib.lib_ref ("lean." ^ mk_char_prim) with
-  | c -> c
-  | exception _ -> Rocqlib.lib_ref ("lean." ^ mk_char_prim_legacy)
+  match Rocqlib.lib_ref_opt ("lean." ^ mk_char_prim) with
+  | Some c -> c
+  | None -> Rocqlib.lib_ref ("lean." ^ mk_char_prim_legacy)
 
 (*
 Register Nat_isValidChar as lean.Nat_isValidChar.
@@ -967,68 +974,22 @@ let nat_int nat double i =
     ZMap.get i !nat_ints
   end
 
-(* Decode a UTF-8 string into a list of valid codepoints, with error reporting for bad characters *)
-(* let string_to_codepoints s =
-  (* Create a UTF-8 decoder for the input string *)
-  let decoder = Uutf.decoder ~encoding:`UTF_8 (`String s) in
-
-  (* Define the condition for filtering codepoints *)
-  let is_valid_codepoint n = n < 0xd800 || (0xdfff < n && n < 0x110000) in
-
-  (* Decode the string and collect valid codepoints *)
-  let rec collect_codepoints acc =
-    match Uutf.decode decoder with
-    | `Uchar u when is_valid_codepoint (Uchar.to_int u) ->
-      collect_codepoints (Uchar.to_int u :: acc)
-    | `Uchar u when Uchar.to_int u >= 0x110000 ->
-      (* Raise an exception with the problematic character *)
-      let bad_char = Printf.sprintf "U+%04X" (Uchar.to_int u) in
-      failwith (Printf.sprintf "Invalid codepoint (>= 0x110000): %s" bad_char)
-    | `Uchar u when Uchar.to_int u >= 0xd800 && 0xdfff >= Uchar.to_int u ->
-      (* Raise an exception with the problematic character *)
-      let bad_char = Printf.sprintf "U+%04X" (Uchar.to_int u) in
-      failwith
-        (Printf.sprintf "Invalid codepoint (u >= 0xd800 && 0xdfff >= u): %s"
-           bad_char)
-    | `Uchar _ -> assert false
-    | `End -> List.rev acc
-    | `Malformed s ->
-      (* Handle malformed UTF-8 sequences *)
-      failwith (Printf.sprintf "Malformed UTF-8 sequence: %S" s)
-    | `Await -> assert false (* This case should not occur for a string input *)
-  in
-  collect_codepoints [] *)
-
-let string_to_codepoints str =
-  let rec decode_utf8 s pos acc =
-    if pos >= String.length s then List.rev acc
+(* The code points of the string literal [s], in order. Lean's strings are
+   well-formed UTF-8 (no overlong form, no surrogate, nothing above U+10FFFF,
+   no sequence cut short): a literal that is not is refused, on either path. *)
+let code_points s =
+  let rec rev_code_points i acc =
+    if i >= String.length s then acc
     else
-      let c = Char.code (String.get s pos) in
-      let n =
-        if c < 0x80 then (1, c)
-        else if c < 0xE0 then (2, c land 0x1F)
-        else if c < 0xF0 then (3, c land 0x0F)
-        else (4, c land 0x07)
-      in
-      let bytes, value = n in
-      let code_point = ref value in
-      for i = 1 to bytes - 1 do
-        let next_byte = Char.code (String.get s (pos + i)) in
-        code_point := (!code_point lsl 6) lor (next_byte land 0x3F)
-      done;
-      decode_utf8 s (pos + bytes) (!code_point :: acc)
-  in
-  decode_utf8 str 0 []
-
-let check_valid_codepoints cs =
-  List.map
-    (fun c ->
-      if c < 0xd800 || (0xdfff < c && c < 0x110000) then c
-      else
-        let bad_char = Printf.sprintf "U+%04X" c in
+      let d = String.get_utf_8_uchar s i in
+      if not (Uchar.utf_decode_is_valid d) then
         CErrors.user_err
-          Pp.(str (Printf.sprintf "Invalid codepoint: %s" bad_char)))
-    cs
+          Pp.(str "String literal is not well-formed UTF-8 at byte " ++ int i ++ str ".")
+      else
+        rev_code_points (i + Uchar.utf_decode_length d)
+          (Uchar.to_int (Uchar.utf_decode_uchar d) :: acc)
+  in
+  List.rev (rev_code_points 0 [])
 
 let mk_char mkChar (c : int) =
   Constr.(mkApp (mkChar, [| mkInt (Uint63.of_int c) |]))
@@ -1044,47 +1005,34 @@ let mk_list list uinst ty l =
   mk_list_rec l
 
 let mk_string char string list char_uinst mkChar s =
-  let codepoints =
-    try check_valid_codepoints (string_to_codepoints s)
-    with Failure msg as exn ->
-      let _, info = Exninfo.capture exn in
-      CErrors.user_err ~info Pp.(str msg)
-  in
-  let chars = List.map (mk_char mkChar) codepoints in
+  let chars = List.map (mk_char mkChar) (code_points s) in
   let ls = mk_list list char_uinst char chars in
   Constr.(mkApp (mkConstructU ((string, 1), UVars.Instance.empty), [| ls |]))
 
 (* On the new path, a string literal is translated as the term Lean's kernel
-   unfolds it to (Lean v4.34.0, src/kernel/inductive.cpp:1368-1380,
-   [string_lit_to_constructor], whose constants are set at lines 1394-1402):
-   [String.ofList] applied to the list [List.cons.{0} Char (Char.ofNat c)] ...
-   [List.nil.{0} Char] of the literal's code points [c], each a natural number
-   literal. [to_constr] translates it like any other Lean term, so it uses the
-   export's own [String.ofList], [List], [Char] and [Char.ofNat]. Lean's
-   strings are well-formed UTF-8: a literal that is not is refused. *)
+   unfolds it to ([string_lit_to_constructor], Lean v4.25.0
+   src/kernel/inductive.cpp:1200-1211): the string constructor applied to the
+   list [List.cons.{0} Char (Char.ofNat c)] ... [List.nil.{0} Char] of the
+   literal's code points [c], each a natural number literal ([Char.ofNat] is
+   set at line 1233). The constructor is [String.mk] up to Lean 4.25.x (v4.25.0
+   line 1226) and [String.ofList] from 4.26.0 on (v4.26.0 line 1226): the
+   export's [lean.version] chooses. [to_constr] translates the term like any
+   other Lean term, so it uses the export's own constructor, [List], [Char] and
+   [Char.ofNat]. *)
 let string_lit_expr s =
   let const path us = Const (N.append_list N.anon path, us) in
   let char = const [ "Char" ] [] in
   (* [U.Prop] is Lean's universe level 0, as in the exports. *)
   let list_ctor k = App (const [ "List"; k ] [ U.Prop ], char) in
-  let cons c rest =
+  let cons rest c =
     App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanExpr.Nat (Z.of_int c))), rest)
   in
-  (* The code points of [s] from byte [i] on, prepended in reverse to [acc]. *)
-  let rec rev_code_points i acc =
-    if i >= String.length s then acc
-    else
-      let d = String.get_utf_8_uchar s i in
-      if not (Uchar.utf_decode_is_valid d) then
-        CErrors.user_err
-          Pp.(str "String literal is not well-formed UTF-8 at byte " ++ int i ++ str ".")
-      else
-        rev_code_points (i + Uchar.utf_decode_length d)
-          (Uchar.to_int (Uchar.utf_decode_uchar d) :: acc)
+  let string_ctor =
+    match !current_version with
+    | Some version when version < (4, 26, 0) -> [ "String"; "mk" ]
+    | Some _ | None -> [ "String"; "ofList" ]
   in
-  App
-    ( const [ "String"; "ofList" ] [],
-      List.fold_left (fun rest c -> cons c rest) (list_ctor "nil") (rev_code_points 0 []) )
+  App (const string_ctor [], List.fold_left cons (list_ctor "nil") (List.rev (code_points s)))
 
 (* The Rocq term of the instantiation [inst] at the Rocq universes [univs] of
    the Lean universes that are not SProp (see [int_of_univs]): its [algs] are
@@ -1110,13 +1058,108 @@ let instance_term inst univs uconv =
   let u = Instance.of_array ([||], Array.of_list univs) in
   (uconv, Constr.mkRef (inst.ref, u))
 
-(* What [check_predeclared] compares with a predeclared constant: the entry of
-   a definition, or the entry of an inductive type with the number of
-   parameters of the predeclared inductive ([None] for a type predeclared as a
-   definition) and the predeclared constructors, in order. *)
-type predeclared_check =
-  | Check_def of def
-  | Check_ind of { ind : ind; nparams : int option; ctors : instantiation list }
+(* The check of an entry of the export bound to a predeclared constant
+   ([check_predeclared_def], [check_predeclared_ind], on either path): the
+   entry is translated as the importer translates any entry, at the universes
+   [start_uconv] gives its instance, and the predeclared constant is taken at
+   the same universes, as [instantiate] takes it. A difference refuses the
+   entry, with a message that names the entry, the predeclared constant and
+   the difference. *)
+
+(* The universes of an entry with the Lean universes [univs] at instance [i],
+   and the Rocq universes a predeclared constant is taken at for it. *)
+let predeclared_univs univs i =
+  let uconv = start_uconv univs i in
+  (uconv, snd (int_of_univs (List.map (fun u -> to_universe uconv.map (U.UNamed u)) univs)))
+
+(* Refuse the entry [name] of the export, bound to the predeclared [ref]. *)
+let refuse_predeclared name ref difference =
+  CErrors.user_err
+    Pp.(
+      str "The export's " ++ N.pp name ++ str " does not agree with the predeclared "
+      ++ Printer.pr_global ref ++ str ": " ++ difference ++ str ".")
+
+(* The type of the predeclared [inst] at the Rocq universes [rocq_univs], with
+   the environment to compare it in. *)
+let predeclared_type uconv rocq_univs inst =
+  let uconv, c = instance_term inst rocq_univs uconv in
+  let env = Environ.set_universes uconv.graph (Global.env ()) in
+  let evd = Evd.from_env env in
+  (uconv, env, EConstr.to_constr evd (Retyping.get_type_of env evd (EConstr.of_constr c)))
+
+(* Compare [export], [what] of the entry [name] of the export, with the type of
+   the predeclared [inst] by conversion, and refuse the entry, bound to the
+   predeclared [pred], when they differ. *)
+let compare_predeclared_type ~name ~pred uconv rocq_univs what export inst =
+  let uconv, env, predeclared = predeclared_type uconv rocq_univs inst in
+  match Conversion.conv env predeclared export with
+  | Ok () -> uconv
+  | Error () ->
+    let pr = Printer.pr_constr_env env (Evd.from_env env) in
+    refuse_predeclared name pred
+      Pp.(
+        what ++ spc () ++ pr export ++ spc () ++ str "is not convertible with" ++ spc ()
+        ++ pr predeclared ++ str ", the type of " ++ Printer.pr_global inst.ref)
+
+(* Compare the type [export] of the inductive type [name] of the export with
+   the type of the predeclared [inst] it is bound to, and refuse the entry when
+   they differ. The parameters and indices are compared by conversion, and the
+   sort exactly: the export's sort, the importer's translation of the sort Lean
+   gives the type, must be the one the predeclared type stands for. src/Lean.v
+   declares in [Set] the types Lean declares in [Type], so a type predeclared
+   in [Set] accepts only the translation of Lean's [Type] ([Type@{Set+1}], see
+   [level_of_sets]); a type predeclared in [SProp], or at the universes of the
+   entry (as [ULift], predeclared as a definition), accepts only its own
+   sort. *)
+let compare_predeclared_arity ~name uconv rocq_univs export inst =
+  let refuse difference = refuse_predeclared name inst.ref difference in
+  let uconv, env, predeclared = predeclared_type uconv rocq_univs inst in
+  let evd = Evd.from_env env in
+  let export_binders, export_sort = Reduction.dest_arity env export in
+  let binders, sort = Reduction.dest_arity env predeclared in
+  let in_prop binders = Term.it_mkProd_or_LetIn Constr.mkProp binders in
+  if Result.is_error (Conversion.conv env (in_prop binders) (in_prop export_binders)) then begin
+    let pr = Printer.pr_constr_env env evd in
+    refuse
+      Pp.(
+        str "its type" ++ spc () ++ pr export ++ spc ()
+        ++ str "does not have the parameters and indices of" ++ spc () ++ pr predeclared
+        ++ str ", the type of " ++ Printer.pr_global inst.ref)
+  end;
+  let pr_sort = Printer.pr_sort ~universes:true evd in
+  let uconv, expected, rule =
+    match sort with
+    | Sorts.Set ->
+      let uconv, lean_type = to_univ_level' (U.Succ U.Prop) uconv in
+      let expected = sort_of_level lean_type in
+      ( uconv,
+        expected,
+        Pp.(
+          str "a type predeclared in Set accepts only " ++ pr_sort expected
+          ++ str ", the importer's translation of Lean's Type") )
+    | _ ->
+      ( uconv,
+        sort,
+        Pp.(
+          Printer.pr_global inst.ref ++ str " is in " ++ pr_sort sort
+          ++ str ", and a predeclared type accepts only its own sort") )
+  in
+  match Conversion.conv env (Constr.mkSort expected) (Constr.mkSort export_sort) with
+  | Ok () -> uconv
+  | Error () -> refuse Pp.(str "its type is in the sort " ++ pr_sort export_sort ++ str ", but " ++ rule)
+
+(* The translation of an inductive type of the export ([translate_ind]): its
+   parameters (innermost first), its arity in their context, the indices and
+   sort of that arity, and its constructors with their types in the context
+   [tr_ctor_env] of the type itself and its parameters. *)
+type translated_ind = {
+  tr_params : Constr.rel_context;
+  tr_arity : Constr.types;
+  tr_indices : Constr.rel_context;
+  tr_sort : Sorts.t;
+  tr_ctor_env : Environ.rel_context_val;
+  tr_ctors : (N.t * Constr.types) list;
+}
 
 let lcnt = ref 0
 
@@ -1304,97 +1347,49 @@ and ensure_exists n i =
     | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared")
     | exception Not_found -> CErrors.user_err Pp.(str "missing " ++ N.pp n))
 
-(* Whether the export's entry agrees with the predeclared constant [pred] the
-   importer binds it to at instance [i], on either path. The entry is translated as the importer translates any entry,
-   and [pred] is taken at the same universes, as [instantiate] takes it. For a
-   definition ([Check_def]) its declared type is compared, not its value:
-   the predeclared value is kept. For an inductive type ([Check_ind]) its
-   parameter count, its type, its constructor count and each constructor's type
-   (in the order of the predeclared constructors) are compared. Types are
-   compared by conversion up to cumulativity ([Conversion.conv_leq], Rocq
-   kernel/conversion.mli:56, which compares with the universes of its [env]):
-   the predeclared type may live in a smaller universe, as src/Lean.v declares
-   in [Set] the types that the importer translates from Lean's [Type] to
-   [Type@{Set+1}]. A difference refuses the entry, with a message that names
-   the entry, the predeclared constant and the difference. *)
-and check_predeclared check i (pred : instantiation) =
-  let name, univs =
-    match check with
-    | Check_def def -> (def.name, def.univs)
-    | Check_ind { ind; _ } -> (ind.name, ind.univs)
-  in
-  let uconv = start_uconv univs i in
-  let rocq_univs =
-    snd (int_of_univs (List.map (fun u -> to_universe uconv.map (U.UNamed u)) univs))
-  in
-  let refuse difference =
-    CErrors.user_err
-      Pp.(
-        str "The export's " ++ N.pp name ++ str " does not agree with the predeclared "
-        ++ Printer.pr_global pred.ref ++ str ": " ++ difference ++ str ".")
-  in
-  (* [what] of the entry, [export], against the type of [inst]. *)
-  let compare_type uconv what export inst =
-    let uconv, c = instance_term inst rocq_univs uconv in
-    let env = Environ.set_universes uconv.graph (Global.env ()) in
-    let evd = Evd.from_env env in
-    let predeclared =
-      EConstr.to_constr evd (Retyping.get_type_of env evd (EConstr.of_constr c))
-    in
-    match Conversion.conv_leq env predeclared export with
-    | Ok () -> uconv
-    | Error () ->
-      let pr = Printer.pr_constr_env env evd in
-      refuse
+(* Check the definition [def] of the export against the predeclared constant
+   [pred] the importer binds it to at instance [i]: its declared type is
+   compared by conversion, not its value (the predeclared value is kept). *)
+and check_predeclared_def ({ name; ty; univs; _ } : def) i (pred : instantiation) =
+  let uconv, rocq_univs = predeclared_univs univs i in
+  let uconv, ty = to_constr empty_env ty uconv in
+  ignore
+    (compare_predeclared_type ~name ~pred:pred.ref uconv rocq_univs (Pp.str "its declared type") ty
+       pred)
+
+(* Check the inductive type [ind] of the export against the predeclared [pred]
+   the importer binds it to at instance [i], translated as [declare_ind]
+   translates a new inductive type ([translate_ind]): its parameter count
+   ([nparams], [None] for a type predeclared as a definition), its type (see
+   [compare_predeclared_arity]), its constructor count and each constructor's
+   type, by conversion, against the predeclared constructors [pred_ctors] in
+   order. *)
+and check_predeclared_ind (ind : ind) i ~nparams ~ctors:pred_ctors (pred : instantiation) =
+  let count what export predeclared =
+    if export <> predeclared then
+      refuse_predeclared ind.name pred.ref
         Pp.(
-          what ++ spc () ++ pr export ++ spc () ++ str "is not convertible with" ++ spc ()
-          ++ pr predeclared ++ str ", the type of " ++ Printer.pr_global inst.ref)
+          str "the export gives it " ++ int export ++ str " " ++ str what
+          ++ str ", the predeclared one has " ++ int predeclared)
   in
-  match check with
-  | Check_def { ty; _ } ->
-    let uconv, ty = to_constr empty_env ty uconv in
-    ignore (compare_type uconv (Pp.str "its declared type") ty pred)
-  | Check_ind { ind = { params; ty; ctors; _ }; nparams; ctors = pred_ctors } ->
-    let count what export predeclared =
-      if export <> predeclared then
-        refuse
-          Pp.(
-            str "the export gives it " ++ int export ++ str " " ++ str what
-            ++ str ", the predeclared one has " ++ int predeclared)
-    in
-    Option.iter (count "parameters" (List.length params)) nparams;
-    let (env_params, uconv), params = to_params uconv params in
-    let uconv, ty = to_constr env_params ty uconv in
-    let full_ty = Term.it_mkProd_or_LetIn ty params in
-    let uconv = compare_type uconv (Pp.str "its type") full_ty pred in
-    count "constructors" (List.length ctors) (List.length pred_ctors);
-    (* The constructor types, translated as [declare_ind] translates those of a
-       new inductive type: in the context of the type and its parameters. *)
-    let _, sort =
-      Reduction.dest_arity
-        (Environ.set_rel_context_val env_params
-           (Environ.set_universes uconv.graph (Global.env ())))
-        ty
-    in
-    let env_ind =
-      Environ.push_rel_context_val
-        (LocalAssum
-           (Context.make_annot (N.to_name name) (Sorts.relevance_of_sort sort), full_ty))
-        empty_env
-    in
-    let env_ind_params =
-      Context.Rel.fold_outside Environ.push_rel_context_val params ~init:env_ind
-    in
-    let uconv, ind_term = instance_term pred rocq_univs uconv in
-    ignore
-      (List.fold_left2
-         (fun uconv (cname, cty) cinst ->
-           let uconv, cty = to_constr env_ind_params cty uconv in
-           let cty = Vars.subst1 ind_term (Term.it_mkProd_or_LetIn cty params) in
-           compare_type uconv
-             Pp.(str "the type of its constructor " ++ N.pp cname ++ str ",")
-             cty cinst)
-         uconv ctors pred_ctors)
+  Option.iter (count "parameters" (List.length ind.params)) nparams;
+  let uconv, rocq_univs = predeclared_univs ind.univs i in
+  let uconv, t = translate_ind uconv ind in
+  let uconv =
+    compare_predeclared_arity ~name:ind.name uconv rocq_univs
+      (Term.it_mkProd_or_LetIn t.tr_arity t.tr_params)
+      pred
+  in
+  count "constructors" (List.length t.tr_ctors) (List.length pred_ctors);
+  let uconv, ind_term = instance_term pred rocq_univs uconv in
+  ignore
+    (List.fold_left2
+       (fun uconv (cname, cty) cinst ->
+         let cty = Vars.subst1 ind_term (Term.it_mkProd_or_LetIn cty t.tr_params) in
+         compare_predeclared_type ~name:ind.name ~pred:pred.ref uconv rocq_univs
+           Pp.(str "the type of its constructor " ++ N.pp cname ++ str ",")
+           cty cinst)
+       uconv t.tr_ctors pred_ctors)
 
 and declare_def ({ name = n; ty; body; univs; } as def) i =
   let ref, algs =
@@ -1404,7 +1399,7 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print def_name ++ str " is predeclared");
       let ref = GlobRef.ConstRef c in
-      check_predeclared (Check_def def) i { ref; algs = [] };
+      check_predeclared_def def i { ref; algs = [] };
       (ref, [])
     | None ->
       let uconv = start_uconv univs i in
@@ -1415,16 +1410,20 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
         try quickdef ~name:(name_for n i) ~types:(Some ty) ~univs body
         with e ->
           let e = Exninfo.capture e in
-          Feedback.msg_info
-            Pp.(
-              str "Failed with" ++ fnl ()
-              ++ Printer.pr_constr_env (Global.env ())
-                   (Evd.from_env (Global.env ()))
-                   body
-              ++ fnl () ++ str ": "
-              ++ Printer.pr_constr_env (Global.env ())
-                   (Evd.from_env (Global.env ()))
-                   ty);
+          (* The term and its type are printed for a failure of the term, not
+             for a critical exception such as the [Control.Timeout] of the
+             Lean Entry Timeout, which ends the entry at once. *)
+          if CErrors.noncritical (fst e) then
+            Feedback.msg_info
+              Pp.(
+                str "Failed with" ++ fnl ()
+                ++ Printer.pr_constr_env (Global.env ())
+                     (Evd.from_env (Global.env ()))
+                     body
+                ++ fnl () ++ str ": "
+                ++ Printer.pr_constr_env (Global.env ())
+                     (Evd.from_env (Global.env ()))
+                     ty);
           Exninfo.iraise e
       in
       (ref, algs)
@@ -1464,7 +1463,45 @@ and to_params uconv params =
   in
   (acc, List.rev params)
 
-and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
+(* The translation of the inductive type [ind] at the universes [uconv], as
+   [declare_ind] declares it and [check_predeclared_ind] checks it: the
+   parameters, then the arity in their context, then each constructor's type
+   in the context of the type itself and its parameters. *)
+and translate_ind uconv ({ name; params; ty; ctors; _ } : ind) =
+  let (env_params, uconv), params = to_params uconv params in
+  let uconv, arity = to_constr env_params ty uconv in
+  let indices, sort =
+    Reduction.dest_arity
+      (Environ.set_rel_context_val env_params
+         (Environ.set_universes uconv.graph (Global.env ())))
+      arity
+  in
+  let env_ind =
+    Environ.push_rel_context_val
+      (LocalAssum
+         ( Context.make_annot (N.to_name name) (Sorts.relevance_of_sort sort),
+           Term.it_mkProd_or_LetIn arity params ))
+      empty_env
+  in
+  let ctor_env = Context.Rel.fold_outside Environ.push_rel_context_val params ~init:env_ind in
+  let uconv, ctors =
+    CList.fold_left_map
+      (fun uconv (cname, cty) ->
+        let uconv, cty = to_constr ctor_env cty uconv in
+        (uconv, (cname, cty)))
+      uconv ctors
+  in
+  ( uconv,
+    {
+      tr_params = params;
+      tr_arity = arity;
+      tr_indices = indices;
+      tr_sort = sort;
+      tr_ctor_env = ctor_env;
+      tr_ctors = ctors;
+    } )
+
+and declare_ind ({ name = n; ctors; univs; _ } as ind) i =
   (* Handle inductives predeclared as definitions (e.g., ULift with cumulativity).
      We check if there's a cumul registration for this specific instance. *)
   match get_predeclared_ind_as_def_some n i with
@@ -1490,7 +1527,7 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
     let ulift_ref = Rocqlib.lib_ref (cumul_reg n) in
     let inst = { ref = ulift_ref; algs = algs_2 } in
     let up = { ref = Rocqlib.lib_ref (cumul_reg (N.append n "up")); algs = algs_2 } in
-    check_predeclared (Check_ind { ind; nparams = None; ctors = [ up ] }) i inst;
+    check_predeclared_ind ind i ~nparams:None ~ctors:[ up ] inst;
     add_declared n i inst;
     (* The export's constructor (Lean's [ULift.up]), bound to ULift_up_cumul. *)
     List.iter (fun (cname, _) -> add_declared cname i up) ctors;
@@ -1509,36 +1546,30 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
     match N.Map.find_opt uname !declared with
     | None -> false
     | Some m ->
-      (match Int.Map.find_opt 0 m with
-       | None -> false
-       | Some { ref = uint32_ref; _ } ->
-         (try
-            let legacy_ref =
-              Rocqlib.lib_ref "lean.UInt32.legacy"
-            in
-            Names.GlobRef.CanOrd.equal uint32_ref legacy_ref
-          with _ -> false))
+      (match (Int.Map.find_opt 0 m, Rocqlib.lib_ref_opt "lean.UInt32.legacy") with
+       | Some { ref = uint32_ref; _ }, Some legacy_ref ->
+         Names.GlobRef.CanOrd.equal uint32_ref legacy_ref
+       | _ -> false)
   in
-  (* The predeclared [mind] checked against the entry: the export's names of
-     its constructors. *)
+  (* Check the entry against the predeclared [mind] the importer binds it to. *)
   let check_predeclared_mind mind =
     let mib = Global.lookup_mind mind in
     let pred_ctors =
       List.init (Array.length mib.mind_packets.(0).mind_consnames) (fun k ->
           { ref = GlobRef.ConstructRef ((mind, 0), k + 1); algs = [] })
     in
-    check_predeclared
-      (Check_ind { ind; nparams = Some mib.mind_nparams; ctors = pred_ctors })
-      i { ref = GlobRef.IndRef (mind, 0); algs = [] };
-    List.map fst ctors
+    check_predeclared_ind ind i ~nparams:(Some mib.mind_nparams) ~ctors:pred_ctors
+      { ref = GlobRef.IndRef (mind, 0); algs = [] }
   in
-  let mind, algs, ind_name, cnames, univs, squashy =
+  (* The export's constructors, bound in order to those of the inductive type. *)
+  let cnames = List.map fst ctors in
+  let mind, algs, ind_name, univs, squashy =
     match get_predeclared_ind_some ~ctors ~uint32_is_legacy n i with
     | Some (Eq, _, (ind_name, mind)) ->
       (* Hack to let the user predeclare eq and quot before running Lean Import
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cnames = check_predeclared_mind mind in
+      check_predeclared_mind mind;
       let squashy =
         { maybe_prop = true; always_prop = true; lean_squashes = false }
       in
@@ -1552,7 +1583,7 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
         | 1 -> UContext.empty
         | _ -> assert false
       in
-      (mind, [], ind_name, cnames, univs, squashy)
+      (mind, [], ind_name, univs, squashy)
     | Some
         ( (Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char),
           _,
@@ -1561,39 +1592,23 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
          TODO make a more general Register-like API? *)
       (* this case is for the ones without universes*)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cnames = check_predeclared_mind mind in
+      check_predeclared_mind mind;
       let squashy = N.Map.get n !squash_info in
-      (mind, [], ind_name, cnames, UContext.empty, squashy)
+      (mind, [], ind_name, UContext.empty, squashy)
     | None ->
       let uconv = start_uconv univs i in
-      let (env_params, uconv), params = to_params uconv params in
-      let uconv, ty = to_constr env_params ty uconv in
-      let indices, sort =
-        let env_params =
-          Environ.set_rel_context_val env_params
-            (Environ.set_universes uconv.graph (Global.env ()))
-        in
-        Reduction.dest_arity env_params ty
+      let ( uconv,
+            {
+              tr_params = params;
+              tr_arity = ty;
+              tr_indices = indices;
+              tr_sort = sort;
+              tr_ctor_env = env_ind_params;
+              tr_ctors;
+            } ) =
+        translate_ind uconv ind
       in
-      let env_ind =
-        Environ.push_rel_context_val
-          (LocalAssum
-             ( Context.make_annot (N.to_name n) (Sorts.relevance_of_sort sort),
-               Term.it_mkProd_or_LetIn ty params ))
-          empty_env
-      in
-      let env_ind_params =
-        Context.Rel.fold_outside Environ.push_rel_context_val params
-          ~init:env_ind
-      in
-      let uconv, ctors =
-        CList.fold_left_map
-          (fun uconv (n, ty) ->
-            let uconv, ty = to_constr env_ind_params ty uconv in
-            (uconv, (n, ty)))
-          uconv ctors
-      in
-      let cnames, ctys = List.split ctors in
+      let ctys = List.map snd tr_ctors in
       let graph = uconv.graph in
       let univs, algs = univ_entry_gen uconv univs in
       let ind_name = name_for n i in
@@ -1701,7 +1716,13 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
             (UState.Polymorphic_entry UContext.empty, UnivNames.empty_binders)
             []
         in
-        let act () = try act BiFinite with e -> act Finite in
+        (* The type is declared [BiFinite] when the kernel accepts that (a
+           non-recursive type), else [Finite]. A critical exception, such as
+           the [Control.Timeout] of the Lean Entry Timeout, is not a refusal
+           of [BiFinite]: it ends the entry. *)
+        let act () =
+          try act BiFinite with e when CErrors.noncritical e -> act Finite
+        in
         if squashy.lean_squashes || not coq_squashes then act ()
         else with_unsafe_univs act ()
       in
@@ -1739,7 +1760,7 @@ and declare_ind ({ name = n; params; ty; ctors; univs } as ind) i =
            | Some _ -> ())
         | None -> ()
       in
-      (mind, algs, ind_name, cnames, univs, squashy)
+      (mind, algs, ind_name, univs, squashy)
   in
 
   (* add ind and ctors to [declared] *)
@@ -1996,15 +2017,18 @@ let declare_ind ind =
 let entry_name = function
 | Quot name | Def { name } | Ax { name } | Ind { name } -> name
 
-(* A name registered for the version-aware predeclared dispatch machinery
-   (UInt32/Char in particular) may legitimately be emitted twice: the
-   second [#IND] flips [get_predeclared_*] to a different Rocq reference.
-   We do not dedupe those; the dispatch logic handles them. Only the legacy
-   path predeclares them: on the new path a repeated [UInt32] or [Char] is a
-   duplicate like any other entry. *)
+(* Whether [n] is bound by a row of the predeclared table that dispatches
+   between two Rocq records ([get_predeclared_uint32], [get_predeclared_char]):
+   on the legacy path, such an entry may legitimately be emitted twice, the
+   second [#IND] flipping the dispatch to the other record, and it is declared
+   again. Those rows apply on the legacy path only: on the new path a repeated
+   [UInt32] or [Char] is a duplicate like any other entry. *)
 let is_predeclared_dispatch_name n =
-  let has_prefix prefix = N.equal n (N.append_list N.anon prefix) in
-  (not (on_new_path ())) && (has_prefix [ "UInt32" ] || has_prefix [ "Char" ])
+  List.exists
+    (function
+      | (UInt32 | Char), _, _ -> true
+      | (Eq | Nat | Nat_le | Or | And | Fin | BitVec), _, _ -> false)
+    (get_predeclared_ind_any n 0)
 
 (* Duplicate entries can occur when lean4export is invoked with multiple
    roots that share a transitive dependency: the shared declaration is
@@ -2158,12 +2182,18 @@ let add_entry_in_time entry =
     | Ok () -> ()
     | Error info -> Exninfo.iraise (EntryTimedOut n, info))
 
-let do_line state l =
+(* Parse the line [l]: for its names, levels and expressions only when
+   [prefix], a line before the first line to import (see [import]); the old
+   text format reads nothing from such a line. *)
+let do_line ~prefix state l =
   let do_line () =
     match state.pstate with
+    | OldParser _ when prefix -> (state, None)
     | OldParser pstate ->
       let pstate, oentry = LeanParse.do_line pstate ~lcnt:!lcnt l in
       ({ state with pstate = OldParser pstate }, oentry)
+    | NdjsonParser pstate when prefix ->
+      ({ state with pstate = NdjsonParser (LeanParseNdjson.do_prefix_line pstate ~lcnt:!lcnt l) }, None)
     | NdjsonParser pstate ->
       let pstate, oentry = LeanParseNdjson.do_line pstate ~lcnt:!lcnt l in
       ({ state with pstate = NdjsonParser pstate }, oentry)
@@ -2175,38 +2205,9 @@ let do_line state l =
     | Ok v -> v
     | Error info -> Exninfo.iraise (TimedOut, info))
 
-let do_line state l =
+let do_line ~prefix state l =
   let t0 = System.get_time () in
-  match do_line state l with
-  | state ->
-    let t1 = System.get_time () in
-    prtime t0 t1;
-    state
-  | exception e ->
-    let e = Exninfo.capture e in
-    (if fst e <> TimedOut then
-       let t1 = System.get_time () in
-       prtime t0 t1);
-    Exninfo.iraise e
-
-let do_prefix_line state l =
-  let do_prefix_line () =
-    match state.pstate with
-    | OldParser _ -> state
-    | NdjsonParser pstate ->
-      let pstate = LeanParseNdjson.do_prefix_line pstate ~lcnt:!lcnt l in
-      { state with pstate = NdjsonParser pstate }
-  in
-  match !timeout with
-  | None -> do_prefix_line ()
-  | Some t ->
-    (match Control.timeout (float_of_int t) do_prefix_line () with
-    | Ok v -> v
-    | Error info -> Exninfo.iraise (TimedOut, info))
-
-let do_prefix_line state l =
-  let t0 = System.get_time () in
-  match do_prefix_line state l with
+  match do_line ~prefix state l with
   | state ->
     let t1 = System.get_time () in
     prtime t0 t1;
@@ -2256,17 +2257,8 @@ let rec do_input state ~from ~until ch =
       finish state;
       if not (until = None) then CErrors.user_err Pp.(str "unexpected EOF!");
       state
-    | l when before_from from ->
-      (match state.pstate with
-      | OldParser _ ->
-        incr lcnt;
-        do_input state ~from ~until ch
-      | NdjsonParser _ ->
-        let state = do_prefix_line state l in
-        incr lcnt;
-        do_input state ~from ~until ch)
     | l ->
-      (match do_line state l with
+      (match do_line ~prefix:(before_from from) state l with
       | exception LeanParseNdjson.Refused { state = pstate; entry; error } ->
         let name = match entry with Some n -> N.pp n | None -> line_name () in
         refuse { state with pstate = NdjsonParser pstate } ~from ~until ch
@@ -2284,11 +2276,15 @@ let rec do_input state ~from ~until ch =
           incr lcnt;
           do_input state ~from ~until ch
         | false, Some (Entry entry) ->
-          (* The path the export's metadata chose before its first entry. *)
-          current_path :=
-            (match state.pstate with
-            | OldParser _ -> LeanParseNdjson.Legacy
-            | NdjsonParser pstate -> LeanParseNdjson.path pstate);
+          (* The path and the Lean version the export's metadata gave before
+             its first entry. *)
+          (match state.pstate with
+          | OldParser _ ->
+            current_path := LeanParseNdjson.Legacy;
+            current_version := None
+          | NdjsonParser pstate ->
+            current_path := LeanParseNdjson.path pstate;
+            current_version := LeanParseNdjson.version pstate);
           (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
           let st = freeze () in
           (match add_entry_in_time entry with
@@ -2296,6 +2292,11 @@ let rec do_input state ~from ~until ch =
             incr lcnt;
             do_input state ~from ~until ch
           | exception e ->
+            (* Every exception refuses the entry, an asynchronous one too: the
+               Lean Entry Timeout reaches here as [EntryTimedOut], and an outer
+               [Timeout] or an interrupt that fires while the entry is being
+               declared refuses it like any other error (see Lean Error Mode
+               in README.md). *)
             let e = Exninfo.capture e in
             let msg = refusal ~name:(N.pp (entry_name entry)) l e in
             unfreeze st;

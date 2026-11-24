@@ -1,0 +1,3 @@
+# Log file, polarity, literal substring (tab-separated).
+string_literal_mk_4260.log.out	+	Error at line 147 (for RLI425.lit)
+string_literal_mk_4260.log.out	+	missing String.ofList

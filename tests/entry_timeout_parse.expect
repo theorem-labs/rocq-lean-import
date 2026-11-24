@@ -50,6 +50,14 @@ entry_timeout_parse_messages.log.out	+	unsupported NDJSON record
 entry_timeout_parse_messages.log.out	+	line 133: RLI434T.fast
 entry_timeout_parse_messages.log.out	+	Done!
 entry_timeout_parse_messages.log.out	+	Skipped 2
+# prefix
+entry_timeout_parse_prefix.log.out	+	Skipping: Error at line 132 (for line-132)
+entry_timeout_parse_prefix.log.out	+	unknown expression id 9999
+entry_timeout_parse_prefix.log.out	+	Skipping: Error at line 133 (for line-133)
+entry_timeout_parse_prefix.log.out	-	line 131: RLI434T.fast
+entry_timeout_parse_prefix.log.out	+	line 136: RLIIndependent
+entry_timeout_parse_prefix.log.out	+	Done!
+entry_timeout_parse_prefix.log.out	+	Skipped 2
 entry_timeout_parse_stop_mutual.log.out	+	Error at line 52 (for line-52)
 entry_timeout_parse_stop_mutual.log.out	+	mutual inductive groups
 entry_timeout_parse_stop_mutual.log.out	-	Skipping:
