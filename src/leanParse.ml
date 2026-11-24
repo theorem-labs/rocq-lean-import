@@ -54,16 +54,18 @@ let fix_ctor = LeanParseShared.fix_ctor
 
 let as_univ state s = RRange.get state.univs (int_of_string s)
 
-let parse_hexa c =
-  if 'A' <= c && c <= 'F' then int_of_char c - int_of_char 'A'
-  else begin
-    assert ('0' <= c && c <= '9');
-    int_of_char c - int_of_char '0'
-  end
+(* A byte of a string literal ([#ELS]) is two hexadecimal digits. The exports
+   write them in upper case; lower case reads the same. *)
+let parse_hexa s c =
+  if '0' <= c && c <= '9' then Char.code c - Char.code '0'
+  else if 'A' <= c && c <= 'F' then Char.code c - Char.code 'A' + 10
+  else if 'a' <= c && c <= 'f' then Char.code c - Char.code 'a' + 10
+  else CErrors.user_err Pp.(str "bad byte " ++ qstring s ++ str " in a string literal.")
 
 let parse_char s =
-  assert (String.length s = 2);
-  Char.chr ((parse_hexa s.[0] * 16) + parse_hexa s.[1])
+  if String.length s <> 2 then
+    CErrors.user_err Pp.(str "bad byte " ++ qstring s ++ str " in a string literal.");
+  Char.chr ((parse_hexa s s.[0] * 16) + parse_hexa s s.[1])
 
 let quot_name = LeanParseShared.quot_name
 
