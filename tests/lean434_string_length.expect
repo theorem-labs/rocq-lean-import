@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+lean434_string_length.log.out	+	Skipping: Error at line 51311 (for Nat.mul_add_div._f)
+lean434_string_length.log.out	+	Skipping: Error at line 343133 (for RLI434.ab_length)
+lean434_string_length.log.out	+	Skipping: Error at line 343143 (for RLI434.astral_length)
+lean434_string_length.log.out	+	Done!

@@ -1,10 +1,11 @@
 # file	features	base_entry	own_entry	status	commits
 tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
 tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
-tests/lean434_char.v	char-ofnataux	BitVec.ofNatLT	Char.ofNatAux	open	-
+tests/lean434_char.v	char-ofnataux	BitVec.ofNatLT	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
 tests/lean434_isvalidchar.v	F6	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
-tests/lean434_strings.v	string-literals	Nat.pow_pos._f	-	open	-
-tests/lean434_nested.v	autoParam nested-inductive	Nat.pow_pos._f	-	open	-
+tests/lean434_strings.v	string-literals	Nat.pow_pos._f	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c 17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
+tests/lean434_string_length.v	string-length nat-linear-reflection	Nat.pow_pos._f	RLI434.ab_length	listed	-
+tests/lean434_nested.v	autoParam nested-inductive	Nat.pow_pos._f	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
 tests/lean434_linear.v	F5	Nat.«Internal».Linear.ExprCnstr.denote_toNormPoly	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba
 tests/lean434_bigint.v	int-literals record-rfl	RLI434.big_fields	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba
 tests/lean434_bigint_decide.v	decide omega proof-auxiliaries	RLI434.big_fields	RLI434.boundedVal._proof_1	listed	-

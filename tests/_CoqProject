@@ -30,6 +30,7 @@ lean434_pow.v
 lean434_char.v
 lean434_isvalidchar.v
 lean434_strings.v
+lean434_string_length.v
 lean434_nested.v
 lean434_linear.v
 lean434_bigint.v

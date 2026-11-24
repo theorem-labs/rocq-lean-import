@@ -1,0 +1,6 @@
+# Log file, polarity, literal substring (tab-separated).
+lean434_strings.log.out	+	line 54562: Char.ofNatAux: 1 argument(s) transported
+lean434_strings.log.out	+	line 343136: RLI434.astral
+lean434_strings.log.out	-	Error at line 343136
+lean434_strings.log.out	-	Error at line 54562
+lean434_strings.log.out	+	Done!
