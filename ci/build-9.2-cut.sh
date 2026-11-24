@@ -939,6 +939,9 @@ main() {
     esac
     expected=${row_own[idx]}
     if [[ $expected == - ]]; then expected=${row_base[idx]}; fi
+    # An inventory name may quote a component as Lean does (Nat.«Internal».Linear…), since a push check of
+    # our tooling reads some dotted names as host names; the log prints the name unquoted.
+    expected=${expected//«/} expected=${expected//»/}
     read -r -a commits <<<"${row_commits[idx]}"
     revert_fix_prepare "$ROOT" "$WORK/tree" "${commits[@]}"
     case $RV_STATUS in
@@ -1583,6 +1586,13 @@ st_rows() {
   st_run 'ST_OUTCOME=option:Lean Entry Timeout' -- --revert-fix tests/lean434_opt.v
   st_rc zero
   st_line 'R5 NEGATIVE MET: tests/lean434_opt.v at option:Lean Entry Timeout'
+  st_new S7b/quoted
+  sed -i 's/\tAlpha\.one\t/\t«Alpha».one\t/' "$ST_REPO/tests/lean434_features.txt"
+  grep -q '«Alpha».one' "$ST_REPO/tests/lean434_features.txt" || st_bad "the template's row names no Alpha.one to quote"
+  st_commit "quote a name component as Lean does"
+  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_rc zero
+  st_line 'R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one'
   st_row S7b
 
   # S8: an unknown test name; each mode with no argument or one short.

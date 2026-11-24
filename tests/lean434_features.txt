@@ -6,4 +6,4 @@ tests/lean434_strings.v	string-literals	Nat.pow_pos._f	-	open	-
 tests/lean434_nested.v	autoParam nested-inductive	Nat.pow_pos._f	-	open	-
 tests/lean434_linear.v	F5	Nat.«Internal».Linear.ExprCnstr.denote_toNormPoly	-	open	-
 tests/lean434_bigint.v	int-literals decide omega proof-auxiliaries record-rfl	RLI434.big_fields	-	open	-
-tests/entry_timeout.v	entry-timeout	option:Lean Entry Timeout	-	open	-
+tests/entry_timeout.v	entry-timeout	option:Lean Entry Timeout	-	fixed	4d81edbc7ca0baf3f88ea258a0e0c90da237837a
