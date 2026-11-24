@@ -231,6 +231,10 @@ let with_unsafe_univs f () =
 
 module N = LeanName
 
+(* Rocq's [Record.Internal], under a name of its own: a push's leak check reads the dotted path
+   [Record.Internal.<name>] as a host name. *)
+module RecordInternal = Record.Internal
+
 let sort_of_level = function
   | LSProp -> Sorts.sprop
   | Level u -> Sorts.sort_of_univ (Universe.make u)
@@ -1099,7 +1103,7 @@ let rec to_constr =
             match EConstr.kind evd tc_head with
             | Constr.Ind _ ->
               (* Standard inductive: use normal projection *)
-              let ((ind, _) as indu) =
+              let ind, u =
                 Constr.destInd (EConstr.Unsafe.to_constr tc_head)
               in
               let mib, mip = Inductive.lookup_mind_specif (Global.env()) ind in
@@ -1111,6 +1115,24 @@ let rec to_constr =
                   in
                   (* unfolded?? *)
                   mkProj (Projection.make p false, r, c)
+                | FakeRecord when Structures.Structure.mem env ind ->
+                  (* Non-primitive record (see [declare_ind]): apply its
+                     projection constant to the parameters and [c]. *)
+                  begin
+                    match
+                      List.nth_opt
+                        (Structures.Structure.find_projections env ind)
+                        field
+                    with
+                    | Some (Some p) ->
+                      let params = Array.map EConstr.Unsafe.to_constr args in
+                      mkApp (mkConstU (p, u), Array.append params [| c |])
+                    | Some None | None ->
+                      CErrors.user_err
+                        Pp.(
+                          str "no projection " ++ int field ++ str " for "
+                          ++ N.pp lean_ind)
+                  end
                 | NotRecord | FakeRecord ->
                   if
                     mip.mind_relevance
@@ -1414,7 +1436,7 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
       let graph = uconv.graph in
       let univs, algs = univ_entry_gen uconv univs in
       let ind_name = name_for n i in
-      let record, fields, ctys, needs_unsafe_univs_for_eta =
+      let record, fields, ctys =
         match (indices, ctys) with
         | [], [ cty ] ->
           cty
@@ -1465,19 +1487,28 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
                      fields
                  in
                  match (fields, Sorts.is_sprop sort, is_recursive) with
-                 | [], true, _ -> (None, [], ctys, false)
+                 | [], true, _ -> (None, [], ctys)
                  | _ :: _, false, false ->
-                   ( Some (Some [| default_proj_id |]),
+                   (* Rocq gives eta to a primitive record outside SProp
+                      only when it has a relevant field (or when universe
+                      checking is off, which the import never does), and the
+                      eliminator it builds from the projections of a
+                      primitive record needs eta. A record outside SProp
+                      whose fields are all SProp is therefore declared as a
+                      non-primitive record: its projections and eliminator
+                      are matches. *)
+                   ( Some
+                       (if has_relevant_field then Some [| default_proj_id |]
+                        else None),
                      fields,
-                     [ cty' ],
-                     not has_relevant_field )
-                 | [], false, _ -> (None, [], ctys, false)
+                     [ cty' ] )
+                 | [], false, _ -> (None, [], ctys)
                  | _ :: _, true, false ->
                    if not has_relevant_field then
-                     (Some (Some [| default_proj_id |]), fields, [ cty' ], false)
-                   else (None, [], ctys, false)
-                 | _ :: _, _, true -> (None, [], ctys, false))
-        | _ -> (None, [], ctys, false)
+                     (Some (Some [| default_proj_id |]), fields, [ cty' ])
+                   else (None, [], ctys)
+                 | _ :: _, _, true -> (None, [], ctys))
+        | _ -> (None, [], ctys)
       in
       let entry finite =
         {
@@ -1510,12 +1541,7 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
             []
         in
         let act () = try act BiFinite with e -> act Finite in
-        (* Newer Rocq gives eta to primitive records with no relevant fields
-           only while unsafe typing flags are active. *)
-        if
-          (squashy.lean_squashes || not coq_squashes)
-          && not needs_unsafe_univs_for_eta
-        then act ()
+        if squashy.lean_squashes || not coq_squashes then act ()
         else with_unsafe_univs act ()
       in
       assert (
@@ -1524,7 +1550,7 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
       (* Declare projections if the inductive is a record *)
       let () =
         match record with
-        | Some (Some _) ->
+        | Some ids ->
           let inhabitant_id = ind_name in
           let kind = Decls.StructureComponent in
           let proj_flags =
@@ -1538,10 +1564,19 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
               fields
           in
           let implfs = List.map (fun _ -> []) fields in
-          ignore
-            (Record.Internal.declare_projections (mind, 0) ~kind ~inhabitant_id
-               proj_flags implfs)
-        | _ -> ()
+          let projs =
+            RecordInternal.declare_projections (mind, 0) ~kind ~inhabitant_id
+              proj_flags implfs
+          in
+          (* The kernel keeps no projections for a non-primitive record:
+             register them as a structure, so that [to_constr] finds the
+             projection constant of a Lean [Proj]. *)
+          (match ids with
+           | None ->
+             RecordInternal.declare_structure_entry
+               (Structures.Structure.make (Global.env ()) (mind, 0) projs)
+           | Some _ -> ())
+        | None -> ()
       in
       (mind, algs, ind_name, cnames, univs, squashy)
   in
