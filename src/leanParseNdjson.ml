@@ -7,6 +7,10 @@ type parsing_state = {
   names : N.t RRange.t;
   exprs : expr RRange.t;
   univs : U.t RRange.t;
+  (* The ids of refused lines: each holds a placeholder in its range. *)
+  refused_names : Int.Set.t;
+  refused_exprs : Int.Set.t;
+  refused_univs : Int.Set.t;
   seen_meta : bool;
 }
 
@@ -15,8 +19,17 @@ let empty_state =
     names = RRange.singleton N.anon;
     exprs = RRange.empty;
     univs = RRange.singleton U.Prop;
+    refused_names = Int.Set.empty;
+    refused_exprs = Int.Set.empty;
+    refused_univs = Int.Set.empty;
     seen_meta = false;
   }
+
+exception Refused of {
+  state : parsing_state;
+  entry : N.t option;
+  error : Exninfo.iexn;
+}
 
 let is_ndjson_line l =
   let l = String.trim l in
@@ -32,7 +45,7 @@ let member name = function
 let require_member ~lcnt name json =
   match member name json with
   | Some v -> v
-  | None -> err ~lcnt ("missing field " ^ name)
+  | None -> err ~lcnt ("no field " ^ name)
 
 let require_string ~lcnt name json =
   match require_member ~lcnt name json with
@@ -75,17 +88,16 @@ let tagged ~lcnt ~what keys json =
   | [ tag ] -> tag
   | _ -> err ~lcnt ("bad " ^ what ^ " record")
 
-let get_name ~lcnt state i =
-  try RRange.get state.names i
-  with Not_found -> err ~lcnt ("unknown name id " ^ string_of_int i)
+let get ~lcnt kind range refused i =
+  if Int.Set.mem i refused then
+    err ~lcnt ("uses " ^ kind ^ " id " ^ string_of_int i ^ " of a refused line")
+  else
+    try RRange.get range i
+    with Not_found -> err ~lcnt ("unknown " ^ kind ^ " id " ^ string_of_int i)
 
-let get_expr ~lcnt state i =
-  try RRange.get state.exprs i
-  with Not_found -> err ~lcnt ("unknown expression id " ^ string_of_int i)
-
-let get_univ ~lcnt state i =
-  try RRange.get state.univs i
-  with Not_found -> err ~lcnt ("unknown level id " ^ string_of_int i)
+let get_name ~lcnt state i = get ~lcnt "name" state.names state.refused_names i
+let get_expr ~lcnt state i = get ~lcnt "expression" state.exprs state.refused_exprs i
+let get_univ ~lcnt state i = get ~lcnt "level" state.univs state.refused_univs i
 
 let expect_next ~lcnt kind expected actual =
   if expected <> actual then
@@ -93,6 +105,16 @@ let expect_next ~lcnt kind expected actual =
       ~lcnt
       (kind ^ " id " ^ string_of_int actual ^ " is not the next expected id "
      ^ string_of_int expected)
+
+(* [next_id ~placeholder f] parses with [f] the rest of a name, level or
+   expression line whose id is the next one.  When [f] fails, the refusal
+   carries [placeholder ()], the state with a stand-in for that id: the ids
+   after it stay in sequence, and a line that uses it is refused in turn. *)
+let next_id ~placeholder f =
+  try f ()
+  with e when not (CErrors.is_async e) ->
+    let e = Exninfo.capture e in
+    raise (Refused { state = placeholder (); entry = None; error = e })
 
 let binders ~lcnt = function
   | "default" -> NotImplicit
@@ -104,26 +126,38 @@ let binders ~lcnt = function
 let parse_name ~lcnt state json =
   let next = require_int ~lcnt "in" json in
   expect_next ~lcnt "name" (RRange.length state.names) next;
+  let placeholder () =
+    { state with
+      names = RRange.append state.names N.anon;
+      refused_names = Int.Set.add next state.refused_names }
+  in
   let base p = get_name ~lcnt state (require_int ~lcnt "pre" p) in
   let name =
-    match tagged ~lcnt ~what:"name" [ "str"; "num" ] json with
-    | "str", p -> N.append (base p) (require_string ~lcnt "str" p)
-    | "num", p -> N.raw_append (base p) (string_of_int (require_int ~lcnt "i" p))
-    | _ -> err ~lcnt "bad name record"
+    next_id ~placeholder (fun () ->
+      match tagged ~lcnt ~what:"name" [ "str"; "num" ] json with
+      | "str", p -> N.append (base p) (require_string ~lcnt "str" p)
+      | "num", p -> N.raw_append (base p) (string_of_int (require_int ~lcnt "i" p))
+      | _ -> err ~lcnt "bad name record")
   in
   ({ state with names = RRange.append state.names name }, None)
 
 let parse_level ~lcnt state json =
   let next = require_int ~lcnt "il" json in
   expect_next ~lcnt "level" (RRange.length state.univs) next;
+  let placeholder () =
+    { state with
+      univs = RRange.append state.univs U.Prop;
+      refused_univs = Int.Set.add next state.refused_univs }
+  in
   let univ j = get_univ ~lcnt state (as_int ~lcnt j) in
   let level =
-    match tagged ~lcnt ~what:"level" [ "succ"; "max"; "imax"; "param" ] json with
-    | "succ", `Int base -> U.Succ (get_univ ~lcnt state base)
-    | "max", `List [ a; b ] -> U.Max (univ a, univ b)
-    | "imax", `List [ a; b ] -> U.IMax (univ a, univ b)
-    | "param", `Int n -> U.UNamed (get_name ~lcnt state n)
-    | _ -> err ~lcnt "bad level record"
+    next_id ~placeholder (fun () ->
+      match tagged ~lcnt ~what:"level" [ "succ"; "max"; "imax"; "param" ] json with
+      | "succ", `Int base -> U.Succ (get_univ ~lcnt state base)
+      | "max", `List [ a; b ] -> U.Max (univ a, univ b)
+      | "imax", `List [ a; b ] -> U.IMax (univ a, univ b)
+      | "param", `Int n -> U.UNamed (get_name ~lcnt state n)
+      | _ -> err ~lcnt "bad level record")
   in
   ({ state with univs = RRange.append state.univs level }, None)
 
@@ -144,6 +178,11 @@ let parse_nat_lit ~lcnt = function
 let parse_expr ~lcnt state json =
   let next = require_int ~lcnt "ie" json in
   expect_next ~lcnt "expression" (RRange.length state.exprs) next;
+  let placeholder () =
+    { state with
+      exprs = RRange.append state.exprs (Bound 0);
+      refused_exprs = Int.Set.add next state.refused_exprs }
+  in
   let int_at p k = require_int ~lcnt k p in
   let name_at p k = get_name ~lcnt state (int_at p k) in
   let expr_at p k = get_expr ~lcnt state (int_at p k) in
@@ -154,40 +193,41 @@ let parse_expr ~lcnt state json =
       expr_at p "body" )
   in
   let expr =
-    match
-      tagged ~lcnt ~what:"expression"
-        [ "bvar"; "sort"; "const"; "app"; "lam"; "forallE"; "letE"; "proj";
-          "natVal"; "strVal"; "mdata" ]
-        json
-    with
-    | "bvar", `Int n -> Bound n
-    | "sort", `Int u -> Sort (get_univ ~lcnt state u)
-    | "const", p ->
-      let us =
-        require_list ~lcnt "us" p
-        |> List.map (fun u -> get_univ ~lcnt state (as_int ~lcnt u))
-      in
-      Const (name_at p "name", us)
-    | "app", p -> App (expr_at p "fn", expr_at p "arg")
-    | "lam", p ->
-      let bk, nm, ty, body = abstraction p in
-      Lam (bk, nm, ty, body)
-    | "forallE", p ->
-      let bk, nm, ty, body = abstraction p in
-      Pi (bk, nm, ty, body)
-    | "letE", p ->
-      Let
-        {
-          name = name_at p "name";
-          ty = expr_at p "type";
-          v = expr_at p "value";
-          rest = expr_at p "body";
-        }
-    | "proj", p -> Proj (name_at p "typeName", int_at p "idx", expr_at p "struct")
-    | "natVal", n -> Nat (parse_nat_lit ~lcnt n)
-    | "strVal", `String s -> String s
-    | "mdata", p -> expr_at p "expr"
-    | _ -> err ~lcnt "bad expression record"
+    next_id ~placeholder (fun () ->
+      match
+        tagged ~lcnt ~what:"expression"
+          [ "bvar"; "sort"; "const"; "app"; "lam"; "forallE"; "letE"; "proj";
+            "natVal"; "strVal"; "mdata" ]
+          json
+      with
+      | "bvar", `Int n -> Bound n
+      | "sort", `Int u -> Sort (get_univ ~lcnt state u)
+      | "const", p ->
+        let us =
+          require_list ~lcnt "us" p
+          |> List.map (fun u -> get_univ ~lcnt state (as_int ~lcnt u))
+        in
+        Const (name_at p "name", us)
+      | "app", p -> App (expr_at p "fn", expr_at p "arg")
+      | "lam", p ->
+        let bk, nm, ty, body = abstraction p in
+        Lam (bk, nm, ty, body)
+      | "forallE", p ->
+        let bk, nm, ty, body = abstraction p in
+        Pi (bk, nm, ty, body)
+      | "letE", p ->
+        Let
+          {
+            name = name_at p "name";
+            ty = expr_at p "type";
+            v = expr_at p "value";
+            rest = expr_at p "body";
+          }
+      | "proj", p -> Proj (name_at p "typeName", int_at p "idx", expr_at p "struct")
+      | "natVal", n -> Nat (parse_nat_lit ~lcnt n)
+      | "strVal", `String s -> String s
+      | "mdata", p -> expr_at p "expr"
+      | _ -> err ~lcnt "bad expression record")
   in
   ({ state with exprs = RRange.append state.exprs expr }, None)
 
@@ -198,13 +238,23 @@ let level_params ~lcnt state payload =
 let line_msg ~lcnt name =
   Feedback.msg_info Pp.(str "line " ++ int lcnt ++ str ": " ++ N.pp name)
 
+(* [declaring ~lcnt state name f] announces the entry [name] of a declaration
+   line, then parses the rest of the line with [f]: a refusal from [f] names
+   the entry. *)
+let declaring ~lcnt state name f =
+  line_msg ~lcnt name;
+  try f ()
+  with e when not (CErrors.is_async e) ->
+    let e = Exninfo.capture e in
+    raise (Refused { state; entry = Some name; error = e })
+
 let parse_axiom ~lcnt state payload =
   ignore (require_bool ~lcnt "isUnsafe" payload);
   let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
-  line_msg ~lcnt name;
-  let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
-  let univs = level_params ~lcnt state payload in
-  (state, Some (Entry (Ax { name; ty; univs })))
+  declaring ~lcnt state name (fun () ->
+    let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
+    let univs = level_params ~lcnt state payload in
+    (state, Some (Entry (Ax { name; ty; univs }))))
 
 let require_reducibility_hint ~lcnt payload =
   match require_member ~lcnt "hints" payload with
@@ -222,11 +272,11 @@ let require_safety ~lcnt payload =
 
 let parse_deflike_common ~lcnt state payload =
   let name = get_name ~lcnt state (require_int ~lcnt "name" payload) in
-  line_msg ~lcnt name;
-  let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
-  let body = get_expr ~lcnt state (require_int ~lcnt "value" payload) in
-  let univs = level_params ~lcnt state payload in
-  (state, Some (Entry (Def { name; ty; body; univs })))
+  declaring ~lcnt state name (fun () ->
+    let ty = get_expr ~lcnt state (require_int ~lcnt "type" payload) in
+    let body = get_expr ~lcnt state (require_int ~lcnt "value" payload) in
+    let univs = level_params ~lcnt state payload in
+    (state, Some (Entry (Def { name; ty; body; univs }))))
 
 let parse_def ~lcnt state payload =
   forbid_member ~lcnt "isUnsafe" payload;
@@ -263,21 +313,21 @@ let parse_ind_param_shape ~lcnt f =
 
 let parse_ind_val ~lcnt state ind_json ctor_jsons =
   let name = get_name ~lcnt state (require_int ~lcnt "name" ind_json) in
-  line_msg ~lcnt name;
-  let nparams = require_int ~lcnt "numParams" ind_json in
-  let ty0 = get_expr ~lcnt state (require_int ~lcnt "type" ind_json) in
-  let params, ty =
-    parse_ind_param_shape ~lcnt (fun () -> LeanParseShared.pop_params nparams ty0)
-  in
-  let ctors =
-    ctor_jsons
-    |> List.map (parse_ctor_val ~lcnt state)
-    |> List.map (fun (ctor_name, ctor_ty) ->
-      (ctor_name, parse_ind_param_shape ~lcnt (fun () ->
-        LeanParseShared.fix_ctor name nparams ctor_ty)))
-  in
-  let univs = level_params ~lcnt state ind_json in
-  Entry (Ind { name; params; ty; ctors; univs })
+  declaring ~lcnt state name (fun () ->
+    let nparams = require_int ~lcnt "numParams" ind_json in
+    let ty0 = get_expr ~lcnt state (require_int ~lcnt "type" ind_json) in
+    let params, ty =
+      parse_ind_param_shape ~lcnt (fun () -> LeanParseShared.pop_params nparams ty0)
+    in
+    let ctors =
+      ctor_jsons
+      |> List.map (parse_ctor_val ~lcnt state)
+      |> List.map (fun (ctor_name, ctor_ty) ->
+        (ctor_name, parse_ind_param_shape ~lcnt (fun () ->
+          LeanParseShared.fix_ctor name nparams ctor_ty)))
+    in
+    let univs = level_params ~lcnt state ind_json in
+    Entry (Ind { name; params; ty; ctors; univs }))
 
 let parse_inductive ~lcnt state payload =
   let types = require_list ~lcnt "types" payload in
@@ -332,10 +382,15 @@ let parse_line ~prefix ~lcnt state l =
         if prefix then (state, None) else err ~lcnt "unsupported NDJSON record"
 
 let do_prefix_line ~lcnt state l =
-  fst (parse_line ~prefix:true ~lcnt state l)
+  try fst (parse_line ~prefix:true ~lcnt state l)
+  with Refused { error; _ } -> Exninfo.iraise error
 
 let do_line ~lcnt state l =
-  parse_line ~prefix:false ~lcnt state l
+  try parse_line ~prefix:false ~lcnt state l with
+  | Refused _ as e -> raise e
+  | e when not (CErrors.is_async e) ->
+    let e = Exninfo.capture e in
+    raise (Refused { state; entry = None; error = e })
 
 let pp_state state =
   let open Pp in

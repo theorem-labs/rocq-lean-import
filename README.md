@@ -93,9 +93,9 @@ An "entry" means an axiom or constant, or an inductive type (including
 its constructors and recursor), or the primitive quotient declarations
 `quot`, `quot.mk`, `quot.lift` and `quot.ind`.
 
-For ease of debugging, `Lean Import` will succeed even when an error
-occurs: this allows inspecting the state from just before the failing entry.
-This may probably be changed to only happen in a debugging mode at some point.
+By default `Lean Import` fails at the first error. With `Set Lean Error
+Mode "Stop".` it succeeds instead, which allows inspecting the state from
+just before the failing entry (see `Lean Error Mode` below).
 
 # How does it work?
 
@@ -438,20 +438,59 @@ Off by default, this may be useful for debugging if `Lean Import`
 misdetects whether Lean would allow unrestricted elimination for some
 inductive type.
 
-## Lean Skip Errors
+## Lean Error Mode
 
-Off by default. With it on, when an error is encountered, skip the
-failed line and keep going.
+A string option: `"Fail"` (the default), `"Stop"` or `"Skip"`. It decides
+what `Lean Import` does with a line it refuses: a line whose entry it cannot
+declare, or a line it cannot parse. The refusal reads `Error at line N (for
+NAME)`, followed by the line and the error. NAME is the entry's name. For a
+line that cannot be parsed, it is the name the NDJSON parser read before the
+error, else `line-N`.
 
-Useful to tell how much the current system can handle.
+- `Fail`: the import stops there and `Lean Import` fails with the refusal.
+- `Stop`: the import stops there and `Lean Import` succeeds, keeping what it
+  declared before the refused line.
+- `Skip`: the refusal is printed after `Skipping: `, what the refused entry
+  had declared is undone, and the import goes on with the next line. An
+  entry that uses a refused entry is refused in turn, and so is an NDJSON
+  line that uses the id of a refused name, level or expression line. The
+  final summary counts the refused lines (`Skipped N`).
 
-Note that timeouts and interrupts are also absorbed by this option. If
-you turn it on and start loading mathlib, then change your mind and
-decide to stop, you will need to kill the Coq process.
+`Skip` is useful to tell how much the current system can handle.
+
+Note that in `Skip` mode, an interrupt or an outer `Timeout` that arrives
+while an entry is being declared refuses that entry like any other error,
+and the import goes on. If you start loading mathlib this way and decide to
+stop, you will need to kill the Coq process.
+
+## Lean Entry Timeout
+
+An integer option, unset by default. Use `Set Lean Entry Timeout 10.` to
+bound the time spent declaring each entry (translating and checking it) to
+10 seconds. An entry still being declared after that is refused with
+`Timed out after 10 s (Lean Entry Timeout)`, and `Lean Error Mode` handles it
+like any other refused entry. With `Skip`, this allows processing all the
+entries which do not depend on something that takes more than 10s.
+
+The value must be a positive number of seconds. `Unset Lean Entry Timeout.`
+removes the limit. The limit does not bound parsing the entry's line (see
+`Lean Line Timeout`), and an enclosing `Timeout` shorter than it still ends
+the command.
+
+An importer without this option only warns that the option is unknown and
+imports with no limit. A file that sets it should therefore first run `Set
+Warnings "+unknown-option".`, so that such an importer fails at the `Set`:
+
+~~~coq
+Set Warnings "+unknown-option".
+Set Lean Entry Timeout 10.
+Set Lean Error Mode "Skip".
+Lean Import "/path/to/export.ndjson".
+~~~
 
 ## Lean Line Timeout
 
 An integer option, off by default. Use `Set Lean Line Timeout 10.` to
-cause a failure whenever some entry takes more than 10s. Combined with
-`Lean Skip Errors`, this allows processing all the entries which do
-not depend on something that takes more than 10s.
+cause a failure whenever parsing a line takes more than 10s. This failure
+ends the import whatever `Lean Error Mode`. It does not bound declaring the
+line's entry: `Lean Entry Timeout` does.

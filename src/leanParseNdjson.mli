@@ -2,6 +2,18 @@ open LeanExpr
 
 type parsing_state
 
+exception Refused of {
+  state : parsing_state;
+  entry : LeanName.t option;
+  error : Exninfo.iexn;
+}
+(** [do_line] raises [Refused] for a line it cannot parse: [error] is why,
+    [entry] the name of the entry the line declares when it was read before
+    [error], and [state] the state to read the next line with. A refused name,
+    level or expression line whose id was the next one leaves a placeholder for
+    that id in [state], so that the ids after it stay in sequence; a line that
+    uses the id is refused in turn. *)
+
 val empty_state : parsing_state
 val is_ndjson_line : string -> bool
 val do_prefix_line : lcnt:int -> parsing_state -> string -> parsing_state

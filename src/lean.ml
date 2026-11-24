@@ -1955,6 +1955,46 @@ let () =
 
 exception TimedOut
 
+(* Lean Entry Timeout: how many seconds declaring one entry may take, unset by
+   default. An entry still being declared then is refused with
+   [EntryTimedOut]. *)
+let entry_timeout = ref None
+
+let () =
+  Goptions.declare_int_option
+    {
+      optdepr = None;
+      optstage = Interp;
+      optkey = [ "Lean"; "Entry"; "Timeout" ];
+      optread = (fun () -> !entry_timeout);
+      optwrite =
+        (fun x ->
+          (match x with
+          | Some n when n <= 0 ->
+            CErrors.user_err
+              Pp.(
+                str "Lean Entry Timeout must be a positive number of seconds, not "
+                ++ int n ++ str ".")
+          | None | Some _ -> ());
+          entry_timeout := x);
+    }
+
+exception EntryTimedOut of int
+
+let () =
+  CErrors.register_handler (function
+    | EntryTimedOut n ->
+      Some Pp.(str "Timed out after " ++ int n ++ str " s (Lean Entry Timeout)")
+    | _ -> None)
+
+let add_entry_in_time entry =
+  match !entry_timeout with
+  | None -> add_entry entry
+  | Some n ->
+    (match Control.timeout (float_of_int n) add_entry entry with
+    | Ok () -> ()
+    | Error info -> Exninfo.iraise (EntryTimedOut n, info))
+
 let do_line state l =
   let do_line () =
     match state.pstate with
@@ -2022,6 +2062,24 @@ let unfreeze (lib, sum) =
   Lib.Interp.unfreeze lib;
   Summary.Interp.unfreeze_summaries sum
 
+(* The refusal of the current line [l]: [name] is what the line declares, [e]
+   why it is refused. *)
+let refusal ~name l e =
+  Pp.(
+    str "Error at line " ++ int !lcnt ++ str " (for " ++ name ++ str ")"
+    ++ str (": " ^ l)
+    ++ fnl () ++ CErrors.iprint e)
+
+(* The name of a refused line that declares no entry the parser read. *)
+let line_name () = Pp.(str "line-" ++ int !lcnt)
+
+(* Whether failing to parse a line refuses it. The Lean Line Timeout's
+   [TimedOut] and the asynchronous exceptions (an outer [Timeout], an
+   interrupt) end the import instead. *)
+let refuses_line = function
+  | TimedOut -> false
+  | e -> not (CErrors.is_async e)
+
 let rec do_input state ~from ~until ch =
   if until = Some !lcnt then begin
     close_in ch;
@@ -2045,49 +2103,55 @@ let rec do_input state ~from ~until ch =
         incr lcnt;
         do_input state ~from ~until ch)
     | l ->
-      let state, oentry = do_line state l in
-      (match (just_parse (), oentry) with
-      | true, _ | false, None ->
-        incr lcnt;
-        do_input state ~from ~until ch
-      | false, Some (Nota _) ->
-        (* notations not yet implemented *)
-        incr lcnt;
-        do_input state ~from ~until ch
-      | false, Some (Entry entry) ->
-        (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
-        let st = freeze () in
-        (match add_entry entry with
-        | () ->
+      (match do_line state l with
+      | exception LeanParseNdjson.Refused { state = pstate; entry; error } ->
+        let name = match entry with Some n -> N.pp n | None -> line_name () in
+        refuse { state with pstate = NdjsonParser pstate } ~from ~until ch
+          (fst error) (refusal ~name l error)
+      | exception e when refuses_line e ->
+        let e = Exninfo.capture e in
+        refuse state ~from ~until ch (fst e) (refusal ~name:(line_name ()) l e)
+      | state, oentry ->
+        (match (just_parse (), oentry) with
+        | true, _ | false, None ->
           incr lcnt;
           do_input state ~from ~until ch
-        | exception e ->
-          let e = Exninfo.capture e in
-          let n = entry_name entry in
-          let epp =
-            Pp.(
-              str "Error at line " ++ int !lcnt ++ str " (for " ++ N.pp n
-              ++ str ")"
-              ++ str (": " ^ l)
-              ++ fnl () ++ CErrors.iprint e)
-          in
-          unfreeze st;
-          (* without this unfreeze, the global state.declared and the
-             global env are out of sync *)
-          (match error_mode (fst e) with
-          | Skip ->
-            Feedback.msg_info Pp.(str "Skipping: " ++ epp);
+        | false, Some (Nota _) ->
+          (* notations not yet implemented *)
+          incr lcnt;
+          do_input state ~from ~until ch
+        | false, Some (Entry entry) ->
+          (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
+          let st = freeze () in
+          (match add_entry_in_time entry with
+          | () ->
             incr lcnt;
-            do_input { state with skips = state.skips + 1 } ~from ~until ch
-          | Stop ->
-            close_in ch;
-            finish state;
-            Feedback.msg_info epp;
-            state
-          | Fail ->
-            close_in ch;
-            finish state;
-            CErrors.user_err epp)))
+            do_input state ~from ~until ch
+          | exception e ->
+            let e = Exninfo.capture e in
+            let msg = refusal ~name:(N.pp (entry_name entry)) l e in
+            unfreeze st;
+            (* without this unfreeze, the global state.declared and the
+               global env are out of sync *)
+            refuse state ~from ~until ch (fst e) msg)))
+
+(* The Error Mode's answer to the refusal [msg] of the current line, refused
+   because of [exn]. *)
+and refuse state ~from ~until ch exn msg =
+  match error_mode exn with
+  | Skip ->
+    Feedback.msg_info Pp.(str "Skipping: " ++ msg);
+    incr lcnt;
+    do_input { state with skips = state.skips + 1 } ~from ~until ch
+  | Stop ->
+    close_in ch;
+    finish state;
+    Feedback.msg_info msg;
+    state
+  | Fail ->
+    close_in ch;
+    finish state;
+    CErrors.user_err msg
 
 let pstate = Summary.ref ~name:"lean-parse-state" LeanParse.empty_state
 
