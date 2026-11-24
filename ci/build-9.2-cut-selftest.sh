@@ -123,6 +123,19 @@ case $ST_OUTCOME in
     printf 'Error at line 9 (for Later.entry): {"def": 2}\n'
     exit 2 ;;
   fail-noentry) printf 'Error: Some other failure\n'; exit 2 ;;
+  redirect:*)
+    # Each word <name>=<entry>, in the order given: tests/<name>.out, the file of a Redirect, gets the importer's
+    # error at <entry>; the name "-" puts it in the run's output instead. The test then fails at a line that
+    # names no entry.
+    for w in ${ST_OUTCOME#redirect:}; do
+      if [[ ${w%%=*} == - ]]; then
+        printf 'Error at line 5 (for %s): {"def": 3}\n' "${w#*=}"
+      else
+        printf 'line 7: %s\nError at line 7 (for %s): {"def": 1}\n' "${w#*=}" "${w#*=}" >"$2/tests/${w%%=*}.out"
+      fi
+    done
+    printf 'File "./%s.v", line 2, characters 0-20:\nError: The reference alpha_check was not found.\n' "${3:-test}"
+    exit 1 ;;
   option:*)
     printf 'File "./%s.v", line 3, characters 0-30:\n' "${3:-test}"
     printf 'Error: There is no flag or option with this name:\n"%s".\n' "${ST_OUTCOME#option:}"
@@ -232,6 +245,11 @@ st_new() { # <label>: a fresh case: a copy of the template, an empty TMPDIR, a s
 
 st_commit() { st_git_commit "$ST_REPO" "$1" >/dev/null || st_bad "cannot commit: $1"; }
 
+st_redirect_test() { # <names...>: tests/lean434_a.v imports under one Redirect per name, in that order
+  local n
+  for n in "$@"; do printf 'Redirect "%s" Lean Import "../dumps/small.ndjson".\n' "$n"; done >"$ST_REPO/tests/lean434_a.v"
+}
+
 st_run() { # [VAR=value...] -- [script args...]: run the case's copy of the script with the stubs
   local -a envs=()
   while (($#)) && [[ $1 != -- ]]; do
@@ -296,7 +314,8 @@ st_row() { # <id>: print the row's verdict
 }
 
 st_rows() {
-  local head v dangling inv=$INVENTORY plain work
+  local head v dangling inv=$INVENTORY plain work parent fix
+  local at_a="src/ of $ST_BASE, the parent of the first fix commit $ST_FIX_A"
   local stack1='STACK soft=8192 hard=unlimited'
 
   # S0: a clean tree passes every check and goes on to build and run the suite (SUITE PASS), plain and with
@@ -422,86 +441,149 @@ st_rows() {
   st_not_ran
   st_row S4
 
-  # S5: a revert that conflicts with a later commit fails, names the commit and the file, and leaves the
-  # caller's tree as it was.
+  # S5: a later commit rewrote the lines of the row's fix commit, so that `git revert` of it would conflict: the
+  # control still builds the src/ of the parent of the fix commit, with the head's tests/, and passes at the
+  # row's entry; the verdict line names that parent, and the caller's tree is left as it was.
   st_new S5
   printf 'let fix_a = 2\n' >"$ST_REPO/src/fix_a.ml"
   st_commit "change fix a again"
   head=$(git -C "$ST_REPO" rev-parse HEAD)
-  st_run -- --revert-fix tests/lean434_a.v
-  st_rc nonzero
-  st_has "reverting $ST_FIX_A conflicts in src/fix_a.ml"
-  st_lacks 'R5 NEGATIVE MET'
-  st_not_ran
+  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
+  st_ran one
+  [[ $(st_call_field 4) == 'src at base' && $(st_call_field 6) == 'fix_*.ml' ]] ||
+    st_bad "src/ is not the parent's of fix a: $(st_call_field 4), $(st_call_field 6)"
+  [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
   st_tree_untouched "$head"
   st_row S5
 
-  # S6: --revert-fix fails ("R5 negative not met") when the test passes with the fix reverted.
+  # S6: --revert-fix fails ("R5 negative not met") when the test passes at the parent's src/, and names it.
   st_new S6
   st_run ST_OUTCOME=pass -- --revert-fix tests/lean434_a.v
   st_rc nonzero
-  st_has 'R5 negative not met: the test passes'
+  st_has "R5 negative not met: the test passes ($at_a)"
   st_lacks 'R5 NEGATIVE MET'
   st_ran one
   st_row S6
 
-  # S7: --revert-fix fails when the test fails at another entry than its row names (also a prefix or an
-  # extension of the right one, and the base entry where the row names an own entry), when an option test fails
-  # elsewhere than its Set line, and when no "Error at line N (for X)" line names an entry.
+  # S7: --revert-fix, built from the src/ of the parent of the row's first fix commit, fails when the test fails
+  # at another entry than its row names (also a prefix or an extension of the right one, and the base entry where
+  # the row names an own entry), when an option test fails elsewhere than its Set line, and when no "Error at
+  # line N (for X)" line names an entry; the line names the parent.
   for v in Alpha.two Alpha.on Alpha.one.x; do
     st_new "S7/$v"
     st_run "ST_OUTCOME=fail:$v" -- --revert-fix tests/lean434_a.v
     st_rc nonzero
-    st_has "the test fails at $v, but its row names Alpha.one"
+    st_has "the test fails at $v, but its row names Alpha.one ($at_a)"
     st_lacks 'R5 NEGATIVE MET'
   done
   st_new S7/own-entry
   st_run ST_OUTCOME=fail:Beta.base -- --revert-fix tests/lean434_b.v
   st_rc nonzero
-  st_has 'the test fails at Beta.base, but its row names Beta.own'
+  st_has "the test fails at Beta.base, but its row names Beta.own (src/ of $ST_FIX_A, the parent of the first fix commit $ST_FIX_B)"
   st_lacks 'R5 NEGATIVE MET'
   st_new S7/option
   st_run ST_OUTCOME=fail:Gamma.x -- --revert-fix tests/lean434_opt.v
   st_rc nonzero
   st_has 'the test fails at Gamma.x, not at its Set line'
-  st_has 'option:Lean Entry Timeout'
+  st_has "option:Lean Entry Timeout (src/ of $ST_FIX_B, the parent of the first fix commit $ST_FIX_OPT)"
   st_lacks 'R5 NEGATIVE MET'
   st_new S7/no-entry
   st_run ST_OUTCOME=fail-noentry -- --revert-fix tests/lean434_a.v
   st_rc nonzero
   st_has 'R5 negative not met: the test fails at no "Error at line N (for X)" line'
+  st_has "($at_a)"
   st_lacks 'R5 NEGATIVE MET'
   st_row S7
 
-  # S7b: --revert-fix passes ("R5 NEGATIVE MET") when the test, run in the reverted scratch copy and not in the
-  # caller's tree, fails at the entry its row names (base entry, own entry, option, or a name quoted as Lean
-  # quotes it); the caller's tree is left as it was.
+  # S7b: --revert-fix passes ("R5 NEGATIVE MET ... (src/ of <parent>)") when the test, run in a scratch tree that
+  # holds the src/ of the parent of the row's first fix commit and the head's tests/, not in the caller's tree,
+  # fails at the entry its row names (base entry, own entry, option, or a name quoted as Lean quotes it); the line
+  # names that parent, and the caller's tree is left as it was.
   st_new S7b/base
   head=$(git -C "$ST_REPO" rev-parse HEAD)
   st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
   st_rc zero
-  st_line 'R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one'
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   st_ran one
   [[ $(st_call_field 3) == lean434_a ]] || st_bad "RUN_TEST did not get the test name lean434_a"
   [[ $(st_call_field 2) != "$ST_REPO" ]] || st_bad "the test ran in the caller's tree"
-  [[ $(st_call_field 6) != *fix_a.ml* && $(st_call_field 6) == *fix_b.ml* ]] || st_bad "the scratch copy is not HEAD with fix a reverted: $(st_call_field 6)"
+  [[ $(st_call_field 4) == 'src at base' && $(st_call_field 6) == 'fix_*.ml' ]] ||
+    st_bad "src/ is not the parent's of fix a: $(st_call_field 4), $(st_call_field 6)"
+  [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
   st_tree_untouched "$head"
   st_new S7b/own
   st_run ST_OUTCOME=fail:Beta.own -- --revert-fix lean434_b
   st_rc zero
-  st_line 'R5 NEGATIVE MET: lean434_b at Beta.own'
+  st_line "R5 NEGATIVE MET: lean434_b at Beta.own (src/ of $ST_FIX_A)"
+  [[ $(st_call_field 6) == fix_a.ml ]] || st_bad "src/ is not the parent's of fix b: $(st_call_field 6)"
   st_new S7b/option
   st_run 'ST_OUTCOME=option:Lean Entry Timeout' -- --revert-fix tests/lean434_opt.v
   st_rc zero
-  st_line 'R5 NEGATIVE MET: tests/lean434_opt.v at option:Lean Entry Timeout'
+  st_line "R5 NEGATIVE MET: tests/lean434_opt.v at option:Lean Entry Timeout (src/ of $ST_FIX_B)"
   st_new S7b/quoted
   sed -i 's/\tAlpha\.one\t/\t«Alpha».one\t/' "$ST_REPO/tests/lean434_features.txt"
   grep -q '«Alpha».one' "$ST_REPO/tests/lean434_features.txt" || st_bad "the template's row names no Alpha.one to quote"
   st_commit "quote a name component as Lean does"
   st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
   st_rc zero
-  st_line 'R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one'
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   st_row S7b
+
+  # S7c: a test that imports under Redirect gets the importer's errors in the Redirect's .out file, not in the
+  # run's log: --revert-fix reads that file too, and passes when its first entry error is the row's entry.
+  st_new S7c
+  st_redirect_test lean434_a.log
+  st_commit "test a imports under Redirect"
+  st_run ST_OUTCOME=redirect:lean434_a.log=Alpha.one -- --revert-fix tests/lean434_a.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
+  st_lacks 'Error at line 7 (for Alpha.one)'
+  st_row S7c
+
+  # S7d: a failure at another entry that only a Redirect's .out file names fails --revert-fix, which names that
+  # entry and the parent.
+  st_new S7d
+  st_redirect_test lean434_a.log
+  st_commit "test a imports under Redirect"
+  st_run ST_OUTCOME=redirect:lean434_a.log=Alpha.two -- --revert-fix tests/lean434_a.v
+  st_rc nonzero
+  st_has "R5 negative not met: the test fails at Alpha.two, but its row names Alpha.one ($at_a)"
+  st_lacks 'R5 NEGATIVE MET'
+  st_row S7d
+
+  # S7e: the .out files are read in the order of the test's Redirect lines, not the order they were written: the
+  # first names another entry, so --revert-fix fails, although the second names the row's entry.
+  st_new S7e
+  st_redirect_test lean434_a_1.log lean434_a_2.log
+  st_commit "test a imports under two Redirects"
+  st_run 'ST_OUTCOME=redirect:lean434_a_2.log=Alpha.one lean434_a_1.log=Alpha.two' -- --revert-fix tests/lean434_a.v
+  st_rc nonzero
+  st_has "R5 negative not met: the test fails at Alpha.two, but its row names Alpha.one ($at_a)"
+  st_lacks 'R5 NEGATIVE MET'
+  st_row S7e
+
+  # S7f: the run's log is read before the .out files: its entry error, the row's, decides, although the .out file
+  # of a Redirect names another entry.
+  st_new S7f
+  st_redirect_test lean434_a.log
+  st_commit "test a imports under Redirect"
+  st_run 'ST_OUTCOME=redirect:lean434_a.log=Alpha.two -=Alpha.one' -- --revert-fix tests/lean434_a.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
+  st_row S7f
+
+  # S7g: a row naming two fix commits, the later one first: its first fix commit is the earlier one in the history
+  # of HEAD, and --revert-fix builds the src/ of that commit's parent.
+  st_new S7g
+  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_B $ST_FIX_A")" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+  st_commit "row a: two fix commits"
+  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
+  [[ $(st_call_field 6) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6)"
+  st_row S7g
 
   # S8: --revert-fix of a test with no row fails; each mode with no argument or one short prints the usage and
   # exits 2; no test runs.
@@ -615,11 +697,11 @@ st_rows() {
   st_line 'SUITE PASS'
   st_row S13
 
-  # S14: --revert-fix fails, and says the plugin build failed, when the build fails after the revert.
+  # S14: --revert-fix fails, and says the plugin build failed at the parent's src/, when that build fails.
   st_new S14
   st_run ST_OUTCOME=build-fail -- --revert-fix tests/lean434_a.v
   st_rc nonzero
-  st_has 'the plugin build failed after reverting'
+  st_has "the plugin build failed ($at_a)"
   st_has 'Error: Unbound value planted_build_error'
   st_lacks 'R5 NEGATIVE MET'
   st_row S14
@@ -770,13 +852,15 @@ st_rows() {
   st_not_ran
   st_row S21
 
-  # S22: the fix commit of the row also set CUT_STACK_KIB; the revert unsets it in the scratch copy, and the
-  # test still has to fail at its entry. The plain run of the same head (stack 65536) is the control.
+  # S22: the fix commit of the row also set CUT_STACK_KIB; the parent of that commit holds no such line, so the
+  # test runs at the default stack, and it still has to fail at its entry. The plain run of the same head (stack
+  # 65536) is the control.
   for v in revert control; do
     st_new "S22/$v"
     printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_s.v"
     printf 'lean434_s.v\n' >>"$ST_REPO/tests/_CoqProject"
     st_commit "test s"
+    parent=$(git -C "$ST_REPO" rev-parse HEAD)
     st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
     printf 'let fix_s = 1\n' >"$ST_REPO/src/fix_s.ml"
     st_commit "fix s, with a larger stack"
@@ -786,7 +870,7 @@ st_rows() {
     if [[ $v == revert ]]; then
       st_run ST_OUTCOME=fail:Sigma.one -- --revert-fix tests/lean434_s.v
       st_rc zero
-      st_line 'R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one'
+      st_line "R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one (src/ of $parent)"
       st_line "$stack1"
       st_lacks 'soft=65536'
     else
@@ -796,6 +880,27 @@ st_rows() {
     fi
   done
   st_row S22
+
+  # S22b: the CUT_STACK_KIB that the parent of the row's first fix commit sets is the stack of the test, not the
+  # one a later commit set at the head.
+  st_new S22b
+  printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_s.v"
+  printf 'lean434_s.v\n' >>"$ST_REPO/tests/_CoqProject"
+  st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
+  st_commit "test s, with a larger stack"
+  parent=$(git -C "$ST_REPO" rev-parse HEAD)
+  printf 'let fix_s = 1\n' >"$ST_REPO/src/fix_s.ml"
+  st_commit "fix s"
+  fix=$(git -C "$ST_REPO" rev-parse HEAD)
+  st_set_stack "$ST_REPO/$SCRIPT_REL" 32768
+  st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_s.v F8 Sigma.one - fixed "$fix")" >"$ST_REPO/$inv"
+  st_commit "row s, with a smaller stack"
+  st_run ST_OUTCOME=fail:Sigma.one -- --revert-fix tests/lean434_s.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one (src/ of $parent)"
+  st_line 'STACK soft=65536 hard=unlimited'
+  st_lacks 'soft=32768'
+  st_row S22b
 
   # S23: --import and --check on a tree without history and with a broken inventory: a missing file, a
   # failing run, a normal run, the stack rules; no inventory check.

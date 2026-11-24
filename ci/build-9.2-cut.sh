@@ -30,9 +30,9 @@ LFS_BATCH_URL=https://github.com/theorem-labs/rocq-lean-import.git/info/lfs/obje
 # CUT_STACK_KIB: the soft stack size, in KiB, for every test run, --import and --check. Only a commit sets
 # it, by adding the line CUT_STACK_KIB=<integer> (at the start of the line) right below the last line of this
 # comment; no such line means "unset", which keeps the default soft stack. The script reads that line from
-# its own file instead of using the shell variable, so that --revert-fix can read the value the reverted
-# copy of this file holds (reverting the commit that set it unsets it). The environment variable of that
-# name is ignored.
+# its own file instead of using the shell variable, so that --revert-fix can read the value the copy of this
+# file in the parent of a fix's first commit holds (the parent of the commit that set it holds none). The
+# environment variable of that name is ignored.
 # The CUT_STACK_KIB=<integer> line, when a commit adds one, goes right below this line.
 
 CUT_ROOT=${CUT_ROOT:-/scratch/cs/cut} # opam root $CUT_ROOT/opam (switch "cut"), sources $CUT_ROOT/src
@@ -89,8 +89,9 @@ Usage:
   ci/build-9.2-cut.sh --handoff
       The same, and fail while an inventory row is still open.
   ci/build-9.2-cut.sh --revert-fix <test>
-      In a scratch copy, revert the fix commits of <test>'s inventory row, then check that <test> fails at
-      the entry its row names ("R5 negative").
+      Build the plugin from the src/ of the parent of the first fix commit of <test>'s inventory row, with
+      the head's tests/ and dumps/, then check that <test> fails at the entry its row names ("R5 negative"),
+      in its log or the .out files of its Redirect commands.
   ci/build-9.2-cut.sh --import <file.v> [-- <rocq compile flags>]
       Compile one file with the cut, in the file's directory; writes <file.v>.stack.
   ci/build-9.2-cut.sh --check <file.vo>... [-- <rocqchk flags>]
@@ -617,43 +618,49 @@ run_passthrough() {
   } 3>&1
 }
 
-# <root> <tree> <commit...>: a detached worktree of HEAD at <tree>, with the commits reverted newest first
-# (git revert --no-commit). Facts: RV_STATUS ok|conflict|error, RV_ORDER, RV_FILES (unmerged), RV_MSG.
+# <root> <tree> <script> <name> <commit...>: the tree of the R5 negative control of a row whose fix commits are
+# <commit...>. The row's first fix commit is the earliest of them in the history of HEAD; <tree> is made as
+# source_at_prepare makes it, from that commit's parent (the head's tests/ and dumps/, the parent's src/, Makefile
+# and _CoqProject), and <script> gets the parent's own copy of this script, for its CUT_STACK_KIB (no file when
+# the parent has none). Facts: RV_STATUS ok|error, RV_FIRST, RV_PARENT, RV_MSG.
 revert_fix_prepare() {
-  local root=$1 tree=$2 c out history
-  shift 2
-  local -A want=()
-  local -a order=()
-  RV_STATUS=error RV_ORDER='' RV_FILES='' RV_MSG=''
+  local root=$1 tree=$2 script=$3 name=$4 c history
+  shift 4
+  local -A want=() seen=()
+  local -a missing=()
+  RV_STATUS=error RV_FIRST='' RV_PARENT='' RV_MSG=''
   for c in "$@"; do want[$c]=1; done
   history=$(git -C "$root" rev-list --topo-order HEAD) || {
     RV_MSG="git rev-list HEAD failed"
     return 0
   }
+  # rev-list lists a commit before its parents: the last commit of the row it lists is the earliest.
   while IFS= read -r c; do
-    if [[ -n $c && -n ${want[$c]:-} ]]; then order+=("$c"); fi
+    if [[ -n $c && -n ${want[$c]:-} ]]; then RV_FIRST=$c seen[$c]=1; fi
   done <<<"$history"
-  RV_ORDER=${order[*]}
-  if ((${#order[@]} != ${#want[@]})); then
-    RV_ORDER=$*
-    RV_MSG="not every commit of the row is in HEAD's history"
+  for c in "$@"; do
+    if [[ -z ${seen[$c]:-} ]]; then missing+=("$c"); fi
+  done
+  if ((${#missing[@]})); then
+    RV_MSG="a fix commit of its row is not an ancestor of HEAD: ${missing[*]}"
     return 0
   fi
-  out=$(git -C "$root" worktree add --detach "$tree" HEAD 2>&1) || {
-    RV_MSG="git worktree add failed: ${out//$'\n'/ }"
+  RV_PARENT=$(git -C "$root" rev-parse --verify --quiet "$RV_FIRST^1") || {
+    RV_MSG="the first fix commit $RV_FIRST has no parent in this clone"
     return 0
   }
-  WORKTREES+=("$tree")
-  if out=$(git -C "$tree" -c user.name=build-9.2-cut -c user.email=build-9.2-cut@localhost \
-    revert --no-commit "${order[@]}" 2>&1); then
-    RV_STATUS=ok
+  source_at_prepare "$root" "$tree" "$RV_PARENT" "$name"
+  if [[ $SA_STATUS != ok ]]; then
+    RV_MSG=$SA_CAUSE
     return 0
   fi
-  RV_MSG=${out//$'\n'/ }
-  RV_FILES=$(git -C "$tree" diff --name-only --diff-filter=U 2>/dev/null)
-  RV_FILES=${RV_FILES//$'\n'/ }
-  if [[ -n $RV_FILES ]]; then RV_STATUS=conflict; fi
-  return 0
+  if git -C "$root" cat-file -e "$RV_PARENT:$SCRIPT_REL" 2>/dev/null; then
+    git -C "$root" show "$RV_PARENT:$SCRIPT_REL" >"$script" 2>/dev/null || {
+      RV_MSG="cannot read $SCRIPT_REL at $RV_PARENT"
+      return 0
+    }
+  fi
+  RV_STATUS=ok
 }
 
 # <root> <tree> <commit> <name>: a detached worktree of HEAD at <tree> (the head's tests/ and dumps/) whose
@@ -695,14 +702,17 @@ entry_error_name() { # <line>: sets ENTRY_NAME to X when the line holds "Error a
   fi
 }
 
-first_entry_error() { # <log>: the X of the log's first "Error at line N (for X)", or nothing
-  local line
-  while IFS= read -r line || [[ -n $line ]]; do
-    if entry_error_name "$line"; then
-      printf '%s' "$ENTRY_NAME"
-      return 0
-    fi
-  done <"$1"
+first_entry_error() { # <files...>: the X of the first "Error at line N (for X)" of the files, in order; or nothing
+  local f line
+  for f in "$@"; do
+    [[ -f $f ]] || continue
+    while IFS= read -r line || [[ -n $line ]]; do
+      if entry_error_name "$line"; then
+        printf '%s' "$ENTRY_NAME"
+        return 0
+      fi
+    done <"$f"
+  done
   return 0
 }
 
@@ -941,15 +951,11 @@ main() {
     # our tooling reads some dotted names as host names; the log prints the name unquoted.
     expected=${expected//«/} expected=${expected//»/}
     read -r -a commits <<<"${row_commits[idx]}"
-    revert_fix_prepare "$ROOT" "$WORK/tree" "${commits[@]}"
-    case $RV_STATUS in
-      ok) ;;
-      conflict) fail "--revert-fix $test_arg: reverting $RV_ORDER conflicts in $RV_FILES; a conflict is not \"R5 negative\"" ;;
-      *) fail "--revert-fix $test_arg: git revert --no-commit $RV_ORDER failed: $RV_MSG" ;;
-    esac
-    # The test runs at the stack the scratch copy's own script holds: reverting the commit that set
-    # CUT_STACK_KIB unsets it there (S22).
-    run_tree=$WORK/tree stack_file=$WORK/tree/$SCRIPT_REL
+    revert_fix_prepare "$ROOT" "$WORK/tree" "$WORK/parent-script" "$name" "${commits[@]}"
+    [[ $RV_STATUS == ok ]] || fail "--revert-fix $test_arg: $RV_MSG"
+    # The test runs at the stack the parent's own copy of this script sets: the parent of the commit that set
+    # CUT_STACK_KIB holds no such line, and a later commit's line is not in it (S22, S22b).
+    run_tree=$WORK/tree stack_file=$WORK/parent-script
   fi
   if [[ $mode == source ]]; then
     name=${test_arg#tests/} name=${name%.v}
@@ -1024,6 +1030,14 @@ main() {
   local log=$WORK/test.log actual n
   local -a cmd=() logs=()
   local -A seen=() errored=()
+  # The logs of one test, read in this order: the run's log, then the .out file of each Redirect of the test, in
+  # the order of its lines (S7c-S7f, S24).
+  if [[ $mode == revert || $mode == source ]]; then
+    logs=("$log")
+    while IFS= read -r n; do
+      if [[ -n $n ]]; then logs+=("$n"); fi
+    done <<<"$(redirect_logs "$run_tree/tests/$name.v" "$run_tree/tests")"
+  fi
   case $mode in
     suite)
       printf '%s\n' "$stack_line" >&2
@@ -1036,31 +1050,33 @@ main() {
       fail "the suite failed (status $RUN_RC): $(first_error_line "$log")"
       ;;
     revert)
-      # "R5 negative": with its row's fix commits reverted, the test fails, and it fails at the entry its row
-      # names (its own entry, else its base entry), or for an option row at the Set line of that option; a
-      # conflicting revert or a failed plugin build does not count.
+      # "R5 negative": built from the src/ of the parent of its row's first fix commit with the head's tests/,
+      # the test fails, and the first "Error at line N (for X)" of its logs names the entry its row names (its
+      # own entry, else its base entry), or for an option row its log shows the unknown-option error at the Set
+      # line of that option; a failed plugin build does not count. Each verdict line names that parent.
+      local at="src/ of $RV_PARENT, the parent of the first fix commit $RV_FIRST"
       printf '%s\n' "$stack_line" >&2
       run_logged "$log" "$want" one "$run_tree" "$name"
       if ((RUN_RC == RT_BUILD_FAILED)); then
-        fail "--revert-fix $test_arg: the plugin build failed after reverting $RV_ORDER: $(first_error_line "$log"); a failed build is not \"R5 negative\""
+        fail "--revert-fix $test_arg: the plugin build failed ($at): $(first_error_line "$log"); a failed build is not \"R5 negative\""
       fi
       if ((RUN_RC == 0)); then
-        fail "--revert-fix $test_arg: R5 negative not met: the test passes with $RV_ORDER reverted"
+        fail "--revert-fix $test_arg: R5 negative not met: the test passes ($at)"
       fi
-      actual=$(first_entry_error "$log")
-      if [[ -z $actual ]]; then actual='no "Error at line N (for X)" line'; fi
+      actual=$(first_entry_error "${logs[@]}")
+      if [[ -z $actual ]]; then actual='no "Error at line N (for X)" line of its log or its Redirect .out files'; fi
       if [[ $expected == option:* ]]; then
         if option_failure_seen "$log" "${expected#option:}"; then
-          printf 'R5 NEGATIVE MET: %s at %s\n' "$test_arg" "$expected"
+          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
           exit 0
         fi
-        fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at its Set line for \"${expected#option:}\"; its row names $expected"
+        fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at its Set line for \"${expected#option:}\"; its row names $expected ($at)"
       fi
       if [[ $actual == "$expected" ]]; then
-        printf 'R5 NEGATIVE MET: %s at %s\n' "$test_arg" "$expected"
+        printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
         exit 0
       fi
-      fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, but its row names $expected"
+      fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, but its row names $expected ($at)"
       ;;
     source)
       printf '%s\n' "$stack_line" >&2
@@ -1070,10 +1086,6 @@ main() {
         exit 4
       fi
       if ((RUN_RC == 0)); then printf 'SOURCE-AT TEST pass\n'; else printf 'SOURCE-AT TEST fail\n'; fi
-      logs=("$log")
-      while IFS= read -r n; do
-        if [[ -n $n ]]; then logs+=("$n"); fi
-      done <<<"$(redirect_logs "$run_tree/tests/$name.v" "$run_tree/tests")"
       while IFS=$'\t' read -r kind n; do
         case $kind in
           seen) seen["$n"]=1 ;;
