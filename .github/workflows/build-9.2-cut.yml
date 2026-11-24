@@ -31,25 +31,27 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0 # the inventory checks read the history
+          persist-credentials: false # no later step needs the token
 
       - name: Install system prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends m4 rsync pkg-config libgmp-dev unzip
 
-      - name: Read the cut's Rocq commit from the script
+      - name: Read the cut's Rocq commit from the settings
         id: cut
         run: |
-          sha=$(sed -n 's/^CUT_ROCQ_COMMIT=\([0-9a-f]\{40\}\)$/\1/p' ci/build-9.2-cut.sh)
-          test -n "$sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          source ci/cut-settings.sh
+          echo "sha=$CUT_ROCQ_COMMIT" >> "$GITHUB_OUTPUT"
 
+      # The key is the hash of ci/cut-settings.sh, the inputs the opam root is built from; the Rocq commit,
+      # which that hash already covers, is in the key for its readers.
       - name: Restore the opam root
         id: cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: ${{ env.CUT_ROOT }}
-          key: cut-${{ steps.cut.outputs.sha }}-${{ hashFiles('ci/build-9.2-cut.sh') }}
+          key: cut-${{ steps.cut.outputs.sha }}-${{ hashFiles('ci/cut-settings.sh') }}
 
       - name: Build Rocq at the cut, build the plugin, run the suite
         run: ci/build-9.2-cut.sh
