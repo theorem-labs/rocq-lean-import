@@ -53,9 +53,9 @@ PREDECLARED_TABLES=(get_predeclared_ind_any get_predeclared_def_any get_predecla
 GVISOR_STACK_CAP_KIB=131072 # gVisor caps the stack at 128 MiB
 RT_BUILD_FAILED=125         # RUN_TEST's status when the plugin build, not the test, failed
 # Rocq's message when `Set <Option Name>` names an option that does not exist (an error once
-# `Set Warnings "+unknown-option".` precedes it); the quoted option name follows it. This text is to be
-# checked against the message the cut itself prints.
-UNKNOWN_OPTION_MSG='There is no flag, option or table with this name'
+# `Set Warnings "+unknown-option".` precedes it); the quoted option name follows it. The cut prints it
+# (theorem-labs/rocq 07e45e36 library/goptions.ml:435; seen in the suite's log of tests/entry_timeout.v).
+UNKNOWN_OPTION_MSG='There is no flag or option with this name'
 STACK_ANCHOR='# The CUT_STACK_KIB=<integer> line, when a commit adds one, goes right below this line.'
 LFS_POINTER_HEAD='version https://git-lfs.github.com/spec/v1'
 
@@ -1221,7 +1221,7 @@ case $ST_OUTCOME in
   fail-noentry) printf 'Error: Some other failure\n'; exit 2 ;;
   option:*)
     printf 'File "./%s.v", line 3, characters 0-30:\n' "${3:-test}"
-    printf 'Error: There is no flag, option or table with this name:\n"%s".\n' "${ST_OUTCOME#option:}"
+    printf 'Error: There is no flag or option with this name:\n"%s".\n' "${ST_OUTCOME#option:}"
     exit 2 ;;
   build-fail)
     printf 'File "src/lean.ml", line 1, characters 0-5:\nError: Unbound value planted_build_error\n'
