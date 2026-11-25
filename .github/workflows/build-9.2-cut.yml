@@ -1,9 +1,14 @@
 name: build-9.2-cut
 
 # Build Rocq at the cut, build the plugin against it and run the suite, through ci/build-9.2-cut.sh.
+# A pull request edit that changed its base (retargeted to the cut) runs it like any other pull request event.
+# An edit that did not (`github.event.action == 'edited' && github.event.changes.base == null`: a title or body
+# edit, draft or not, or an edit with no `changes`) builds nothing, and it reports under another check name and
+# in another concurrency group, so that its skipped job is never the build-9.2-cut check and it never replaces a
+# pending build in the build's group. Each of the three places below tests that same expression.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     branches: [typewise-isomorphism-9.2-cut]
   push:
     branches: [typewise-isomorphism-9.2-cut]
@@ -11,15 +16,23 @@ on:
 permissions:
   contents: read
 
+# Every event but a metadata-only edit: the group ${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}
+  group: >-
+    ${{ (github.event.action == 'edited' && github.event.changes.base == null)
+      && format('{0}-metadata-edit-{1}', github.workflow, github.run_id)
+      || format('{0}-{1}-{2}', github.workflow, github.event_name, github.sha) }}
   cancel-in-progress: false
 
 jobs:
   # A job id may not hold a '.'; the name is what GitHub shows as the check.
   build_9_2_cut:
-    name: build-9.2-cut
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    name: >-
+      ${{ (github.event.action == 'edited' && github.event.changes.base == null)
+        && 'build-9.2-cut metadata edit (not built)' || 'build-9.2-cut' }}
+    if: >-
+      ${{ !(github.event.action == 'edited' && github.event.changes.base == null) &&
+        (github.event_name == 'push' || !github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:

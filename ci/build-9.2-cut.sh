@@ -67,7 +67,8 @@ LFS_POINTER_HEAD='version https://git-lfs.github.com/spec/v1'
 #   CUT_STUB_COMPILE   replaces `opam exec -- rocq compile` (--import).
 #   CUT_STUB_CHECK     replaces `opam exec -- rocqchk` (--check).
 # With CUT_SELF_TEST_STUBS=1 a missing switch is an error, never a build. The Rocq commit needs no stub: the
-# self-test points CUT_ROOT at a directory whose rocq-commit file it writes for each case.
+# self-test points CUT_ROOT at a directory whose rocq-commit file it writes for each case, and puts on PATH, for
+# --source-at, a stand-in rocq in a root of its own with its own rocq-commit file.
 stubbed() { [[ ${CUT_SELF_TEST_STUBS:-} == 1 && -n ${!1:-} ]]; }
 
 # RUN_TEST: the one command that builds the plugin and runs the tests (see run_test_real).
@@ -77,6 +78,7 @@ if stubbed CUT_STUB_RUN_TEST; then RUN_TEST=$CUT_STUB_RUN_TEST; fi
 WORK=           # this run's scratch directory, under $TMPDIR
 WORKTREES=()    # git worktrees to remove on exit
 SCRATCH_DIRS=() # directories to delete on exit
+TOOLCHAIN='cut' # the toolchain run_test_real builds with: cut (the switch at $CUT_ROOT) or path (--source-at)
 OPAM_BIN=
 FAIL_PREFIX='FAIL: '
 FAIL_CODE=1
@@ -91,19 +93,21 @@ Usage:
   ci/build-9.2-cut.sh --revert-fix <test>
       Build the plugin from the src/ of the parent of the first fix commit of <test>'s inventory row, with
       the head's tests/ and dumps/, then check that <test> fails at the entry its row names ("R5 negative"),
-      in its log or the .out files of its Redirect commands.
+      in its log or the .out files of its Redirect commands, or as the test's r5 lines say (r5_lines).
   ci/build-9.2-cut.sh --import <file.v> [-- <rocq compile flags>]
       Compile one file with the cut, in the file's directory; writes <file.v>.stack.
   ci/build-9.2-cut.sh --check <file.vo>... [-- <rocqchk flags>]
       Run the cut's rocqchk -silent -o on the files; writes <first file>.stack.
   ci/build-9.2-cut.sh --source-at <commit> <test>
-      Build the plugin from <commit>'s src/ with the head's tests/ and dumps/, run <test>, report the
-      planted entries it accepted. Exit 3: bad commit or test; 4: plugin build failed; else the test's.
+      Build the plugin from <commit>'s src/ with the head's tests/ and dumps/, with the rocq, make and OCaml
+      of PATH (no opam switch; $CUT_ROOT is not used), run <test>, report that toolchain's rocq-commit (or
+      unknown) and each planted entry its own case accepted. Exit 3: bad commit or test, no rocq on PATH;
+      4: plugin build failed; else the test's.
   ci/build-9.2-cut.sh --self-test
       Check this script's rules (rows S0 to S24c of ci/build-9.2-cut-selftest.sh) with stubs (needs git and
       bash only).
-Environment: CUT_ROOT (default /scratch/cs/cut) holds the opam root, the sources and the rocq-commit file;
-CUT_JOBS (default: nproc) is the build parallelism.
+Environment: CUT_ROOT (default /scratch/cs/cut) holds the opam root, the sources and the rocq-commit file
+(not read by --source-at); CUT_JOBS (default: nproc) is the build parallelism.
 EOF
 }
 
@@ -264,10 +268,11 @@ check_inventory() {
         printf 'unreadable\t%s\t%s fields, not 6\t%s\n' "$n" "${#fld[@]}" "${line//$'\t'/\\t}"
         continue
       fi
+      # A field of blanks only is empty too: a commits field of blanks names no commit word at all.
       for f in 0 1 2 3 4 5; do
-        if [[ -z ${fld[f]} ]]; then break; fi
+        if [[ -z ${fld[f]//[[:space:]]/} ]]; then break; fi
       done
-      if [[ -z ${fld[f]} ]]; then
+      if [[ -z ${fld[f]//[[:space:]]/} ]]; then
         local -a names=(file features base_entry own_entry status commits)
         printf 'unreadable\t%s\tempty %s field\t%s\n' "$n" "${names[f]}" "${line//$'\t'/\\t}"
         continue
@@ -380,11 +385,27 @@ uname_r() { # `uname -r`, or its stub; the status is theirs
 
 # ---- Switch ---------------------------------------------------------------------------------------------------
 
-read_rocq_commit() { # fact RC_SHA: the commit in $CUT_ROOT/rocq-commit; empty when missing, unreadable or empty
-  local f=$CUT_ROOT/rocq-commit
+read_rocq_commit() { # <root>: fact RC_SHA, the commit in <root>/rocq-commit; empty when missing, unreadable or empty
+  local f=$1/rocq-commit
   RC_SHA=
   if [[ -f $f && -r $f ]]; then IFS= read -r RC_SHA <"$f"; fi
   RC_SHA=${RC_SHA//[[:space:]]/}
+}
+
+# The toolchain of --source-at, the caller's: the rocq on PATH. Facts: TC_ROCQ, the real path of that executable
+# (empty when PATH has none), and TC_SHA, the commit of the rocq-commit file of the root that holds it, read only
+# when the executable is <root>/opam/<switch>/bin/rocq, the layout build_switch makes under $CUT_ROOT; empty for
+# any other layout, or when that root has no readable, non-empty rocq-commit file. $CUT_ROOT is never read.
+path_toolchain() {
+  local exe bin prefix opam_root
+  TC_ROCQ='' TC_SHA=''
+  exe=$(command -v rocq) && [[ $exe == /* ]] || return 0
+  TC_ROCQ=$(readlink -f -- "$exe") || TC_ROCQ=$exe
+  bin=${TC_ROCQ%/*} prefix=${bin%/*}
+  opam_root=${prefix%/*}
+  [[ ${bin##*/} == bin && ${opam_root##*/} == opam ]] || return 0
+  read_rocq_commit "${opam_root%/*}"
+  TC_SHA=$RC_SHA
 }
 
 # Downloads with python3's standard library. `file <url> <dest> <sha256>` fetches a URL; `lfs <batch url>
@@ -578,16 +599,22 @@ fetch_lfs() {
 
 # RUN_TEST, real: `suite <tree>` or `one <tree> <name>`. Builds the plugin (status 125 when that fails),
 # then runs `make -k test`, so that every test runs and the log names each one that fails, or
-# `make tests/<name>.vo` (the root Makefile forwards tests/% goals).
+# `make tests/<name>.vo` (the root Makefile forwards tests/% goals). With TOOLCHAIN=cut, under `opam exec` on the
+# cut's switch ($OPAMROOT, $OPAMSWITCH); with TOOLCHAIN=path (--source-at), the plain make, rocq and OCaml tools of
+# the caller's PATH, main having unset OPAMROOT and OPAMSWITCH.
 run_test_real() {
   local kind=$1 tree=$2 name=${3:-}
-  ensure_opam || return "$RT_BUILD_FAILED"
+  local -a run=()
+  if [[ $TOOLCHAIN == cut ]]; then
+    ensure_opam || return "$RT_BUILD_FAILED"
+    run=("$OPAM_BIN" exec --)
+  fi
   cd -- "$tree" || return "$RT_BUILD_FAILED"
-  "$OPAM_BIN" exec -- make || return "$RT_BUILD_FAILED"
+  "${run[@]}" make || return "$RT_BUILD_FAILED"
   if [[ $kind == suite ]]; then
-    "$OPAM_BIN" exec -- make -k test
+    "${run[@]}" make -k test
   else
-    "$OPAM_BIN" exec -- make "tests/$name.vo"
+    "${run[@]}" make "tests/$name.vo"
   fi
 }
 
@@ -716,20 +743,35 @@ first_entry_error() { # <files...>: the X of the first "Error at line N (for X)"
   return 0
 }
 
-# <files...>: "seen<TAB>X" for each line "line N: X", "error<TAB>X" for each "Error at line N (for X)".
-entry_scan() {
-  local f line re='^[[:space:]]*line [0-9]+: (.*[^[:space:]])[[:space:]]*$'
-  for f in "$@"; do
-    [[ -f $f ]] || continue
-    while IFS= read -r line || [[ -n $line ]]; do
-      if [[ $line =~ $re ]]; then
-        printf 'seen\t%s\n' "${BASH_REMATCH[1]}"
-      elif entry_error_name "$line"; then
-        printf 'error\t%s\n' "$ENTRY_NAME"
-      fi
-    done <"$f"
-  done
-  return 0
+# <log> <entry>: fact CASE_OUTCOME, how the Redirect log of one planted case ended for <entry>:
+#   unreached   no log: Rocq stopped before the case's Redirect, or never ran it
+#   refused     a line "Error at line N (for <entry>)"
+#   unseen      no line "line N: <entry>" (exactly that name: a longer name is another entry)
+#   unfinished  "line N: <entry>", but no line "Done!" after it: the import did not complete
+#   accepted    "line N: <entry>", no refusal of it, and a line "Done!" after it
+case_outcome() {
+  local log=$1 want=$2 line t seen=0 done_after=0 refused=0 re='^[[:space:]]*line [0-9]+: (.*[^[:space:]])[[:space:]]*$'
+  CASE_OUTCOME=unreached
+  [[ -f $log ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $line =~ $re ]]; then
+      if [[ ${BASH_REMATCH[1]} == "$want" ]]; then seen=1 done_after=0; fi
+    elif entry_error_name "$line"; then
+      if [[ $ENTRY_NAME == "$want" ]]; then refused=1; fi
+    elif ((seen)); then
+      t=${line#"${line%%[![:space:]]*}"}
+      if [[ ${t%"${t##*[![:space:]]}"} == 'Done!' ]]; then done_after=1; fi
+    fi
+  done <"$log"
+  if ((refused)); then
+    CASE_OUTCOME=refused
+  elif ((!seen)); then
+    CASE_OUTCOME=unseen
+  elif ((!done_after)); then
+    CASE_OUTCOME=unfinished
+  else
+    CASE_OUTCOME=accepted
+  fi
 }
 
 first_error_line() { # <log>: its first line starting "Error", else the first naming an error, else its last line
@@ -757,11 +799,24 @@ option_failure_seen() {
   return 1
 }
 
-planted_entries() { # <test file>: the Lean name of each "(* planted: <name> *)" line
-  local line re='^[[:space:]]*\(\*[[:space:]]+planted:[[:space:]]+([^[:space:]]+)[[:space:]]+\*\)[[:space:]]*$'
+# <test file>: the planted cases of the test, one fact per "(* planted: <name> *)" line, whose case is the first
+# Redirect command after it (a line starting Redirect "<redirect>"):
+#   case<TAB><name><TAB><redirect>
+#   orphan<TAB><line no><TAB><name>    no Redirect follows the planted line
+planted_cases() {
+  local line n=0 i planted_re='^[[:space:]]*\(\*[[:space:]]+planted:[[:space:]]+([^[:space:]]+)[[:space:]]+\*\)[[:space:]]*$'
+  local redirect_re='^[[:space:]]*Redirect[[:space:]]+"([^"]+)"'
+  local -a pending=() marker_lines=()
   while IFS= read -r line || [[ -n $line ]]; do
-    if [[ $line =~ $re ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; fi
+    n=$((n + 1))
+    if [[ $line =~ $planted_re ]]; then
+      pending+=("${BASH_REMATCH[1]}") marker_lines+=("$n")
+    elif [[ $line =~ $redirect_re ]]; then
+      for i in "${!pending[@]}"; do printf 'case\t%s\t%s\n' "${pending[i]}" "${BASH_REMATCH[1]}"; done
+      pending=() marker_lines=()
+    fi
   done <"$1"
+  for i in "${!pending[@]}"; do printf 'orphan\t%s\t%s\n' "${marker_lines[i]}" "${pending[i]}"; done
   return 0
 }
 
@@ -770,6 +825,169 @@ redirect_logs() { # <test file> <dir>: <dir>/<name>.out for each Redirect "<name
   while IFS= read -r line || [[ -n $line ]]; do
     if [[ $line =~ $re ]]; then printf '%s/%s.out\n' "$2" "${BASH_REMATCH[1]}"; fi
   done <"$1"
+  return 0
+}
+
+squeeze() { # <text>: its words, joined by single spaces
+  local IFS=$' \t\n\v\f\r'
+  local -a w=()
+  read -r -d '' -a w <<<"$1"
+  printf '%s' "${w[*]}"
+}
+
+names_token() { # <text> <name>: status 0 when <name> occurs in <text> with no name character right before or after
+  local rest=$1 before after namech="[[:alnum:]_.']"
+  while [[ $rest == *"$2"* ]]; do
+    before=${rest%%"$2"*} after=${rest#*"$2"}
+    if [[ ! ${before: -1} =~ $namech && ! ${after:0:1} =~ $namech ]]; then return 0; fi
+    rest=$after
+  done
+  return 1
+}
+
+# <file> <text> [prefix]: status 0 when a line of the file, its trailing blanks removed, is <text> (with "prefix":
+# starts with <text>, its leading blanks removed too)
+log_has_line() {
+  local line t
+  while IFS= read -r line || [[ -n $line ]]; do
+    t=${line%"${line##*[![:space:]]}"}
+    if [[ ${3:-} == prefix ]]; then
+      t=${t#"${t%%[![:space:]]*}"}
+      if [[ $t == "$2"* ]]; then return 0; fi
+    elif [[ $t == "$2" ]]; then
+      return 0
+    fi
+  done <"$1"
+  return 1
+}
+
+# <log> <test name> <line>: fact RE_MSG, the message of the Rocq error the log reports at that line of tests/<name>.v
+# (the line 'File "./<name>.v", line <line>, characters A-B:' right before a line starting "Error:"), its lines up
+# to the next blank line squeezed into one; empty when the log reports no error there.
+rocq_error_at() {
+  local log=$1 name=$2 at=$3 line state=seek msg=''
+  RE_MSG=''
+  [[ -f $log ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $state == msg ]]; then
+      if [[ -z ${line//[[:space:]]/} || $line == make:* || $line == 'make['* || $line == 'File "'* ]]; then break; fi
+      msg+=" $line"
+    elif [[ $state == loc && $line == Error:* ]]; then
+      state=msg msg=${line#Error:}
+    elif [[ $line == "File \"./$name.v\", line $at, characters "* || $line == "File \"$name.v\", line $at, characters "* ]]; then
+      state=loc
+    else
+      state=seek
+    fi
+  done <"$log"
+  if [[ $state == msg ]]; then RE_MSG=$(squeeze "$msg"); fi
+}
+
+# <log> <test name> <redirect> <text>: status 0 when the log has the line
+# "EXPECT FAIL: tests/<name>.expect:<n>: <redirect>.out: unexpected '<text>'" that tests/check_expect.py prints
+expect_failure_seen() {
+  local line mid pre="EXPECT FAIL: tests/$2.expect:" post=": $3.out: unexpected '$4'"
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line == "$pre"*"$post" ]] || continue
+    mid=${line#"$pre"} mid=${mid%"$post"}
+    if [[ $mid =~ ^[0-9]+$ ]]; then return 0; fi
+  done <"$1"
+  return 1
+}
+
+# <test file>: the r5 lines of the test. A test whose failure before its fix the first entry error of its logs does
+# not name ("R5 negative", --revert-fix) says what that failure is in comment lines of these kinds:
+#   (* r5 error: <text> *)                   the run's Rocq error at the command right after it (only blank lines
+#                                            and other r5 lines between) holds <text> and the row's entry
+#   (* r5 log: "<redirect>" <text> *)        the .out log of that Redirect of the test has the line <text>
+#   (* r5 log lacks: "<redirect>" <text> *)  that log exists and has no line <text>
+#   (* r5 assertion: "<redirect>" <text> *)  the run's log has the failure "unexpected '<text>'" of the test's .expect
+#                                            on that Redirect's log, that log has a line starting with <text>, and
+#                                            <text> names the row's entry
+# One fact per r5 line: "error<TAB><line no of the command><TAB><text>", "log|lacks|assertion<TAB><redirect><TAB>
+# <text>", or "bad<TAB><line no><TAB><why>" for a line starting "(* r5 " that is none of these, or that names a
+# Redirect the test does not have.
+r5_lines() {
+  local line kind rest i j n
+  local marker_re='^[[:space:]]*\(\*[[:space:]]+r5[[:space:]]' comment_re='^[[:space:]]*\(\*'
+  local line_re='^[[:space:]]*\(\*[[:space:]]+r5 (error|log|log lacks|assertion):[[:space:]]+(.*[^[:space:]])[[:space:]]+\*\)[[:space:]]*$'
+  local named_re='^"([^"]+)"[[:space:]]+(.+)$' redirect_re='^[[:space:]]*Redirect[[:space:]]+"([^"]+)"'
+  local -a lines=()
+  local -A redirects=()
+  mapfile -t lines <"$1"
+  for line in "${lines[@]}"; do
+    if [[ $line =~ $redirect_re ]]; then redirects[${BASH_REMATCH[1]}]=1; fi
+  done
+  n=${#lines[@]}
+  for ((i = 0; i < n; i++)); do
+    line=${lines[i]}
+    [[ $line =~ $marker_re ]] || continue
+    if [[ ! $line =~ $line_re ]]; then
+      printf 'bad\t%s\tan r5 line of no known kind: %s\n' "$((i + 1))" "${line#"${line%%[![:space:]]*}"}"
+      continue
+    fi
+    kind=${BASH_REMATCH[1]} rest=${BASH_REMATCH[2]}
+    if [[ $kind == error ]]; then
+      for ((j = i + 1; j < n; j++)); do
+        [[ -z ${lines[j]//[[:space:]]/} || ${lines[j]} =~ $marker_re ]] || break
+      done
+      if ((j >= n)) || [[ ${lines[j]} =~ $comment_re ]]; then
+        printf 'bad\t%s\tno command right after this r5 error line\n' "$((i + 1))"
+      else
+        printf 'error\t%s\t%s\n' "$((j + 1))" "$rest"
+      fi
+    elif [[ ! $rest =~ $named_re ]]; then
+      printf 'bad\t%s\tno "<redirect>" and text after "r5 %s:"\n' "$((i + 1))" "$kind"
+    elif [[ -z ${redirects[${BASH_REMATCH[1]}]:-} ]]; then
+      printf 'bad\t%s\tno Redirect "%s" in the test\n' "$((i + 1))" "${BASH_REMATCH[1]}"
+    else
+      if [[ $kind == 'log lacks' ]]; then kind=lacks; fi
+      printf '%s\t%s\t%s\n' "$kind" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    fi
+  done
+  return 0
+}
+
+# <test file> <entry> <run log> <dir of its Redirect logs>: one line per r5 line of the test (r5_lines; a bad one is
+# skipped) that the logs of a failed run do not meet; nothing when each one is met.
+r5_unmet() {
+  local file=$1 entry=$2 log=$3 dir=$4 name kind a text out
+  name=${file##*/} name=${name%.v}
+  while IFS=$'\t' read -r kind a text; do
+    out=$dir/$a.out
+    case $kind in
+      error)
+        rocq_error_at "$log" "$name" "$a"
+        if [[ -z $RE_MSG ]]; then
+          printf 'no Rocq error at tests/%s.v line %s\n' "$name" "$a"
+        elif [[ $RE_MSG != *"$(squeeze "$text")"* ]]; then
+          printf "the Rocq error at tests/%s.v line %s does not hold '%s': %s\n" "$name" "$a" "$text" "${RE_MSG:0:240}"
+        elif ! names_token "$RE_MSG" "$entry"; then
+          printf 'the Rocq error at tests/%s.v line %s does not name %s: %s\n' "$name" "$a" "$entry" "${RE_MSG:0:240}"
+        fi
+        ;;
+      log | lacks)
+        if [[ ! -f $out ]]; then
+          printf '%s.out does not exist\n' "$a"
+        elif [[ $kind == log ]] && ! log_has_line "$out" "$text"; then
+          printf "%s.out has no line '%s'\n" "$a" "$text"
+        elif [[ $kind == lacks ]] && log_has_line "$out" "$text"; then
+          printf "%s.out has the line '%s'\n" "$a" "$text"
+        fi
+        ;;
+      assertion)
+        if ! expect_failure_seen "$log" "$name" "$a" "$text"; then
+          printf "the run's log has no line \"EXPECT FAIL: tests/%s.expect:<n>: %s.out: unexpected '%s'\"\n" "$name" "$a" "$text"
+        fi
+        if [[ ! -f $out ]]; then
+          printf '%s.out does not exist\n' "$a"
+        elif ! log_has_line "$out" "$text" prefix; then
+          printf "%s.out has no line starting '%s'\n" "$a" "$text"
+        fi
+        if ! names_token "$text" "$entry"; then printf "'%s' does not name %s\n" "$text" "$entry"; fi
+        ;;
+    esac
+  done <<<"$(r5_lines "$file")"
   return 0
 }
 
@@ -829,9 +1047,15 @@ main() {
       exit 2
       ;;
   esac
-  # --source-at keeps its own exit codes: every failure before the test is a SOURCE-AT ERROR, status 3.
-  if [[ $mode == source ]]; then FAIL_PREFIX='SOURCE-AT ERROR: ' FAIL_CODE=3; fi
-  [[ $CUT_ROOT == /* ]] || fail "CUT_ROOT must be an absolute path (an opam root is not relocatable): $CUT_ROOT"
+  # --source-at keeps its own exit codes: every failure before the test is a SOURCE-AT ERROR, status 3. It builds
+  # with the caller's toolchain, the one its PATH gives (S24): no opam root or switch of this script is selected,
+  # and nothing under $CUT_ROOT is read, built or used.
+  if [[ $mode == source ]]; then
+    FAIL_PREFIX='SOURCE-AT ERROR: ' FAIL_CODE=3 TOOLCHAIN=path
+    unset OPAMROOT OPAMSWITCH
+  else
+    [[ $CUT_ROOT == /* ]] || fail "CUT_ROOT must be an absolute path (an opam root is not relocatable): $CUT_ROOT"
+  fi
   WORK=$(mktemp -d "${TMPDIR:-/tmp}/build-9.2-cut.XXXXXX") || fail "cannot create a scratch directory under ${TMPDIR:-/tmp}"
   SCRATCH_DIRS+=("$WORK")
 
@@ -927,7 +1151,7 @@ main() {
   fi
 
   # The scratch tree and the inputs of each mode.
-  local expected='' run_tree=$ROOT stack_file=$SELF stack_out='' idx=-1
+  local expected='' run_tree=$ROOT stack_file=$SELF stack_out='' idx=-1 r5_facts='' cases=''
   local -a commits=()
   if [[ $mode == revert ]]; then
     name=${test_arg#tests/} name=${name%.v}
@@ -956,12 +1180,37 @@ main() {
     # The test runs at the stack the parent's own copy of this script sets: the parent of the commit that set
     # CUT_STACK_KIB holds no such line, and a later commit's line is not in it (S22, S22b).
     run_tree=$WORK/tree stack_file=$WORK/parent-script
+    # The r5 lines of the head's test (r5_lines), checked before it runs (S7k): a test that has them is decided by
+    # them, with exactly one error or assertion line, and never on an option row.
+    r5_facts=$(r5_lines "$run_tree/tests/$name.v")
+    if [[ -n $r5_facts ]]; then
+      local verdicts=0
+      local -a r5_bad=()
+      while IFS=$'\t' read -r kind a b; do
+        case $kind in
+          bad) r5_bad+=("tests/$name.v line $a: $b") ;;
+          error | assertion) verdicts=$((verdicts + 1)) ;;
+        esac
+      done <<<"$r5_facts"
+      if ((${#r5_bad[@]})); then
+        for f in "${r5_bad[@]}"; do printf '%s--revert-fix %s: %s\n' "$FAIL_PREFIX" "$test_arg" "$f" >&2; done
+        exit "$FAIL_CODE"
+      fi
+      [[ $expected != option:* ]] || fail "--revert-fix $test_arg: an option row is decided at its Set line, but tests/$name.v has r5 lines"
+      ((verdicts == 1)) || fail "--revert-fix $test_arg: tests/$name.v has $verdicts r5 error or assertion lines; it needs exactly one"
+    fi
   fi
   if [[ $mode == source ]]; then
+    local kind a b
     name=${test_arg#tests/} name=${name%.v}
     source_at_prepare "$ROOT" "$WORK/tree" "$commit_arg" "$name"
     [[ $SA_STATUS == ok ]] || fail "$SA_CAUSE"
     run_tree=$WORK/tree
+    # Each planted line's case is the first Redirect after it (planted_cases); a planted line with none is no case.
+    cases=$(planted_cases "$run_tree/tests/$name.v")
+    while IFS=$'\t' read -r kind a b; do
+      if [[ $kind == orphan ]]; then fail "tests/$name.v line $a: no Redirect after the planted line of $b"; fi
+    done <<<"$cases"
   fi
   if [[ $mode == import || $mode == check ]]; then
     for f in "${files[@]}"; do
@@ -1002,8 +1251,8 @@ main() {
   fi
   local stack_line="STACK soft=$soft hard=${hard:-unknown}"
 
-  # The switch: built when missing, except where a packed root must have been unpacked.
-  if [[ ! -d $OPAMROOT/cut ]]; then
+  # The switch: built when missing, except where a packed root must have been unpacked; --source-at uses none.
+  if [[ $mode != source && ! -d $OPAMROOT/cut ]]; then
     if [[ $mode == import || $mode == check ]]; then
       fail "no switch at $OPAMROOT/cut; unpack the packed opam root at $CUT_ROOT first"
     fi
@@ -1012,11 +1261,15 @@ main() {
   fi
 
   # The Rocq commit: the switch's, read from $CUT_ROOT/rocq-commit, must be readable and be the cut's
-  # CUT_ROCQ_COMMIT (S9, S9b); --source-at only reports it.
-  read_rocq_commit
+  # CUT_ROCQ_COMMIT (S9, S9b). --source-at reports the rocq on the caller's PATH and the commit of that toolchain's
+  # rocq-commit file, or unknown (path_toolchain), and fails when PATH has no rocq.
   if [[ $mode == source ]]; then
-    printf 'ROCQ COMMIT %s\n' "${RC_SHA:-unknown}"
+    path_toolchain
+    [[ -n $TC_ROCQ ]] || fail "no rocq on PATH; --source-at builds with the caller's toolchain"
+    printf 'ROCQ EXECUTABLE %s\n' "$TC_ROCQ"
+    printf 'ROCQ COMMIT %s\n' "${TC_SHA:-unknown}"
   else
+    read_rocq_commit "$CUT_ROOT"
     [[ -n $RC_SHA ]] || fail "cannot read the Rocq commit of the switch from $CUT_ROOT/rocq-commit (missing, unreadable or empty); the cut is never assumed"
     [[ $RC_SHA == "$CUT_ROCQ_COMMIT" ]] || fail "the switch's Rocq is commit $RC_SHA, not the cut $CUT_ROCQ_COMMIT"
     if [[ $mode != import && $mode != check ]]; then printf 'ROCQ COMMIT %s\n' "$RC_SHA" >&2; fi
@@ -1027,12 +1280,11 @@ main() {
   fi
 
   # Run, and the verdict of each mode.
-  local log=$WORK/test.log actual n
+  local log=$WORK/test.log actual n unmet
   local -a cmd=() logs=()
-  local -A seen=() errored=()
   # The logs of one test, read in this order: the run's log, then the .out file of each Redirect of the test, in
-  # the order of its lines (S7c-S7f, S24).
-  if [[ $mode == revert || $mode == source ]]; then
+  # the order of its lines (S7c-S7f).
+  if [[ $mode == revert ]]; then
     logs=("$log")
     while IFS= read -r n; do
       if [[ -n $n ]]; then logs+=("$n"); fi
@@ -1051,9 +1303,10 @@ main() {
       ;;
     revert)
       # "R5 negative": built from the src/ of the parent of its row's first fix commit with the head's tests/,
-      # the test fails, and the first "Error at line N (for X)" of its logs names the entry its row names (its
-      # own entry, else its base entry), or for an option row its log shows the unknown-option error at the Set
-      # line of that option; a failed plugin build does not count. Each verdict line names that parent.
+      # the test fails, and: when the test has r5 lines, the logs meet each of them (r5_unmet; S7h-S7j); for an
+      # option row, its log shows the unknown-option error at the Set line of that option; else the first "Error
+      # at line N (for X)" of its logs names the entry its row names (its own entry, else its base entry). A failed
+      # plugin build does not count. Each verdict line names that parent.
       local at="src/ of $RV_PARENT, the parent of the first fix commit $RV_FIRST"
       printf '%s\n' "$stack_line" >&2
       run_logged "$log" "$want" one "$run_tree" "$name"
@@ -1062,6 +1315,15 @@ main() {
       fi
       if ((RUN_RC == 0)); then
         fail "--revert-fix $test_arg: R5 negative not met: the test passes ($at)"
+      fi
+      if [[ -n $r5_facts ]]; then
+        unmet=$(r5_unmet "$run_tree/tests/$name.v" "$expected" "$log" "$run_tree/tests")
+        if [[ -z $unmet ]]; then
+          while IFS=$'\t' read -r kind a b; do printf 'R5 CASE MET: tests/%s.v, r5 %s %s: %s\n' "$name" "$kind" "$a" "$b" >&2; done <<<"$r5_facts"
+          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
+          exit 0
+        fi
+        fail "--revert-fix $test_arg: R5 negative not met: the test fails, but not as the r5 lines of tests/$name.v say: ${unmet//$'\n'/; }; its row names $expected ($at)"
       fi
       actual=$(first_entry_error "${logs[@]}")
       if [[ -z $actual ]]; then actual='no "Error at line N (for X)" line of its log or its Redirect .out files'; fi
@@ -1086,15 +1348,15 @@ main() {
         exit 4
       fi
       if ((RUN_RC == 0)); then printf 'SOURCE-AT TEST pass\n'; else printf 'SOURCE-AT TEST fail\n'; fi
-      while IFS=$'\t' read -r kind n; do
-        case $kind in
-          seen) seen["$n"]=1 ;;
-          error) errored["$n"]=1 ;;
-        esac
-      done <<<"$(entry_scan "${logs[@]}")"
-      while IFS= read -r n; do
-        if [[ -n $n && -n ${seen[$n]:-} && -z ${errored[$n]:-} ]]; then printf 'SOURCE-AT ACCEPTED %s\n' "$n"; fi
-      done <<<"$(planted_entries "$run_tree/tests/$name.v")"
+      while IFS=$'\t' read -r kind a b; do
+        [[ $kind == case ]] || continue
+        case_outcome "$run_tree/tests/$b.out" "$a"
+        if [[ $CASE_OUTCOME == accepted ]]; then
+          printf 'SOURCE-AT ACCEPTED %s in %s\n' "$a" "$b"
+        else
+          printf 'SOURCE-AT CASE %s in %s: %s\n' "$a" "$b" "$CASE_OUTCOME" >&2
+        fi
+      done <<<"$cases"
       exit "$RUN_RC"
       ;;
     import | check)

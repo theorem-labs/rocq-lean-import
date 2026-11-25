@@ -12,6 +12,7 @@ ST_MEMBERS=(Eq Nat Nat.le Or And Fin UInt32 BitVec Char ULift UInt32.size Nat.is
 ST_ROOT='' ST_CASE='' ST_REPO='' ST_LABEL='' ST_WHY='' ST_RC=0 ST_N=0 ST_PASS=0 ST_FAIL=0
 ST_BASE='' ST_FIX_A='' ST_FIX_B='' ST_FIX_OPT='' ST_ROW_A='' ST_ROW_B='' ST_ROW_C='' ST_ROW_OPT=''
 ST_OTHER_SHA=1111111111111111111111111111111111111111
+ST_CALLER_SHA=2222222222222222222222222222222222222222 # the caller toolchain's rocq-commit (st_new)
 
 st_tsv() {
   local IFS=$'\t'
@@ -111,9 +112,11 @@ st_stubs() {
   mkdir -p "$s" || return 1
   cat >"$s/run-test" <<'EOF'
 #!/usr/bin/env bash
-# Self-test stand-in for RUN_TEST. $1: suite|one, $2: tree, $3: test name; ST_OUTCOME picks the outcome.
+# Self-test stand-in for RUN_TEST. $1: suite|one, $2: tree, $3: test name; ST_OUTCOME picks the outcome. Each call
+# is recorded with the opam root and switch its environment selects ("<unset>" when none).
 src_marker=$(<"$2/src/marker") tests_marker=$(<"$2/tests/marker") fixes=$(cd "$2/src" && echo fix_*.ml)
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:-}" "$src_marker" "$tests_marker" "$fixes" >>"$ST_CALLS"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:-}" "$src_marker" "$tests_marker" "$fixes" \
+  "${OPAMROOT-<unset>}" "${OPAMSWITCH-<unset>}" >>"$ST_CALLS"
 echo "STUB RUN-TEST $1 ${3:-}"
 case $ST_OUTCOME in
   pass) echo "stub: the test passes"; exit 0 ;;
@@ -144,10 +147,27 @@ case $ST_OUTCOME in
     printf 'File "src/lean.ml", line 1, characters 0-5:\nError: Unbound value planted_build_error\n'
     exit 125 ;;
   source:*)
-    printf 'line 3: Planted.ok\nline 4: Planted.err\nError at line 4 (for Planted.err): {"bad": 1}\n'
-    printf 'line 5: Planted.prefix\n'
-    printf 'line 6: Planted.log\n' >"$2/tests/planted_sa.log.out"
+    # The cases of tests/planted_sa.v (st_template), one Redirect log each: Planted.ok accepted; Planted.err
+    # refused; Planted.same refused in its first case and accepted in its second; Planted.pre seen only in another
+    # case's log, its own log naming longer names; Planted.cut seen with no "Done!" after it; Planted.unstarted's
+    # case not reached (no log); Planted.cross accepted in the run's own log only, which is no case.
+    t=$2/tests
+    printf 'line 1: Planted.cross\nDone!\n'
+    printf 'line 2: Planted.pre\nline 3: Planted.ok\n\n\nDone!\n- 3 entries\n' >"$t/planted_ok.log.out"
+    printf 'line 4: Planted.err\nError at line 4 (for Planted.err): {"bad": 1}\n\nDone!\n' >"$t/planted_err.log.out"
+    printf 'line 5: Planted.same\nSkipping: Error at line 5 (for Planted.same): {"bad": 2}\nDone!\n' >"$t/planted_same_a.log.out"
+    printf 'line 5: Planted.same\nDone!\n' >"$t/planted_same_b.log.out"
+    printf 'line 6: Planted.prefix\nline 7: Planted.pre.x\nline 8: Planted.pre: 1 argument(s) transported (L)\nDone!\n' >"$t/planted_pre.log.out"
+    printf 'Done!\nline 9: Planted.cut\n' >"$t/planted_cut.log.out"
     exit "${ST_OUTCOME#source:}" ;;
+  play:*)
+    # The case filled ST_FX: run.log is the run's output, and every other file goes to tests/ of the tree as a
+    # Redirect log of the test.
+    for f in "$ST_FX"/*; do
+      [[ -f $f ]] || continue
+      if [[ ${f##*/} == run.log ]]; then cat -- "$f"; else cp -- "$f" "$2/tests/"; fi
+    done
+    exit "${ST_OUTCOME#play:}" ;;
   *) echo "stub: unknown ST_OUTCOME '$ST_OUTCOME'" >&2; exit 99 ;;
 esac
 EOF
@@ -221,9 +241,18 @@ st_template() { # the repository every case copies: base, three fix commits, the
   ST_FIX_OPT=$(git -C "$t" rev-parse HEAD)
   printf 'src at head\n' >"$t/src/marker"
   printf 'tests at head\n' >"$t/tests/marker"
-  printf '%s\n' '(* planted: Planted.ok *)' '(* planted: Planted.err *)' '(* planted: Planted.absent *)' \
-    '(* planted: Planted.log *)' '(* planted: Planted.pre *)' \
-    'Redirect "planted_sa.log" Lean Import "../dumps/small.ndjson".' >"$t/tests/planted_sa.v"
+  # One planted case per Redirect (the stub's source:<status> outcome writes their logs); the second marker of
+  # Planted.same is separated from its Redirect by a comment.
+  printf '%s\n' '(* planted: Planted.ok *)' 'Redirect "planted_ok.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.err *)' 'Redirect "planted_err.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.same *)' 'Redirect "planted_same_a.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.same *)' '(* The same name in a second case. *)' \
+    'Redirect "planted_same_b.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.pre *)' 'Redirect "planted_pre.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.cut *)' 'Redirect "planted_cut.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.unstarted *)' 'Redirect "planted_unstarted.log" Lean Import "../dumps/small.ndjson".' \
+    '(* planted: Planted.cross *)' 'Redirect "planted_cross.log" Lean Import "../dumps/small.ndjson".' \
+    >"$t/tests/planted_sa.v"
   ST_ROW_A=$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_A")
   ST_ROW_B=$(st_tsv tests/lean434_b.v 'F2 F3' Beta.base Beta.own fixed "$ST_FIX_B")
   ST_ROW_C=$(st_tsv tests/lean434_c.v F4 Gamma.one - listed -)
@@ -232,15 +261,45 @@ st_template() { # the repository every case copies: base, three fix commits, the
   st_git_commit "$t" "head: inventory" || return 1
 }
 
-st_new() { # <label>: a fresh case: a copy of the template, an empty TMPDIR, a switch stand-in at the cut
+st_new() { # <label>: a fresh case: a copy of the template, an empty TMPDIR, a switch stand-in at the cut, and the
+  # caller's toolchain on PATH (st_toolchain, commit ST_CALLER_SHA)
   ST_LABEL=$1 ST_N=$((ST_N + 1))
   ST_CASE=$ST_ROOT/case$ST_N ST_REPO=$ST_ROOT/case$ST_N/repo
-  if ! { mkdir -p "$ST_CASE/tmp" "$ST_CASE/cut/opam/cut" && cp -a "$ST_ROOT/template" "$ST_REPO"; }; then
+  if ! { mkdir -p "$ST_CASE/tmp" "$ST_CASE/cut/opam/cut" "$ST_CASE/fx" && cp -a "$ST_ROOT/template" "$ST_REPO" &&
+    st_toolchain "$ST_CASE/caller" "$ST_CALLER_SHA"; }; then
     ST_WHY=${ST_WHY:-"$ST_LABEL: cannot set up the case"}
     return 1
   fi
   printf '%s\n' "$CUT_ROCQ_COMMIT" >"$ST_CASE/cut/rocq-commit"
   : >"$ST_CASE/calls"
+}
+
+st_toolchain() { # <root> <commit|none>: <root>/opam/cut/bin/rocq, the layout build_switch makes, and <root>/rocq-commit
+  mkdir -p "$1/opam/cut/bin" && printf '#!/usr/bin/env bash\nexit 0\n' >"$1/opam/cut/bin/rocq" &&
+    chmod +x "$1/opam/cut/bin/rocq" || return 1
+  if [[ $2 != none ]]; then printf '%s\n' "$2" >"$1/rocq-commit"; fi
+}
+
+st_norocq_path() { # prints a PATH with the commands the script and st_run call and no rocq ($ST_ROOT/norocq)
+  local d=$ST_ROOT/norocq t p
+  if [[ ! -d $d ]]; then
+    mkdir -p -- "$d" || return 1
+    for t in bash env git mktemp dirname basename rm nproc cat readlink tee grep head tr cut sed ls mkdir cp uname python3; do
+      if p=$(command -v "$t") && [[ $p == /* ]]; then ln -s -- "$p" "$d/$t" || return 1; fi
+    done
+  fi
+  printf '%s' "$d"
+}
+
+st_fx() { # <file> <text, printf %b>: a file of the case's play:<status> outcome (the stub's run-test)
+  printf '%b' "$2" >"$ST_CASE/fx/$1" || st_bad "cannot write fx/$1"
+}
+
+st_r5_test() { # <name> <entry>: tests/<name>.v from stdin, listed in tests/_CoqProject, its row fixed by fix a
+  { cat >"$ST_REPO/tests/$1.v" && printf '%s.v\n' "$1" >>"$ST_REPO/tests/_CoqProject" &&
+    st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" \
+      "$(st_tsv "tests/$1.v" F9 "$2" - fixed "$ST_FIX_A")" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
+  st_commit "test $1"
 }
 
 st_commit() { st_git_commit "$ST_REPO" "$1" >/dev/null || st_bad "cannot commit: $1"; }
@@ -260,10 +319,11 @@ st_run() { # [VAR=value...] -- [script args...]: run the case's copy of the scri
   (
     cd -- "$ST_REPO" &&
       exec env CUT_SELF_TEST_STUBS=1 CUT_ROOT="$ST_CASE/cut" TMPDIR="$ST_CASE/tmp" \
+        PATH="$ST_CASE/caller/opam/cut/bin:$PATH" \
         CUT_STUB_RUN_TEST="$ST_ROOT/stubs/run-test" CUT_STUB_ULIMIT="$ST_ROOT/stubs/ulimit" \
         CUT_STUB_UNAME_R="$ST_ROOT/stubs/uname" CUT_STUB_COMPILE="$ST_ROOT/stubs/compile" \
         CUT_STUB_CHECK="$ST_ROOT/stubs/check" ST_CALLS="$ST_CASE/calls" ST_OUTCOME=pass ST_SOFT= \
-        ST_DEFAULT_SOFT=8192 ST_HARD=unlimited ST_UNAME=generic "${envs[@]}" \
+        ST_DEFAULT_SOFT=8192 ST_HARD=unlimited ST_UNAME=generic ST_FX="$ST_CASE/fx" "${envs[@]}" \
         bash "$ST_REPO/$SCRIPT_REL" "$@"
   ) >"$ST_CASE/out" 2>"$ST_CASE/err" </dev/null
   ST_RC=$?
@@ -314,7 +374,7 @@ st_row() { # <id>: print the row's verdict
 }
 
 st_rows() {
-  local head v dangling inv=$INVENTORY plain work parent fix
+  local head v dangling inv=$INVENTORY plain work parent fix c
   local at_a="src/ of $ST_BASE, the parent of the first fix commit $ST_FIX_A"
   local stack1='STACK soft=8192 hard=unlimited'
 
@@ -371,25 +431,33 @@ st_rows() {
   st_not_ran
   st_row S2
 
-  # S3: a fixed row naming no commit, a commit that is not an ancestor of HEAD, or a commit that does not exist
-  # fails the checks and names the row; no test runs.
+  # S3: a fixed row naming no commit ("-", or a commits field of blanks, which reads as an empty field), a commit
+  # that is not a full hash, a commit that is not an ancestor of HEAD, or a commit that does not exist fails the
+  # checks and names the inventory, the row and the cause; no test runs. --revert-fix of that row fails the same
+  # way. (S0 is the control: the template's fixed rows pass.)
   dangling=$(git -C "$ST_ROOT/template" commit-tree -m dangling "$ST_BASE^{tree}")
-  for v in none dangling unknown; do
+  for v in none blank tab-blank malformed dangling unknown blank-revert; do
     st_new "S3/$v"
     case $v in
-      none) st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv" ;;
-      dangling) st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$dangling")" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv" ;;
-      unknown) st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed 0123456789abcdef0123456789abcdef01234567)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv" ;;
+      none) c=- ;;
+      blank | blank-revert) c='   ' ;;
+      tab-blank) c=$' \v ' ;;
+      malformed) c=${ST_FIX_A:0:8} ;;
+      dangling) c=$dangling ;;
+      unknown) c=0123456789abcdef0123456789abcdef01234567 ;;
     esac
+    st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$c")" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
     st_commit "row a: $v"
-    st_run --
+    if [[ $v == blank-revert ]]; then st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v; else st_run --; fi
     st_rc nonzero
-    st_has "$inv line 2 (tests/lean434_a.v)"
     case $v in
-      none) st_has 'status fixed, but the row names no commit' ;;
-      dangling) st_has "commit $dangling is not an ancestor of HEAD" ;;
-      unknown) st_has 'commit 0123456789abcdef0123456789abcdef01234567 is not an ancestor of HEAD' ;;
+      none) st_has "$inv line 2 (tests/lean434_a.v): status fixed, but the row names no commit" ;;
+      blank | tab-blank | blank-revert) st_has "$inv line 2 cannot be read (empty commits field): tests/lean434_a.v\\tF1\\tAlpha.one" ;;
+      malformed) st_has "$inv line 2 (tests/lean434_a.v): '${ST_FIX_A:0:8}' is not a full commit hash" ;;
+      dangling) st_has "$inv line 2 (tests/lean434_a.v): commit $dangling is not an ancestor of HEAD" ;;
+      unknown) st_has "$inv line 2 (tests/lean434_a.v): commit 0123456789abcdef0123456789abcdef01234567 is not an ancestor of HEAD" ;;
     esac
+    st_lacks 'R5 NEGATIVE MET'
     st_not_ran
   done
   st_row S3
@@ -512,6 +580,8 @@ st_rows() {
   [[ $(st_call_field 4) == 'src at base' && $(st_call_field 6) == 'fix_*.ml' ]] ||
     st_bad "src/ is not the parent's of fix a: $(st_call_field 4), $(st_call_field 6)"
   [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
+  [[ $(st_call_field 7) == "$ST_CASE/cut/opam" && $(st_call_field 8) == cut ]] ||
+    st_bad "the test did not run on the cut's switch: OPAMROOT $(st_call_field 7), OPAMSWITCH $(st_call_field 8)"
   st_tree_untouched "$head"
   st_new S7b/own
   st_run ST_OUTCOME=fail:Beta.own -- --revert-fix lean434_b
@@ -584,6 +654,205 @@ st_rows() {
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   [[ $(st_call_field 6) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6)"
   st_row S7g
+
+  # S7h: a test whose failure before its fix is a missing binding after a parser refusal says so in r5 lines
+  # (r5_lines), and its first entry error (the intentional refusal of line 132) does not decide: the Rocq error at
+  # the command right after its "r5 error" line must hold that line's text and the row's entry, and the test's own
+  # Redirect log must hold each "r5 log" line and no "r5 log lacks" line. Built from the parent's src/, the test
+  # failing that way passes (and names the parent). Each other result fails, with its own line: the test passing
+  # (the head's result); the intentional refusal followed by an unrelated error; the error of the prefix test's
+  # file at the same line; the error at another line of the test; the successor's refusal in another Redirect's
+  # log; a row naming the refused line (the symptom) instead of the binding; and, for the prefix test, the log of
+  # a full import, which announces the entry of line 131.
+  local p_err='File "./case_p.v", line 6, characters 6-11:\nError: The reference PName was not found in the current\nenvironment.\n\nmake[2]: *** [Makefile.rocq:815: case_p.vo] Error 1\n'
+  local p_full='line 131: P.fast\nSkipping: Error at line 132 (for line-132): {"in":32}\nNDJSON parse error at line 132: bad name record\nSkipping: Error at line 133 (for line-133): {"in":33}\nNDJSON parse error at line 133: name id 33 is not the next expected id 32\nDone!\n'
+  local p_132='line 131: P.fast\nSkipping: Error at line 132 (for line-132): {"in":32}\nNDJSON parse error at line 132: bad name record\nDone!\n'
+  local p_not='R5 negative not met: the test fails, but not as the r5 lines of tests/case_p.v say'
+  for v in met pass refusal-then-unrelated unrelated-error other-file other-line other-redirect symptom-row; do
+    st_new "S7h/$v"
+    if [[ $v == symptom-row ]]; then c='line-133'; else c=PName; fi
+    st_r5_test case_p "$c" <<'EOF'
+From LeanImport Require Import Lean.
+Redirect "case_p.log" Lean Import "../dumps/small.ndjson".
+(* r5 log: "case_p.log" line 131: P.fast *)
+(* r5 log: "case_p.log" NDJSON parse error at line 133: name id 33 is not the next expected id 32 *)
+(* r5 error: The reference PName was not found *)
+Check PName.
+EOF
+    st_fx run.log "$p_err"
+    st_fx case_p.log.out "$p_full"
+    case $v in
+      refusal-then-unrelated)
+        st_fx case_p.log.out "$p_132"
+        st_fx run.log 'File "./case_p.v", line 6, characters 0-11:\nError: Assertion failed: an unrelated check.\n\n'
+        ;;
+      unrelated-error) st_fx run.log 'File "./case_p.v", line 6, characters 0-11:\nError: Assertion failed: an unrelated check.\n\n' ;;
+      other-file) st_fx run.log "${p_err/case_p.v/case_pp.v}" ;;
+      other-line) st_fx run.log "${p_err/line 6,/line 2,}" ;;
+      other-redirect) st_fx case_p.log.out "$p_132" && st_fx case_p_other.log.out "$p_full" ;;
+    esac
+    if [[ $v == pass ]]; then st_run -- --revert-fix tests/case_p.v; else st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_p.v; fi
+    case $v in
+      met)
+        st_rc zero
+        st_line "R5 NEGATIVE MET: tests/case_p.v at PName (src/ of $ST_BASE)"
+        ;;
+      pass)
+        st_rc nonzero
+        st_has "R5 negative not met: the test passes ($at_a)"
+        ;;
+      *)
+        st_rc nonzero
+        st_has "$p_not"
+        st_has "its row names $c ($at_a)"
+        ;;
+    esac
+    case $v in
+      refusal-then-unrelated)
+        st_has "case_p.log.out has no line 'NDJSON parse error at line 133: name id 33 is not the next expected id 32'"
+        st_has "the Rocq error at tests/case_p.v line 6 does not hold 'The reference PName was not found'"
+        ;;
+      unrelated-error) st_has "the Rocq error at tests/case_p.v line 6 does not hold 'The reference PName was not found'" ;;
+      other-file | other-line) st_has 'no Rocq error at tests/case_p.v line 6' ;;
+      other-redirect) st_has "case_p.log.out has no line 'NDJSON parse error at line 133" ;;
+      symptom-row) st_has 'the Rocq error at tests/case_p.v line 6 does not name line-133' ;;
+    esac
+    if [[ $v != met ]]; then st_lacks 'R5 NEGATIVE MET'; fi
+    st_ran one
+  done
+  for v in prefix-met full-import; do
+    st_new "S7h/$v"
+    st_r5_test case_pp PName <<'EOF'
+Redirect "case_pp.log" Lean Import "../dumps/small.ndjson" 144.
+(* r5 log lacks: "case_pp.log" line 131: P.fast *)
+(* r5 log: "case_pp.log" NDJSON parse error at line 133: name id 33 is not the next expected id 32 *)
+
+(* r5 error: The reference PName was not found *)
+Check PName.
+EOF
+    st_fx run.log "${p_err//case_p/case_pp}"
+    if [[ $v == prefix-met ]]; then st_fx case_pp.log.out "${p_full#line 131: P.fast\\n}"; else st_fx case_pp.log.out "$p_full"; fi
+    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_pp.v
+    if [[ $v == prefix-met ]]; then
+      st_rc zero
+      st_line "R5 NEGATIVE MET: tests/case_pp.v at PName (src/ of $ST_BASE)"
+    else
+      st_rc nonzero
+      st_has "case_pp.log.out has the line 'line 131: P.fast'"
+      st_lacks 'R5 NEGATIVE MET'
+    fi
+  done
+  st_row S7h
+
+  # S7i: a test whose failure before its fix is the kernel's refusal of an entry at one of two imports says so with
+  # an "r5 error" line right above that import's Redirect, whose text is the diagnostic that only that import
+  # gives (here the unqualified constructor). It passes when that import's Rocq error holds the text and the row's
+  # entry; the same entry refused at the first import, the diagnostic of the other test (the constructor qualified
+  # by the library it loaded), the entry's refusal with another constructor (the common part alone), and the
+  # diagnostic naming another entry each fail.
+  local s_err='File "./case_s.v", line 3, characters 0-60:\nError:\nError at line 214 (for S.pair_eq): {"thm":1}\nThe term "eq_refl S_pair" has type "S_pair = S_pair"\nwhile it is expected to have type\n "S_pair =\n  List_cons String\n    (String_mk\n       (List_nil Char))".\n\nmake[2]: *** [Makefile.rocq:815: case_s.vo] Error 1\n'
+  for v in met first-import qualified other-constructor other-entry; do
+    st_new "S7i/$v"
+    st_r5_test case_s S.pair_eq <<'EOF'
+Redirect "case_s_old.log" Lean Import "../dumps/small.ndjson".
+(* r5 error: S_pair = List_cons String (String_mk *)
+Redirect "case_s_new.log" Lean Import "../dumps/small.ndjson".
+EOF
+    case $v in
+      met) st_fx run.log "$s_err" ;;
+      first-import) st_fx run.log "${s_err/line 3,/line 1,}" ;;
+      qualified) st_fx run.log "${s_err/List_cons String\\n    (String_mk/saved.List_cons saved.String\\n    (saved.String_mk}" ;;
+      other-constructor) st_fx run.log "${s_err/String_mk/String_ofList}" ;;
+      other-entry) st_fx run.log "${s_err/S.pair_eq/S.other_eq}" ;;
+    esac
+    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_s.v
+    if [[ $v == met ]]; then
+      st_rc zero
+      st_line "R5 NEGATIVE MET: tests/case_s.v at S.pair_eq (src/ of $ST_BASE)"
+    else
+      st_rc nonzero
+      st_has 'R5 negative not met: the test fails, but not as the r5 lines of tests/case_s.v say'
+      st_lacks 'R5 NEGATIVE MET'
+    fi
+    case $v in
+      first-import) st_has 'no Rocq error at tests/case_s.v line 3' ;;
+      qualified | other-constructor) st_has "the Rocq error at tests/case_s.v line 3 does not hold 'S_pair = List_cons String (String_mk'" ;;
+      other-entry) st_has 'the Rocq error at tests/case_s.v line 3 does not name S.pair_eq' ;;
+    esac
+  done
+  st_row S7i
+
+  # S7j: a test whose failure before its fix is an assertion of its .expect file after a successful compile says so
+  # with an "r5 assertion" line: the run's log must hold that assertion's failure on the named Redirect's log
+  # ("unexpected '<text>'"), the log must hold a line starting with the text, and the text must name the row's
+  # entry. Another assertion's failure, the failure on another Redirect's log, the failure with no such line in
+  # the log (or no log), and a failed run with no assertion failure each fail.
+  local u_run="EXPECT FAIL: tests/case_u.expect:7: case_u.log.out: unexpected 'Skipping duplicate declaration for UInt32'\nEXPECT FAIL: tests/case_u.expect:8: case_u.log.out: missing 'Skipping scheme'\n"
+  local u_log='Fin is predeclared\nSkipping duplicate declaration for UInt32 (already declared earlier in the export).\nline 20: RLIP.x\nDone!\n'
+  for v in met other-assertion other-redirect no-log-line no-log no-assertion; do
+    st_new "S7j/$v"
+    st_r5_test case_u UInt32 <<'EOF'
+(* r5 assertion: "case_u.log" Skipping duplicate declaration for UInt32 *)
+Redirect "case_u.log" Lean Import "../dumps/small.ndjson".
+EOF
+    st_fx run.log "$u_run"
+    st_fx case_u.log.out "$u_log"
+    case $v in
+      other-assertion) st_fx run.log "EXPECT FAIL: tests/case_u.expect:8: case_u.log.out: missing 'Skipping scheme'\n" ;;
+      other-redirect) st_fx run.log "${u_run//case_u.log.out/case_u2.log.out}" ;;
+      no-log-line) st_fx case_u.log.out 'Fin is predeclared\nline 20: RLIP.x\nDone!\n' ;;
+      no-log) rm -f -- "$ST_CASE/fx/case_u.log.out" ;;
+      no-assertion) st_fx run.log 'make: *** [Makefile:9: submake] Error 2\n' ;;
+    esac
+    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_u.v
+    if [[ $v == met ]]; then
+      st_rc zero
+      st_line "R5 NEGATIVE MET: tests/case_u.v at UInt32 (src/ of $ST_BASE)"
+    else
+      st_rc nonzero
+      st_has 'R5 negative not met: the test fails, but not as the r5 lines of tests/case_u.v say'
+      st_lacks 'R5 NEGATIVE MET'
+    fi
+    case $v in
+      other-assertion | other-redirect | no-assertion)
+        st_has "the run's log has no line \"EXPECT FAIL: tests/case_u.expect:<n>: case_u.log.out: unexpected 'Skipping duplicate declaration for UInt32'\""
+        ;;
+      no-log-line) st_has "case_u.log.out has no line starting 'Skipping duplicate declaration for UInt32'" ;;
+      no-log) st_has 'case_u.log.out does not exist' ;;
+    esac
+  done
+  st_row S7j
+
+  # S7k: r5 lines that cannot be read fail --revert-fix before the test runs: an unknown kind, an "r5 error" line
+  # with no command right after it, a line naming a Redirect the test does not have, two error lines, a test with
+  # only "r5 log" lines, and r5 lines on an option row.
+  local m_lines
+  for v in kind no-command no-redirect two-verdicts log-only option-row; do
+    st_new "S7k/$v"
+    case $v in
+      kind) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 maybe: "case_m.log" x *)' '(* r5 error: The reference M was not found *)' 'Check M.') ;;
+      no-command) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 error: The reference M was not found *)' '(* a comment *)' 'Check M.') ;;
+      no-redirect) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 log: "nosuch.log" x *)' '(* r5 error: The reference M was not found *)' 'Check M.') ;;
+      two-verdicts) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 error: The reference M was not found *)' 'Check M.' '(* r5 error: The reference N was not found *)' 'Check N.') ;;
+      log-only) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 log: "case_m.log" x *)') ;;
+      option-row) m_lines=$(printf '%s\n' 'Redirect "case_m.log" Lean Import "x".' '(* r5 error: The reference M was not found *)' 'Check M.') ;;
+    esac
+    if [[ $v == option-row ]]; then c='option:Lean Entry Timeout'; else c=M; fi
+    st_r5_test case_m "$c" <<<"$m_lines"
+    st_run ST_OUTCOME=fail:M -- --revert-fix tests/case_m.v
+    st_rc nonzero
+    case $v in
+      kind) st_has 'tests/case_m.v line 2: an r5 line of no known kind: (* r5 maybe: "case_m.log" x *)' ;;
+      no-command) st_has 'tests/case_m.v line 2: no command right after this r5 error line' ;;
+      no-redirect) st_has 'tests/case_m.v line 2: no Redirect "nosuch.log" in the test' ;;
+      two-verdicts) st_has 'tests/case_m.v has 2 r5 error or assertion lines; it needs exactly one' ;;
+      log-only) st_has 'tests/case_m.v has 0 r5 error or assertion lines; it needs exactly one' ;;
+      option-row) st_has 'an option row is decided at its Set line, but tests/case_m.v has r5 lines' ;;
+    esac
+    st_lacks 'R5 NEGATIVE MET'
+    st_not_ran
+  done
+  st_row S7k
 
   # S8: --revert-fix of a test with no row fails; each mode with no argument or one short prints the usage and
   # exits 2; no test runs.
@@ -953,41 +1222,79 @@ st_rows() {
   st_not_ran
   st_row S23
 
-  # S24: --source-at builds from the commit's src/ with the head's tests/, reports the Rocq commit (or
-  # unknown; S9 and S9b do not apply), the test's result and the planted entries it accepted; exit = test's.
+  # S24: --source-at builds from the commit's src/ with the head's tests/, with the toolchain of the caller's PATH:
+  # it reports the commit in the rocq-commit file of the root that holds the rocq on PATH (<root>/opam/<switch>/bin,
+  # the layout build_switch makes), or unknown when that root has none or rocq is not in such a layout, never the
+  # commit of $CUT_ROOT, and it neither builds nor selects the switch there (S9 and S9b do not apply); the test
+  # runs with no opam root or switch selected. It prints the test's result and each planted entry that its own
+  # case accepted: the case of a planted line is the first Redirect after it, and an entry is accepted there when
+  # that Redirect's log announces it ("line N: <entry>"), refuses it nowhere, and says "Done!" after it. A
+  # refused entry, the same name accepted in another case only, a longer name, a name in no Redirect's log, an
+  # announced entry with no "Done!" after it and a case Rocq never reached are not accepted. Exit = test's.
+  local caller_rocq left
   st_new S24/pass
   head=$(git -C "$ST_REPO" rev-parse HEAD)
+  caller_rocq=$(readlink -f -- "$ST_CASE/caller/opam/cut/bin/rocq")
   st_run ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
   st_rc 0
-  st_line "ROCQ COMMIT $CUT_ROCQ_COMMIT"
+  st_line "ROCQ EXECUTABLE $caller_rocq"
+  st_line "ROCQ COMMIT $ST_CALLER_SHA"
+  st_lacks "ROCQ COMMIT $CUT_ROCQ_COMMIT"
   st_line 'SOURCE-AT TEST pass'
-  st_line 'SOURCE-AT ACCEPTED Planted.ok'
-  st_line 'SOURCE-AT ACCEPTED Planted.log'
+  st_line 'SOURCE-AT ACCEPTED Planted.ok in planted_ok.log'
+  st_line 'SOURCE-AT ACCEPTED Planted.same in planted_same_b.log'
   [[ $(grep -c '^SOURCE-AT ACCEPTED ' -- "$ST_CASE/out") == 2 ]] || st_bad "not exactly two accepted entries"
+  st_line 'SOURCE-AT CASE Planted.err in planted_err.log: refused'
+  st_line 'SOURCE-AT CASE Planted.same in planted_same_a.log: refused'
+  st_line 'SOURCE-AT CASE Planted.pre in planted_pre.log: unseen'
+  st_line 'SOURCE-AT CASE Planted.cut in planted_cut.log: unfinished'
+  st_line 'SOURCE-AT CASE Planted.unstarted in planted_unstarted.log: unreached'
+  st_line 'SOURCE-AT CASE Planted.cross in planted_cross.log: unreached'
   [[ $(st_call_field 4) == 'src at base' ]] || st_bad "src/ is not the commit's: $(st_call_field 4)"
   [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
+  [[ $(st_call_field 7) == '<unset>' && $(st_call_field 8) == '<unset>' ]] ||
+    st_bad "the test ran with an opam root or switch selected: $(st_call_field 7), $(st_call_field 8)"
   st_tree_untouched "$head"
   st_new S24/fail
   st_run ST_OUTCOME=source:2 -- --source-at "$ST_BASE" tests/planted_sa.v
   st_rc 2
   st_line 'SOURCE-AT TEST fail'
-  st_line 'SOURCE-AT ACCEPTED Planted.ok'
-  st_new S24/other-rocq
+  st_line 'SOURCE-AT ACCEPTED Planted.ok in planted_ok.log'
+  st_line 'SOURCE-AT ACCEPTED Planted.same in planted_same_b.log'
+  [[ $(grep -c '^SOURCE-AT ACCEPTED ' -- "$ST_CASE/out") == 2 ]] || st_bad "not exactly two accepted entries"
+  # $CUT_ROOT holds another commit and no switch: the caller's commit is reported, and nothing is built there.
+  st_new S24/unrelated-cut-root
   printf '%s\n' "$ST_OTHER_SHA" >"$ST_CASE/cut/rocq-commit"
+  rm -rf -- "$ST_CASE/cut/opam"
   st_run ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
   st_rc 0
-  st_line "ROCQ COMMIT $ST_OTHER_SHA"
+  st_line "ROCQ COMMIT $ST_CALLER_SHA"
+  st_lacks "$ST_OTHER_SHA"
   st_line 'SOURCE-AT TEST pass'
+  left=$(find "$ST_CASE/cut" -mindepth 1 -printf '%P\n')
+  [[ $left == rocq-commit ]] || st_bad "\$CUT_ROOT changed: ${left//$'\n'/ }"
+  # The caller's root has no rocq-commit: unknown, although $CUT_ROOT has one.
   st_new S24/unknown-rocq
-  rm -f -- "$ST_CASE/cut/rocq-commit"
+  rm -f -- "$ST_CASE/caller/rocq-commit"
   st_run ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
   st_rc 0
   st_line 'ROCQ COMMIT unknown'
+  st_lacks "ROCQ COMMIT $CUT_ROCQ_COMMIT"
   st_line 'SOURCE-AT TEST pass'
+  # The rocq on PATH is not in an opam root's switch: a rocq-commit file beside its bin/ is not its metadata.
+  st_new S24/other-layout
+  if ! { mkdir -p -- "$ST_CASE/flat/bin" && printf '#!/usr/bin/env bash\nexit 0\n' >"$ST_CASE/flat/bin/rocq" &&
+    chmod +x -- "$ST_CASE/flat/bin/rocq" && printf '%s\n' "$ST_OTHER_SHA" >"$ST_CASE/flat/rocq-commit"; }; then
+    st_bad "cannot set up the flat toolchain"
+  fi
+  st_run "PATH=$ST_CASE/flat/bin:$PATH" ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
+  st_rc 0
+  st_line 'ROCQ COMMIT unknown'
+  st_lacks "$ST_OTHER_SHA"
   st_row S24
 
-  # S24b: --source-at of a commit that is not found, or of a test not in the head's tests/, fails with status 3;
-  # no test runs.
+  # S24b: --source-at of a commit that is not found, of a test not in the head's tests/, of a test with a planted
+  # line that no Redirect follows, or with no rocq on PATH, fails with status 3; no test runs.
   for v in 0123456789abcdef0123456789abcdef01234567 no-such-ref; do
     st_new "S24b/$v"
     st_run -- --source-at "$v" planted_sa
@@ -1000,14 +1307,30 @@ st_rows() {
   st_rc 3
   st_has "SOURCE-AT ERROR: test tests/nosuch.v is not in the head's tests/"
   st_not_ran
+  st_new S24b/no-case
+  printf '(* planted: Planted.orphan *)\n' >>"$ST_REPO/tests/planted_sa.v"
+  st_commit "a planted line with no Redirect after it"
+  st_run ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
+  st_rc 3
+  st_has 'SOURCE-AT ERROR: tests/planted_sa.v line 18: no Redirect after the planted line of Planted.orphan'
+  st_lacks 'SOURCE-AT TEST'
+  st_not_ran
+  st_new S24b/no-rocq
+  st_run "PATH=$(st_norocq_path)" ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
+  st_rc 3
+  st_has 'SOURCE-AT ERROR: no rocq on PATH'
+  st_lacks 'SOURCE-AT TEST'
+  st_not_ran
   st_row S24b
 
-  # S24c: --source-at exits 4, and reports the build failure, when the plugin build fails at that commit.
+  # S24c: --source-at exits 4, and reports the build failure, when the plugin build fails at that commit: no test
+  # result and no accepted entry.
   st_new S24c
   st_run ST_OUTCOME=build-fail -- --source-at "$ST_BASE" planted_sa
   st_rc 4
   st_has 'SOURCE-AT BUILD FAILED: Error: Unbound value planted_build_error'
   st_lacks 'SOURCE-AT TEST'
+  st_lacks 'SOURCE-AT ACCEPTED'
   st_row S24c
 }
 
