@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+uint32_transport_ofnatlt.log.out	+	line 1062: UInt32.ofNatLT: 1 argument(s) transported (UInt32_ofNatLT__nat_eq_1)
+uint32_transport_ofnatlt.log.out	+	line 1185: UInt32.toNat_ofNatLT: 1 argument(s) transported (UInt32_ofNatLT__nat_eq_1)
+uint32_transport_ofnatlt.log.out	-	Error at line
+uint32_transport_ofnatlt.log.out	+	Done!

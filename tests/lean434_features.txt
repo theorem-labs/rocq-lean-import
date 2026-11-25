@@ -2,10 +2,10 @@
 tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
 tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
 tests/lean434_char.v	char-ofnataux	BitVec.ofNatLT	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
-tests/lean434_isvalidchar.v	F6	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
-tests/lean434_strings.v	string-literals	Nat.pow_pos._f	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c 17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
+tests/lean434_isvalidchar.v	F6	_private.Init.Prelude0.isValidChar_UInt32.match_1_1	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c
+tests/lean434_strings.v	string-literals	Nat.pow_pos._f	RLI434.astral	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c 17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
 tests/lean434_string_length.v	string-length nat-linear-reflection	Nat.pow_pos._f	RLI434.ab_length	listed	-
-tests/lean434_nested.v	autoParam nested-inductive	Nat.pow_pos._f	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
+tests/lean434_nested.v	char-ofnataux-autoparam-closure	Nat.pow_pos._f	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
 tests/lean434_linear.v	F5	Nat.«Internal».Linear.ExprCnstr.denote_toNormPoly	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba
 tests/lean434_bigint.v	int-literals record-rfl	RLI434.big_fields	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba
 tests/lean434_bigint_decide.v	decide omega proof-auxiliaries	RLI434.big_fields	RLI434.boundedVal._proof_1	listed	-
@@ -23,3 +23,5 @@ tests/parse_text_numbering.v	text-numbered-sequence-check	RLITextAfterGaps	-	fix
 tests/parse_wrong_payload.v	ndjson-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
 tests/parse_wrong_payload_prefix.v	ndjson-prefix-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
 tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
+tests/uint32_transport_ofnatlt.v	uint32-ofnatlt-transport	BitVec.ofNatLT	UInt32.ofNatLT	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1
+tests/uint32_transport_shiftleft.v	uint32-shiftleft-transport	Nat.pow_pos._f	UInt32.toNat_shiftLeft	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1

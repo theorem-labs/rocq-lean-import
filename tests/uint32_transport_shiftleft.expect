@@ -1,0 +1,4 @@
+# Log file, polarity, literal substring (tab-separated).
+uint32_transport_shiftleft.log.out	+	line 12253: UInt32.toNat_shiftLeft: 2 argument(s) transported (UInt32_toNat_shiftLeft__nat_eq_1, UInt32_toNat_shiftLeft__nat_eq_2)
+uint32_transport_shiftleft.log.out	-	Error at line
+uint32_transport_shiftleft.log.out	+	Done!

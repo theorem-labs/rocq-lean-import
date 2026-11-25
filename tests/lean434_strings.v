@@ -11,6 +11,15 @@ From LeanImport Require Import Lean.
 Set Lean Error Mode "Skip".
 Set Warnings "+unknown-option".
 Set Lean Entry Timeout 30.
+(* The inventory row names two entries. A Lean 4.34 String holds a ByteArray of UInt8, whose closure holds
+   BitVec, so the literal cannot be the first entry refused: without the fix 50081965 the first is
+   Nat.pow_pos._f (export line 9131). The row's own entry, RLI434.astral, is decided by the r5 line below
+   (ci/build-9.2-cut.sh --revert-fix): on the src/ of c6c1c9d4, the parent of 50081965, the import skips
+   RLI434.astral with "missing String" (it refused the String entry, export line 9552, with "missing
+   ByteArray.IsValidUTF8"), and tests/lean434_strings.expect refuses that line after the compile: *)
+(* r5 assertion: "lean434_strings.log" Skipping: Error at line 343136 (for RLI434.astral) *)
 Redirect "lean434_strings.log" Lean Import "../dumps/lean434/strings.ndjson".
 
-Check RLI434_astral.
+(* RLI434.astral is declared: tests/lean434_strings.expect reads this log. Locate does not fail when no constant
+   has the name, so the compile ends normally and the .expect is checked also when the import skipped it. *)
+Redirect "lean434_strings_locate" Locate RLI434_astral.

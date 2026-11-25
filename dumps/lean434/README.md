@@ -38,6 +38,9 @@ select the legacy path.
 | `bitvec_only.ndjson` | `lean4export Init -- BitVec` | `6033908788afecb40929ff381d0168ff72490107be0fa2324f22b3b041f1350a` |
 | `predeclared.ndjson` | `lean4export Init -- Char UInt32.size Nat.isValidChar Nat.pow Or And ULift` | `656869c1a35b48fc2fdcc0a16e7040020c59a3f3e0d6aa318ee52b39cfd82307` |
 | `uint32_transport.ndjson` | `lean4export Init -- UInt32.ofNatLT UInt32.toNat_shiftLeft UInt32.toNat_ofNatLT` | `1e148f466807605cd3f6a4dffb3a3784e148056a81f46a804f65ba0d9e6ab53e` |
+| `isvalidchar.ndjson` | `lean4export Init -- _private.Init.Prelude.0.isValidChar_UInt32` | `9844ef3c805e7dc7386b638819d599bf70aa82d97e3aa77cb0cd98e6c54401a3` |
+| `uint32_ofnatlt.ndjson` | `lean4export Init -- UInt32.ofNatLT UInt32.toNat_ofNatLT` | `f208be058cf6f1242a33d0baba23a13a7a161f6f8cf5874c1fcf7982e706c6cb` |
+| `uint32_shiftleft.ndjson` | `lean4export Init -- UInt32.toNat_shiftLeft` | `d082b946fcdf9dd642f67a70dee900eb48dc01fef8a0e9537f415b8c6ed2c941` |
 | `src/RLI434AutoParam.lean` | Lean source for `autoparam.ndjson`. | `89c539317c51db6115c38ff997cc826a68989dfec1a15e4de4e3e5c62f62b927` |
 | `src/RLI434BigInt.lean` | Lean source for `bigint.ndjson`. | `c5e679bfcfb6bd2bd37eed68d1535d885b53d0ec7724a05c4c1d6212093985c8` |
 | `src/RLI434Strings.lean` | Lean source for the ZIP member `strings.ndjson`. | `1ede0487aaf9edc69d6c7b1214adb1505fc7d51a108bbe8f5997f0107c4f053d` |

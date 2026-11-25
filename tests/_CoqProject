@@ -38,6 +38,8 @@ lean434_bigint.v
 lean434_bigint_decide.v
 nat_transport.v
 nat_transport_budget.v
+uint32_transport_ofnatlt.v
+uint32_transport_shiftleft.v
 entry_timeout.v
 entry_timeout_parse.v
 parse_untagged.v

@@ -1,10 +1,15 @@
 From LeanImport Require Import Lean.
 
-(* Lean's proof that a valid code point is below UInt32.size (isValidChar_UInt32 and its match), checked
-   against Lean's own Nat.isValidChar and UInt32.size on the new path: the entries of dumps/lean434/char.ndjson
-   up to export line 5096 (the range 1 5097 reads it). Char.ofNatAux, after it, is tests/lean434_char.v. *)
+(* F6: Lean's proof that a valid code point is below UInt32.size (_private.Init.Prelude.0.isValidChar_UInt32)
+   and its matcher, checked against Lean's own Nat.isValidChar and UInt32.size on the new path.
+   dumps/lean434/isvalidchar.ndjson is exported from that theorem alone. Its closure has no BitVec, no UInt32
+   type and no Char entry (UInt32.size, the Nat 4294967296, is its only UInt32 name), so without the fix
+   50081965 the first entry refused is the matcher (export line 563, Stack overflow.), on the base source as on
+   the src/ of its parent c6c1c9d4 (ci/build-9.2-cut.sh --revert-fix). The importer appends a numeric name
+   component to the one before it, so the log names it _private.Init.Prelude0.isValidChar_UInt32.match_1_1.
+   Char.ofNatAux, which needs this theorem, is tests/lean434_char.v. *)
 Set Lean Error Mode "Fail".
-Lean Import "../dumps/lean434/char.ndjson" 1 5097.
+Lean Import "../dumps/lean434/isvalidchar.ndjson".
 
 Check _private_Init_Prelude0_isValidChar_UInt32_match_1_1.
 Check _private_Init_Prelude0_isValidChar_UInt32.
