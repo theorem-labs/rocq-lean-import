@@ -1,0 +1,29 @@
+# Log file, polarity, literal substring (tab-separated).
+# Lines 1-143 are read by the prefix reader: no declaration of timeout.ndjson's is announced.
+parse_untagged_prefix.log.out	-	line 131: RLI434T.fast
+# The name case: line 132 has only "in":32, line 133 is name 33, line 134 uses name 32.
+parse_untagged_prefix.log.out	+	Skipping: Error at line 132 (for line-132)
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 132: bad name record
+parse_untagged_prefix.log.out	-	Error at line 133 (
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 134: uses name id 32 of a refused line
+# The level case: line 135 has only "il":5, line 136 is level 6, line 137 uses level 5.
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 135: bad level record
+parse_untagged_prefix.log.out	-	Error at line 136 (
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 137: uses level id 5 of a refused line
+# The expression case: line 138 has only "ie":90, line 139 is expression 91, line 140 uses expression 90.
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 138: bad expression record
+parse_untagged_prefix.log.out	-	Error at line 139 (
+parse_untagged_prefix.log.out	+	NDJSON parse error at line 140: uses expression id 90 of a refused line
+# The records after the three cases, and the axioms, which the normal reader reads.
+parse_untagged_prefix.log.out	-	Error at line 141 (
+parse_untagged_prefix.log.out	-	Error at line 142 (
+parse_untagged_prefix.log.out	-	Error at line 143 (
+parse_untagged_prefix.log.out	+	line 144: RLIUntaggedName
+parse_untagged_prefix.log.out	-	Error at line 144 (
+parse_untagged_prefix.log.out	+	line 145: RLIUntaggedLevel
+parse_untagged_prefix.log.out	-	Error at line 145 (
+parse_untagged_prefix.log.out	+	line 146: RLIUntaggedExpr
+parse_untagged_prefix.log.out	-	Error at line 146 (
+parse_untagged_prefix.log.out	-	is not the next expected id
+parse_untagged_prefix.log.out	+	Done!
+parse_untagged_prefix.log.out	+	Skipped 6

@@ -27,10 +27,14 @@ let small_literal = Z.of_int 8192
    costs its full number of steps again: the kernel checks the expanded proof tree. *)
 let budget = 1_000_000
 
-(* The deepest nesting of Nat terms the finder follows. *)
+(* The deepest nesting the pass follows: the Nat terms the finder computes, and the terms its scans and walks
+   go through, counted together from the entry's value or type down. Deeper, the pass stops ([Out_of_budget])
+   before its recursion can exhaust the stack. *)
 let max_depth = 10_000
 
 exception Out_of_budget
+
+let check_depth depth = if depth > max_depth then raise Out_of_budget
 
 (* What the pass uses from src/Lean.v and Corelib. *)
 type refs = {
@@ -321,7 +325,7 @@ let rec value st depth c =
 
 and compute st depth c =
   tick st 1;
-  if depth > max_depth then raise Out_of_budget;
+  check_depth depth;
   match nat_form st c with
   | None -> None
   | Some f ->
@@ -335,19 +339,20 @@ and compute st depth c =
       (match (value a, value b) with Some x, Some y -> row.spec.z x y | _ -> None))
 
 (* Whether [c] is a literal of the importer's form. *)
-let rec is_literal st c =
+let rec is_literal st depth c =
+  check_depth depth;
   match nat_form st c with
   | Some Zero -> true
   | Some (Succ m | Double m) ->
     tick st 1;
-    is_literal st m
+    is_literal st (depth + 1) m
   | Some (Unfold _ | Op _) | None -> false
 
 (* The literal [c] unfolds to, if it is one: the kernel converts two terms of the same literal without
    arithmetic. *)
 let rec literal_of st depth c =
-  if depth > max_depth then raise Out_of_budget;
-  if is_literal st c then Some c
+  check_depth depth;
+  if is_literal st depth c then Some c
   else
     match nat_form st c with
     | Some (Unfold b) ->
@@ -371,14 +376,14 @@ let rec certify st depth t =
     r
 
 and certify_node st depth t =
-  if depth > max_depth then raise Out_of_budget;
+  check_depth depth;
   let nt = st.refs in
   match value st depth t with
   | None -> None
   | Some v ->
     tick st 1;
     let w = n_literal nt v in
-    if Z.lt v small_literal && is_literal st t then Some (v, refl_n nt w, 1)
+    if Z.lt v small_literal && is_literal st depth t then Some (v, refl_n nt w, 1)
     else
       let sub = certify st (depth + 1) in
       let step lemma m =
@@ -409,9 +414,9 @@ and certify_node st depth t =
    cache lasts as long as the Rocq file (document) that runs the imports. *)
 let lemma_cache : ((Constr.t * Constr.t) * Constant.t) list ref = Summary.ref ~name:"lean-nat-eq-lemmas" []
 
-(* The lemma [x = y] for two closed Nat terms of equal value, generated and declared on first use. A lemma
-   the kernel refuses is logged and not used. *)
-let nat_eq_lemma st x y =
+(* The lemma [x = y] for two closed Nat terms of equal value, generated and declared on first use, at the
+   nesting [depth] of the place that needs it. A lemma the kernel refuses is logged and not used. *)
+let nat_eq_lemma st depth x y =
   match List.find_opt (fun ((x', y'), _) -> Constr.equal x x' && Constr.equal y y') !lemma_cache with
   | Some (_, c) -> Some c
   | None ->
@@ -421,7 +426,7 @@ let nat_eq_lemma st x y =
        || Result.is_error (UGraph.check_declared_universes (Global.universes ()) levels)
     then None
     else
-      match (certify st 0 x, certify st 0 y) with
+      match (certify st depth x, certify st depth y) with
       | Some (vx, cx, _), Some (vy, cy, _) when Z.equal vx vy ->
         let eq = Constr.mkIndU (nt.nt_eq, UVars.Instance.of_array ([||], [| Univ.Level.set |])) in
         let ty = app eq [| nat_type nt; x; y |] in
@@ -465,8 +470,8 @@ let is_keep = function Keep -> true | _ -> false
 
 (* The shape of the differences of [a] (the argument's type) and [d] (the expected type), and the pairs
    [(x, y)] of the holes: [x] in [a], [y] in [d], of equal value from [transport_min] on, [y] not the same
-   literal as [x]. *)
-let nat_diff st a d =
+   literal as [x]. [depth] is the nesting of the place the types come from. *)
+let nat_diff st depth a d =
   let pairs = ref [] and count = ref 0 in
   let hole x y =
     match List.find_opt (fun (_, x', y') -> Constr.equal x x' && Constr.equal y y') !pairs with
@@ -477,24 +482,26 @@ let nat_diff st a d =
       pairs := (k, x, y) :: !pairs;
       Hole k
   in
-  let nat_pair a d =
-    match (value st 0 a, value st 0 d) with
+  let nat_pair depth a d =
+    match (value st depth a, value st depth d) with
     | None, _ | _, None -> None
     | Some va, Some vd ->
       if not (Z.equal va vd) then raise Other_values
       else if Z.lt va transport_min || Constr.equal a d then Some Keep
       else
-        match (literal_of st 0 a, literal_of st 0 d) with
+        match (literal_of st depth a, literal_of st depth d) with
         | Some la, Some ld when Constr.equal la ld -> Some Keep
         | _ -> Some (hole a d)
   in
-  let rec go a d =
+  let rec go depth a d =
     tick st 1;
+    check_depth depth;
     if a == d then Keep
     else
-      match nat_pair a d with
+      match nat_pair depth a d with
       | Some s -> s
       | None ->
+        let go = go (depth + 1) in
         (match (Constr.kind a, Constr.kind d) with
         | Constr.App _, Constr.App _ ->
           let ha, aa = Constr.decompose_app a and hd, ad = Constr.decompose_app d in
@@ -521,7 +528,7 @@ let nat_diff st a d =
           if is_keep s1 then Keep else Proj_s s1
         | _ -> Keep)
   in
-  let shape = go a d in
+  let shape = go depth a d in
   let holes = Array.make !count (a, d) in
   List.iter (fun (k, x, y) -> holes.(k) <- (x, y)) !pairs;
   (shape, holes)
@@ -545,33 +552,37 @@ let rec nat_fill shape d depth hole =
 
 exception Found
 
-(* Whether [c] has a closed Nat subterm of value [transport_min] or more. *)
-let has_big_nat st c =
-  let rec scan c =
+(* Whether [c], at the nesting [depth], has a closed Nat subterm of value [transport_min] or more. *)
+let has_big_nat st depth c =
+  let rec scan depth c =
     tick st 1;
-    match value st 0 c with
+    check_depth depth;
+    match value st depth c with
     | Some v -> if Z.geq v transport_min then raise_notrace Found
-    | None -> Constr.iter scan c
+    | None -> Constr.iter (scan (depth + 1)) c
   in
   try
-    scan c;
+    scan depth c;
     false
   with Found -> true
 
-let has_beta_redex st c =
-  let rec scan c =
+let has_beta_redex st depth c =
+  let rec scan depth c =
     tick st 1;
+    check_depth depth;
     match Constr.kind c with
     | Constr.App (h, _) when Constr.isLambda h -> raise_notrace Found
-    | _ -> Constr.iter scan c
+    | _ -> Constr.iter (scan (depth + 1)) c
   in
   try
-    scan c;
+    scan depth c;
     false
   with Found -> true
 
 let on_econstr f c = EConstr.Unsafe.to_constr (f (EConstr.of_constr c))
-let beta st env c = if has_beta_redex st c then on_econstr (Reductionops.nf_beta env st.sigma) c else c
+
+let beta st env depth c =
+  if has_beta_redex st depth c then on_econstr (Reductionops.nf_beta env st.sigma) c else c
 
 let retype st env c =
   match on_econstr (Retyping.get_type_of ~lax:true env st.sigma) c with
@@ -582,17 +593,17 @@ let whd_all st env c = on_econstr (Reductionops.whd_all env st.sigma) c
 let is_irrelevant_binder na =
   match Context.binder_relevance na with Sorts.Irrelevant -> true | Sorts.Relevant | Sorts.RelevanceVar _ -> false
 
-(* [arg], whose expected type is the SProp type [dom], cast along the lemmas of its holes, or [None] when
-   its type differs from [dom] at no pair of closed Nat terms that needs one. *)
-let transport_arg st env arg dom =
-  let dom = beta st env dom in
-  if not (has_big_nat st dom) then None
+(* [arg], whose expected type is the SProp type [dom], at the nesting [depth], cast along the lemmas of its
+   holes, or [None] when its type differs from [dom] at no pair of closed Nat terms that needs one. *)
+let transport_arg st env depth arg dom =
+  let dom = beta st env depth dom in
+  if not (has_big_nat st depth dom) then None
   else
-    match Option.map (fun ty -> nat_diff st (beta st env ty) dom) (retype st env arg) with
+    match Option.map (fun ty -> nat_diff st depth (beta st env depth ty) dom) (retype st env arg) with
     | exception Other_values -> None
     | None | Some (_, [||]) -> None
     | Some (shape, pairs) ->
-      let lemmas = Array.map (fun (x, y) -> nat_eq_lemma st x y) pairs in
+      let lemmas = Array.map (fun (x, y) -> nat_eq_lemma st depth x y) pairs in
       if Array.exists Option.is_empty lemmas then None
       else begin
         let nt = st.refs in
@@ -615,8 +626,8 @@ let transport_arg st env arg dom =
         Some !p
       end
 
-(* [args], the arguments of [f], each SProp argument transported where it needs it. *)
-let transport_args st env f args =
+(* [args], the arguments of [f] at the nesting [depth], each SProp argument transported where it needs it. *)
+let transport_args st env depth f args =
   let n = Array.length args in
   let out = ref args in
   let set k a =
@@ -629,7 +640,8 @@ let transport_args st env f args =
     if k < n then
       match Constr.kind ty with
       | Constr.Prod (na, dom, codom) ->
-        if is_irrelevant_binder na then Option.iter (set k) (transport_arg st env !out.(k) (Vars.substl subst dom));
+        if is_irrelevant_binder na then
+          Option.iter (set k) (transport_arg st env depth !out.(k) (Vars.substl subst dom));
         loop (k + 1) codom (!out.(k) :: subst)
       | _ ->
         let ty = whd_all st env (Vars.substl subst ty) in
@@ -638,70 +650,76 @@ let transport_args st env f args =
   Option.iter (fun ty -> loop 0 ty []) (retype st env f);
   !out
 
-let rec transport_walk st env c =
+let rec transport_walk st env depth c =
   tick st 1;
+  check_depth depth;
+  let walk env = transport_walk st env (depth + 1) in
   let push d = Environ.push_rel d env in
   match Constr.kind c with
   | Constr.App (f, args) ->
-    let f' = transport_walk st env f in
-    let args' = transport_args st env f' (CArray.Smart.map (transport_walk st env) args) in
+    let f' = walk env f in
+    let args' = transport_args st env depth f' (CArray.Smart.map (walk env) args) in
     if f' == f && args' == args then c else Constr.mkApp (f', args')
   | Constr.Lambda (na, t, b) ->
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (Context.Rel.Declaration.LocalAssum (na, t'))) b in
+    let t' = walk env t in
+    let b' = walk (push (Context.Rel.Declaration.LocalAssum (na, t'))) b in
     if t' == t && b' == b then c else Constr.mkLambda (na, t', b')
   | Constr.Prod (na, t, b) ->
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (Context.Rel.Declaration.LocalAssum (na, t'))) b in
+    let t' = walk env t in
+    let b' = walk (push (Context.Rel.Declaration.LocalAssum (na, t'))) b in
     if t' == t && b' == b then c else Constr.mkProd (na, t', b')
   | Constr.LetIn (na, v, t, b) ->
-    let v' = transport_walk st env v in
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (Context.Rel.Declaration.LocalDef (na, v', t'))) b in
+    let v' = walk env v in
+    let t' = walk env t in
+    let b' = walk (push (Context.Rel.Declaration.LocalDef (na, v', t'))) b in
     if v' == v && t' == t && b' == b then c else Constr.mkLetIn (na, v', t', b')
   | Constr.Proj (p, r, c0) ->
-    let c0' = transport_walk st env c0 in
+    let c0' = walk env c0 in
     if c0' == c0 then c else Constr.mkProj (p, r, c0')
   | _ -> c
 
-(* [body], whose declared type is [ty], with its SProp result transported to [ty] under its binders. *)
-let rec transport_result st env body ty =
+(* [body], whose declared type is [ty], with its SProp result transported to [ty] under its binders, from the
+   nesting [depth]. *)
+let rec transport_result st env depth body ty =
+  check_depth depth;
   match (Constr.kind body, Constr.kind ty) with
   | Constr.Lambda (na, t, b), Constr.Prod (_, _, tb) ->
-    let b' = transport_result st (Environ.push_rel (Context.Rel.Declaration.LocalAssum (na, t)) env) b tb in
+    let env = Environ.push_rel (Context.Rel.Declaration.LocalAssum (na, t)) env in
+    let b' = transport_result st env (depth + 1) b tb in
     if b' == b then body else Constr.mkLambda (na, t, b')
   | _ ->
     let irrelevant =
-      has_big_nat st ty &&
+      has_big_nat st depth ty &&
       Sorts.relevance_equal Sorts.Irrelevant
         (EConstr.Unsafe.to_relevance (Retyping.relevance_of_type env st.sigma (EConstr.of_constr ty)))
     in
-    if irrelevant then Option.default body (transport_arg st env body ty) else body
+    if irrelevant then Option.default body (transport_arg st env depth body ty) else body
 
 (* Whether the entry may need the pass: [ty], [body] or the type of a global they name holds one of the
    triggers (the rows' constants, [Nat_double], which every literal from 5000 on holds) or a constant of
    type Nat of value [transport_min] or more. *)
 let may_apply st env ty body =
-  let big_const c = match value st 0 c with Some v -> Z.geq v transport_min | None -> false in
+  let big_const depth c = match value st depth c with Some v -> Z.geq v transport_min | None -> false in
   let seen = ref GlobRef.Set_env.empty in
-  let rec scan types c =
+  let rec scan types depth c =
     tick st 1;
+    check_depth depth;
     match Constr.kind c with
     | Constr.Const (k, _) ->
-      if mem_const k st.triggers || big_const c then raise_notrace Found;
-      if types then global (GlobRef.ConstRef k)
-    | Constr.Ind (ind, _) -> if types then global (GlobRef.IndRef ind)
-    | Constr.Construct (cs, _) -> if types then global (GlobRef.ConstructRef cs)
-    | _ -> Constr.iter (scan types) c
-  and global g =
+      if mem_const k st.triggers || big_const depth c then raise_notrace Found;
+      if types then global depth (GlobRef.ConstRef k)
+    | Constr.Ind (ind, _) -> if types then global depth (GlobRef.IndRef ind)
+    | Constr.Construct (cs, _) -> if types then global depth (GlobRef.ConstructRef cs)
+    | _ -> Constr.iter (scan types (depth + 1)) c
+  and global depth g =
     if not (GlobRef.Set_env.mem g !seen) then begin
       seen := GlobRef.Set_env.add g !seen;
-      scan false (fst (Typeops.type_of_global_in_context env g))
+      scan false (depth + 1) (fst (Typeops.type_of_global_in_context env g))
     end
   in
   try
-    scan true ty;
-    scan true body;
+    scan true 0 ty;
+    scan true 0 body;
     false
   with Found -> true
 
@@ -772,7 +790,7 @@ let transport ctx env ~entry ty body =
     match
       if not (may_apply st env ty body) then None
       else
-        let body' = transport_result st env (transport_walk st env body) ty in
+        let body' = transport_result st env 0 (transport_walk st env 0 body) ty in
         if st.count = 0 then None else Some { value = body'; count = st.count; lemmas = List.rev st.lemmas }
     with
     | r -> r

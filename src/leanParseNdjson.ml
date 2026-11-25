@@ -117,6 +117,24 @@ let get_name ~lcnt state i = get ~lcnt "name" state.names state.refused_names i
 let get_expr ~lcnt state i = get ~lcnt "expression" state.exprs state.refused_exprs i
 let get_univ ~lcnt state i = get ~lcnt "level" state.univs state.refused_univs i
 
+(* The id fields of the numbered records: a name, level or expression record
+   has one of them, once. *)
+let id_keys = [ "in"; "il"; "ie" ]
+
+let id_fields = function
+  | `Assoc fields -> List.filter (fun (k, _) -> List.mem k id_keys) fields
+  | _ -> []
+
+(* The id of a name, level or expression record, in its field [key]. A record
+   with more than one id field (another one, or [key] twice) has no id: it is
+   refused with no id reserved. *)
+let record_id ~lcnt key json =
+  match id_fields json with
+  | [ (k, `Int i) ] when k = key -> i
+  | [ (k, _) ] when k = key -> err ~lcnt ("field " ^ key ^ " must be an integer")
+  | [] | [ _ ] -> err ~lcnt ("no field " ^ key)
+  | ids -> err ~lcnt ("more than one id field: " ^ String.concat ", " (List.map fst ids))
+
 let expect_next ~lcnt kind expected actual =
   if expected <> actual then
     err
@@ -138,7 +156,7 @@ let binders ~lcnt = function
   | b -> err ~lcnt ("unknown Lean binderInfo " ^ b)
 
 let parse_name ~lcnt state json =
-  let next = require_int ~lcnt "in" json in
+  let next = record_id ~lcnt "in" json in
   expect_next ~lcnt "name" (RRange.length state.names) next;
   let placeholder () =
     { state with
@@ -156,7 +174,7 @@ let parse_name ~lcnt state json =
   ({ state with names = RRange.append state.names name }, None)
 
 let parse_level ~lcnt state json =
-  let next = require_int ~lcnt "il" json in
+  let next = record_id ~lcnt "il" json in
   expect_next ~lcnt "level" (RRange.length state.univs) next;
   let placeholder () =
     { state with
@@ -190,7 +208,7 @@ let parse_nat_lit ~lcnt = function
   | _ -> err ~lcnt "bad natural literal"
 
 let parse_expr ~lcnt state json =
-  let next = require_int ~lcnt "ie" json in
+  let next = record_id ~lcnt "ie" json in
   expect_next ~lcnt "expression" (RRange.length state.exprs) next;
   let placeholder () =
     { state with
@@ -432,8 +450,15 @@ let parse_line ~prefix ~lcnt state l =
             ("inductive", parse_inductive) ]
       with
       | Some result -> result
-      | None ->
-        if prefix then (state, None) else err ~lcnt "unsupported NDJSON record"
+      | None -> (
+        (* A record with no payload tag whose one id field, [in] or [il],
+           holds the next id of its kind is a name or level record without
+           its payload: that parser refuses it and reserves the id. Any other
+           record is unsupported, and reserves nothing. *)
+        match id_fields json with
+        | [ ("in", `Int i) ] when i = RRange.length state.names -> parse_name ~lcnt state json
+        | [ ("il", `Int i) ] when i = RRange.length state.univs -> parse_level ~lcnt state json
+        | _ -> if prefix then (state, None) else err ~lcnt "unsupported NDJSON record")
 
 (* A line is refused with the state it was read with, except for a name, level
    or expression line, which leaves a placeholder for its id (see [next_id]). *)

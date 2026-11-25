@@ -1,0 +1,7 @@
+# Log file, polarity, literal substring (tab-separated).
+path_deferred_reload.log.out	+	Skipping duplicate declaration for RLI425.lit
+path_deferred_reload.log.out	+	line 214: RLI426.pair_eq
+path_deferred_reload.log.out	-	Error at line
+path_deferred_reload.log.out	+	Done!
+path_deferred_reload_plit_inst1.log.out	+	String_mk
+path_deferred_reload_plit_inst1.log.out	-	String_ofList

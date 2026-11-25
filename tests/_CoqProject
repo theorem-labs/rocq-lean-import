@@ -13,6 +13,7 @@ pnni.v
 ulift.v
 rec_single_ctor.v
 uint32_dispatch.v
+uint32_legacy_only.v
 list_dup.v
 inhabited_sprop.v
 ndjson_bin_tree.v
@@ -39,8 +40,15 @@ nat_transport.v
 nat_transport_budget.v
 entry_timeout.v
 entry_timeout_parse.v
+parse_untagged.v
+parse_untagged_prefix.v
+parse_unclear_id.v
 entry_memory.v
 path_choice.v
+path_deferred_legacy.v
+path_deferred_string.v
+path_deferred_saved.v
+path_deferred_reload.v
 predeclared.v
 negative_controls.v
 string_literal_mk.v

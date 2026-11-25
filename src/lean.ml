@@ -747,11 +747,26 @@ type predeclared_ind_as_def_kind = ULift_cumul
 (* The path of the export being imported ([LeanParseNdjson.export_path]), with
    its Lean version on the new path. [do_input] sets it from the parser before
    it declares each entry: what [LeanParseNdjson.path] read from the NDJSON
-   metadata; the legacy path for the old text format. *)
+   metadata; the legacy path for the old text format. An instance that
+   [ensure_exists] declares later is declared on the path saved with its entry
+   (see [on_path]). *)
 let current_path = ref LeanParseNdjson.Legacy
 
 let on_new_path () =
   match !current_path with LeanParseNdjson.New _ -> true | LeanParseNdjson.Legacy -> false
+
+(* [on_path path f] computes [f ()] with [path] as the current path, then puts
+   back the path it replaced, whether [f] returns or raises. *)
+let on_path path f =
+  let outer = !current_path in
+  current_path := path;
+  match f () with
+  | v ->
+    current_path := outer;
+    v
+  | exception e ->
+    current_path := outer;
+    Exninfo.iraise (Exninfo.capture e)
 
 (* The paths a row of the predeclared tables below applies on: both, or only
    the legacy path (the new path imports that entry from the export, as Lean
@@ -780,16 +795,19 @@ let get_predeclared_char ~uint32_is_legacy indh n i =
     | None -> try_suffixed ""
   else try_suffixed ""
 
-(* Each row: the kind, the Lean name, the paths the row applies on and the
-   lookup of the predeclared inductive type for that name. *)
+(* The rows of the predeclared inductive types that apply on the current path
+   to the Lean name [n]. Each row is the kind, the Lean name, the paths the row
+   applies on and the lookup of the predeclared inductive type for that name
+   at instance [i], which reads a registration only when it is called (see
+   [get_predeclared_ind_some]). *)
 let get_predeclared_ind_any ?(ctors = []) ?(uint32_is_legacy = false) n i =
-  let std indh = get_predeclared_ind indh n i in
-  let uint32 indh = get_predeclared_uint32 ~ctors indh n i in
-  let char indh = get_predeclared_char ~uint32_is_legacy indh n i in
+  let std indh () = get_predeclared_ind indh n i in
+  let uint32 indh () = get_predeclared_uint32 ~ctors indh n i in
+  let char indh () = get_predeclared_char ~uint32_is_legacy indh n i in
   List.filter_map
     (fun (indk, indh, paths, lookup) ->
-      if not (on_current_path paths) then None
-      else lookup indh |> Option.map (fun x -> (indk, indh, x)))
+      if on_current_path paths && N.equal n (N.append_list N.anon indh) then Some (indk, indh, lookup indh)
+      else None)
     [
       (Eq, [ "Eq" ], Both_paths, std);
       (Nat, [ "Nat" ], Both_paths, std);
@@ -803,7 +821,11 @@ let get_predeclared_ind_any ?(ctors = []) ?(uint32_is_legacy = false) n i =
     ]
 
 let get_predeclared_ind_some ?(ctors = []) ?(uint32_is_legacy = false) n i =
-  match get_predeclared_ind_any ~ctors ~uint32_is_legacy n i with
+  match
+    List.filter_map
+      (fun (indk, indh, lookup) -> lookup () |> Option.map (fun x -> (indk, indh, x)))
+      (get_predeclared_ind_any ~ctors ~uint32_is_legacy n i)
+  with
   | [] -> None
   | [ x ] -> Some x
   | _ :: _ :: _ ->
@@ -867,7 +889,12 @@ let nat_double = "Nat_double"
 let declared : instantiation Int.Map.t N.Map.t ref =
   Summary.ref ~name:"lean-declared-instances" N.Map.empty
 
-let entries : entry N.Map.t ref = Summary.ref ~name:"lean-entries" N.Map.empty
+(* An entry of an export and the path (with the Lean version) of that export:
+   [add_entry] saves it, and [ensure_exists] declares its instances on that
+   path, also when an entry of a later export asks for one. *)
+type saved_entry = { entry : entry; path : LeanParseNdjson.path }
+
+let entries : saved_entry N.Map.t ref = Summary.ref ~name:"lean-entries" N.Map.empty
 
 let squash_info : squashy N.Map.t ref =
   Summary.ref ~name:"lean-squash-info" N.Map.empty
@@ -1399,10 +1426,13 @@ and ensure_exists n i =
     (* if i = 0 then CErrors.user_err Pp.(N.pp n ++ str " was not instantiated!"); *)
     (* assert (not (upfront_instances ())); *)
     (match N.Map.find n !entries with
-    | Def def -> declare_def def i
-    | Ax ax -> declare_ax ax i
-    | Ind ind -> declare_ind ind i
-    | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared")
+    | { entry; path } ->
+      on_path path (fun () ->
+          match entry with
+          | Def def -> declare_def def i
+          | Ax ax -> declare_ax ax i
+          | Ind ind -> declare_ind ind i
+          | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared"))
     | exception Not_found -> CErrors.user_err Pp.(str "missing " ++ N.pp n))
 
 (* Check the definition [def] of the export against the predeclared constant
@@ -2113,7 +2143,9 @@ let entry_name = function
    on the legacy path, such an entry may legitimately be emitted twice, the
    second [#IND] flipping the dispatch to the other record, and it is declared
    again. Those rows apply on the legacy path only: on the new path a repeated
-   [UInt32] or [Char] is a duplicate like any other entry. *)
+   [UInt32] or [Char] is a duplicate like any other entry. The answer comes
+   from the rows alone: no registration is read, since which record the entry
+   binds depends on its constructors, which [declare_ind] reads. *)
 let is_predeclared_dispatch_name n =
   List.exists
     (function
@@ -2142,7 +2174,7 @@ let add_entry entry =
       | Ax ax -> declare_ax ax
       | Ind ind -> declare_ind ind
     in
-    entries := N.Map.add name entry !entries
+    entries := N.Map.add name { entry; path = !current_path } !entries
 
 let rec is_arity = function
   | Sort _ -> true
@@ -2170,7 +2202,7 @@ let pp_parser_state = function
 let finish state =
   let max_univs, cnt =
     N.Map.fold
-      (fun _ entry (m, cnt) ->
+      (fun _ { entry; _ } (m, cnt) ->
         match entry with
         | Ax { univs } | Def { univs } | Ind { univs } ->
           let l = List.length univs in
@@ -2180,7 +2212,7 @@ let finish state =
   in
   let nonarities =
     N.Map.fold
-      (fun _ entry cnt ->
+      (fun _ { entry; _ } cnt ->
         match entry with
         | Ax _ | Def _ | Quot _ -> cnt
         | Ind ind -> if is_arity ind.ty then cnt else cnt + 1)
@@ -2199,7 +2231,7 @@ let finish state =
       fnl () ++ fnl () ++ str "Done!" ++ fnl () ++ str "- "
       ++ int (N.Map.cardinal !entries)
       ++ str " entries (" ++ int cnt ++ str " possible instances)"
-      ++ (if N.Map.exists (fun _ -> function Quot _ -> true | _ -> false) !entries then
+      ++ (if N.Map.exists (fun _ { entry; _ } -> match entry with Quot _ -> true | _ -> false) !entries then
             str " (including quot)."
           else str ".")
       ++ fnl () ++

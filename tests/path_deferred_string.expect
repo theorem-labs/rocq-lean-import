@@ -1,0 +1,15 @@
+# Log file, polarity, literal substring (tab-separated).
+path_deferred_string_4250.log.out	+	line 185: RLI425.plit
+path_deferred_string_4250.log.out	-	Error at line
+path_deferred_string_4250.log.out	+	Done!
+path_deferred_string_4260.log.out	+	Skipping duplicate declaration for RLI425.lit
+path_deferred_string_4260.log.out	+	line 197: RLI426.pair
+path_deferred_string_4260.log.out	+	line 214: RLI426.pair_eq
+path_deferred_string_4260.log.out	-	Error at line
+path_deferred_string_4260.log.out	+	Done!
+path_deferred_string_plit.log.out	+	String_mk
+path_deferred_string_plit.log.out	-	String_ofList
+path_deferred_string_plit_inst1.log.out	+	String_mk
+path_deferred_string_plit_inst1.log.out	-	String_ofList
+path_deferred_string_pair.log.out	+	RLI425_plit_inst1
+path_deferred_string_pair.log.out	+	String_ofList
