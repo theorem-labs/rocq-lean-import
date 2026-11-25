@@ -1,14 +1,17 @@
 name: build-9.2-cut
 
-# Build Rocq at the cut, build the plugin against it and run the suite, through ci/build-9.2-cut.sh.
+# Build Rocq at the cut, build the plugin against it and run the suite, through ci/build-9.2-cut.sh, for each
+# pull request into the cut branch, draft or not, and for each push to it.
 # A pull request edit that changed its base (retargeted to the cut) runs it like any other pull request event.
 # An edit that did not (`github.event.action == 'edited' && github.event.changes.base == null`: a title or body
-# edit, draft or not, or an edit with no `changes`) builds nothing, and it reports under another check name and
-# in another concurrency group, so that its skipped job is never the build-9.2-cut check and it never replaces a
-# pending build in the build's group. Each of the three places below tests that same expression.
+# edit, or an edit with no `changes`) builds nothing, and it reports under another check name and in another
+# concurrency group, so that its skipped job is never the build-9.2-cut check and it never replaces a pending
+# build in the build's group. Each of the three places below tests that same expression. GitHub does not
+# evaluate the name of a job its `if` skips: the skipped job's check shows the name expression's text.
+# A draft builds like any other pull request, so marking it ready for review starts nothing more.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, edited]
+    types: [opened, synchronize, reopened, edited]
     branches: [typewise-isomorphism-9.2-cut]
   push:
     branches: [typewise-isomorphism-9.2-cut]
@@ -30,9 +33,7 @@ jobs:
     name: >-
       ${{ (github.event.action == 'edited' && github.event.changes.base == null)
         && 'build-9.2-cut metadata edit (not built)' || 'build-9.2-cut' }}
-    if: >-
-      ${{ !(github.event.action == 'edited' && github.event.changes.base == null) &&
-        (github.event_name == 'push' || !github.event.pull_request.draft) }}
+    if: ${{ !(github.event.action == 'edited' && github.event.changes.base == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
