@@ -41,6 +41,7 @@ select the legacy path.
 | `isvalidchar.ndjson` | `lean4export Init -- _private.Init.Prelude.0.isValidChar_UInt32` | `9844ef3c805e7dc7386b638819d599bf70aa82d97e3aa77cb0cd98e6c54401a3` |
 | `uint32_ofnatlt.ndjson` | `lean4export Init -- UInt32.ofNatLT UInt32.toNat_ofNatLT` | `f208be058cf6f1242a33d0baba23a13a7a161f6f8cf5874c1fcf7982e706c6cb` |
 | `uint32_shiftleft.ndjson` | `lean4export Init -- UInt32.toNat_shiftLeft` | `d082b946fcdf9dd642f67a70dee900eb48dc01fef8a0e9537f415b8c6ed2c941` |
+| `tonat_le.ndjson` | `lean4export Init -- _private.Init.Data.String.Decode.0.Char.toNat_le._proof_1_1` | `87af9fad6c2cbeae38675528e73d93f7122e719451e979be7a0a5c8f7d98e8a3` |
 | `src/RLI434AutoParam.lean` | Lean source for `autoparam.ndjson`. | `89c539317c51db6115c38ff997cc826a68989dfec1a15e4de4e3e5c62f62b927` |
 | `src/RLI434BigInt.lean` | Lean source for `bigint.ndjson`. | `c5e679bfcfb6bd2bd37eed68d1535d885b53d0ec7724a05c4c1d6212093985c8` |
 | `src/RLI434Strings.lean` | Lean source for the ZIP member `strings.ndjson`. | `1ede0487aaf9edc69d6c7b1214adb1505fc7d51a108bbe8f5997f0107c4f053d` |

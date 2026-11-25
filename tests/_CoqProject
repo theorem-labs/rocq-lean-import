@@ -36,6 +36,7 @@ lean434_nested.v
 lean434_linear.v
 lean434_bigint.v
 lean434_bigint_decide.v
+lean434_stack.v
 nat_transport.v
 nat_transport_budget.v
 uint32_transport_ofnatlt.v
