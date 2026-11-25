@@ -3,7 +3,7 @@ module N = LeanName
 module Json = Yojson.Safe
 module RRange = LeanParseShared.RRange
 
-type path = Legacy | New
+type path = Legacy | New of (int * int * int)
 
 type parsing_state = {
   names : N.t RRange.t;
@@ -14,10 +14,8 @@ type parsing_state = {
   refused_exprs : Int.Set.t;
   refused_univs : Int.Set.t;
   seen_meta : bool;
-  (* The path the first metadata line chose, and the Lean version it read
-     (see [export_path]). *)
+  (* The path the first metadata line chose (see [export_path]). *)
   path : path;
-  version : (int * int * int) option;
 }
 
 let empty_state =
@@ -30,11 +28,9 @@ let empty_state =
     refused_univs = Int.Set.empty;
     seen_meta = false;
     path = Legacy;
-    version = None;
   }
 
 let path state = state.path
-let version state = state.version
 
 exception Refused of {
   state : parsing_state;
@@ -364,12 +360,12 @@ let version_triple v =
   | [ Some major; Some minor; Some patch ] -> Some (major, minor, patch)
   | _ -> None
 
-(* The path of an export and its Lean version [MAJOR.MINOR.PATCH], from its
-   metadata [meta.lean.version]. Lean 4.17.0 and later take the new path; an
+(* The path of an export, from its metadata [meta.lean.version]: Lean 4.17.0
+   and later take the new path, with that version [MAJOR.MINOR.PATCH]; an
    earlier version takes the legacy one. A metadata object with no [lean]
    object, no [version] string, or a version that does not start with
-   [MAJOR.MINOR.PATCH] has no version and takes the legacy path, as before this
-   choice existed, with a warning that names the field and its value. *)
+   [MAJOR.MINOR.PATCH] takes the legacy path, as before this choice existed,
+   with a warning that names the field and its value. *)
 let export_path ~lcnt meta =
   let legacy field value =
     Feedback.msg_warning
@@ -377,7 +373,7 @@ let export_path ~lcnt meta =
         str "NDJSON metadata at line " ++ int lcnt ++ str ": field " ++ str field ++ str " is "
         ++ str value
         ++ str "; without a Lean version MAJOR.MINOR.PATCH in lean.version the export takes the legacy path.");
-    (Legacy, None)
+    Legacy
   in
   match member "lean" meta with
   | None -> legacy "lean" "absent"
@@ -386,7 +382,7 @@ let export_path ~lcnt meta =
     | None -> legacy "lean.version" "absent"
     | Some (`String v as value) -> (
       match version_triple v with
-      | Some triple -> ((if triple >= (4, 17, 0) then New else Legacy), Some triple)
+      | Some triple -> if triple >= (4, 17, 0) then New triple else Legacy
       | None -> legacy "lean.version" (Json.to_string value))
     | Some value -> legacy "lean.version" (Json.to_string value))
   | Some value -> legacy "lean" (Json.to_string value)
@@ -399,8 +395,7 @@ let parse_meta ~lcnt state json =
   (* The first metadata line chooses the path, before the first entry. *)
   if state.seen_meta then (state, None)
   else
-    let path, version = export_path ~lcnt meta in
-    ({ state with seen_meta = true; path; version }, None)
+    ({ state with seen_meta = true; path = export_path ~lcnt meta }, None)
 
 let parse_line ~prefix ~lcnt state l =
   let l = String.trim l in

@@ -431,16 +431,19 @@ Register Nat_isValidChar as lean.Nat_isValidChar.
 Register Char as lean.Char.
 Register Char_legacy as lean.Char.legacy.
 Register reflective_Char_legacy_mk_prim as lean.Char.legacy.mk.reflective_prim.
-(* TODO: lean.Char.mk.reflective_prim for the BitVec Char; blocks
-   string literals in Lean >= 4.17 dumps. *)
+(* On the new path (Lean 4.17.0 on) a string literal is translated through the export's own
+   [String.ofList] (or [String.mk]) and [Char.ofNat] (lean.ml, [string_lit_expr]); the BitVec [Char] needs
+   no reflective constructor here. *)
 
 (* Transport of proof arguments across Nat literals (README, "Transport of proof arguments across Nat
    literals"). Rocq computes Lean's Nat arithmetic on the unary [Nat] one [Nat_succ] at a time, so Lean
    Import proves an equality [x = y] of two closed Nat terms of equal value (a literal, a constant such as
    [UInt32.size], or [2 ^ 32] built from the export's own [Nat.pow]) through Rocq's binary [N] and casts an
-   SProp argument along it with [sprop_transport]. Every lemma below is proved by plain induction; the
-   importer instantiates them with the export's [Nat.add], [Nat.mul] and [Nat.pow], whose defining equations
-   it closes by [Logic.eq_refl], and with steps that compute the value of a literal from its form. *)
+   SProp argument along it with [sprop_transport]. The lemmas below are proved by induction on [Nat],
+   [rewrite], [destruct] and [lia]: the [toN] lemmas rely on no axiom, [Nat_eq_of_toN] and
+   [sprop_transport] only on the definitional UIP of [eq]. The importer instantiates them with the
+   export's [Nat.add], [Nat.mul] and [Nat.pow], whose defining equations it closes by [Logic.eq_refl], and
+   with steps that compute the value of a literal from its form. *)
 Section nat_transport.
   Import ZArith NArith Lia.
   Local Unset Universe Polymorphism.

@@ -744,15 +744,14 @@ type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | BitVec
 type predeclared_def_kind = UInt32_size | Nat_isValidChar | Nat_pow
 type predeclared_ind_as_def_kind = ULift_cumul
 
-(* The path of the export being imported ([LeanParseNdjson.export_path]) and
-   its Lean version. [do_input] sets both from the parser before it declares
-   each entry: what [LeanParseNdjson.path] and [LeanParseNdjson.version] read
-   from the NDJSON metadata; the legacy path and no version for the old text
-   format. *)
+(* The path of the export being imported ([LeanParseNdjson.export_path]), with
+   its Lean version on the new path. [do_input] sets it from the parser before
+   it declares each entry: what [LeanParseNdjson.path] read from the NDJSON
+   metadata; the legacy path for the old text format. *)
 let current_path = ref LeanParseNdjson.Legacy
-let current_version : (int * int * int) option ref = ref None
 
-let on_new_path () = !current_path = LeanParseNdjson.New
+let on_new_path () =
+  match !current_path with LeanParseNdjson.New _ -> true | LeanParseNdjson.Legacy -> false
 
 (* The paths a row of the predeclared tables below applies on: both, or only
    the legacy path (the new path imports that entry from the export, as Lean
@@ -966,15 +965,23 @@ let nat_int_binary nat double i =
 
 (* A literal [i] from [max_nat_int] on is [Nat_succ] applied [r] times to the
    binary form of [i - r], with [r] in 1..[lit_segment] chosen so that [i - r]
-   is congruent to [lit_segment / 2] modulo [lit_segment]. Within a segment the
-   predecessor of a literal is then, term for term, the literal one below.
+   is congruent to [lit_segment / 2] modulo [lit_segment]. In each block
+   [b + 1] through [b + lit_segment], large literals use the same binary
+   form of [b]. If [j] and [j - 1] are large literals in the same block,
+   the predecessor of the literal [j] is the literal [j - 1], term for term.
+   At the lower boundary the predecessor of the literal [b + 1] is the
+   binary form of [b], not the literal [b].
 
    This matters to the kernel's conversion. Matching a literal against
    [Nat_succ] yields its predecessor; when that is a closed term, two of them are
    compared structurally ([fast_test]). When it comes from reducing
    [Nat_double], it is a closure of [double]'s fixpoint, and two such closures
    are compared one [Nat_succ] at a time, each a non-tail call: the depth is the
-   value (2^27 for [-(-x) = x] at x = -134217728), which no stack holds.
+   value. When conversion strips [k] successors off the literal [j] and
+   meets the literal [j - k] in the same block ([k < r]), the two terms
+   match structurally. Crossing the block boundary can still force a unary
+   walk: [Nat.pred] of the literal 134217733 reaches the bare binary form
+   of 134217732, not the literal 134217732.
 
    [lit_segment] is small because the cost of some conversions grows quickly
    with the number [r] of leading [Nat_succ]: importing
@@ -1044,10 +1051,10 @@ let mk_string char string list char_uinst mkChar s =
    literal's code points [c], each a natural number literal ([Char.ofNat] is
    set at line 1233). The constructor is [String.mk] up to Lean 4.25.x (v4.25.0
    line 1226) and [String.ofList] from 4.26.0 on (v4.26.0 line 1226): the
-   export's [lean.version] chooses. [to_constr] translates the term like any
-   other Lean term, so it uses the export's own constructor, [List], [Char] and
-   [Char.ofNat]. *)
-let string_lit_expr s =
+   export's [lean.version], [version], chooses. [to_constr] translates the term
+   like any other Lean term, so it uses the export's own constructor, [List],
+   [Char] and [Char.ofNat]. *)
+let string_lit_expr version s =
   let const path us = Const (N.append_list N.anon path, us) in
   let char = const [ "Char" ] [] in
   (* [U.Prop] is Lean's universe level 0, as in the exports. *)
@@ -1055,11 +1062,7 @@ let string_lit_expr s =
   let cons rest c =
     App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanExpr.Nat (Z.of_int c))), rest)
   in
-  let string_ctor =
-    match !current_version with
-    | Some version when version < (4, 26, 0) -> [ "String"; "mk" ]
-    | Some _ | None -> [ "String"; "ofList" ]
-  in
+  let string_ctor = if version < (4, 26, 0) then [ "String"; "mk" ] else [ "String"; "ofList" ] in
   App (const string_ctor [], List.fold_left cons (list_ctor "nil") (List.rev (code_points s)))
 
 (* The Rocq term of the instantiation [inst] at the Rocq universes [univs] of
@@ -1191,706 +1194,33 @@ type translated_ind = {
 
 let lcnt = ref 0
 
-let line_msg name =
-  Feedback.msg_info Pp.(str "line " ++ int !lcnt ++ str ": " ++ N.pp name)
+(* The line of the import's output about the entry [name] of the current line: "line N: NAME", followed by
+   ": MSG" when [msg] is given. *)
+let line_msg ?msg name =
+  Feedback.msg_info
+    Pp.(
+      str "line " ++ int !lcnt ++ str ": " ++ N.pp name
+      ++ match msg with None -> mt () | Some msg -> str ": " ++ msg)
 
-(* Transport of SProp arguments across Nat literals (README, "Transport of proof arguments across Nat
-   literals"). Rocq reduces Lean's [Nat.add], [Nat.mul] and [Nat.pow] on the unary [Nat] one [Nat_succ] at a
-   time, so the kernel cannot convert [n < UInt32.size] with [n < 2 ^ 32] (2^32 units) where Lean's kernel
-   computes both sides with GMP. Before an entry's value is declared, [transport_value] finds each argument
-   of an application whose type is an SProp type that differs from the expected one only at closed Nat
-   terms of equal value, and casts it with [sprop_transport] (src/Lean.v) along a generated lemma
-   [x = y], declared and checked by the kernel like any constant and proved through Rocq's binary [N]. The
-   value finder ([nat_value]) is not trusted: it only finds the places; a wrong value makes the kernel
-   refuse the lemma. The non-SProp arguments (the data) stay Lean's own terms. *)
-
-(* The smallest value worth a lemma: the kernel compares smaller ones unit by unit quickly enough. *)
-let transport_min = Z.of_int 4096
-
-(* The largest value, in bits, the finder computes: a certificate checks binary arithmetic on it. *)
-let transport_max_bits = 1024
-
-(* A certificate of a literal below this value is [Logic.eq_refl]: the kernel computes [toN] of it. *)
-let transport_small_literal = Z.of_int 8192
-
-(* How many constants the finder unfolds along one term. *)
-let transport_fuel = 16
-
-(* What the pass uses from src/Lean.v and Corelib. *)
-type nat_transport_refs = {
-  nt_nat : inductive;
-  nt_double : Constant.t;
-  nt_eq : inductive;
-  nt_n : Constr.t;
-  nt_n0 : Constr.t;
-  nt_npos : Constr.t;
-  nt_xh : Constr.t;
-  nt_xo : Constr.t;
-  nt_xi : Constr.t;
-  nt_refl : Constr.t;
-  nt_succ_step : Constr.t;
-  nt_double_step : Constr.t;
-  nt_unfold_step : Constr.t;
-  nt_op_step : Constr.t;
-  nt_toN_add : Constr.t;
-  nt_toN_mul : Constr.t;
-  nt_toN_pow : Constr.t;
-  nt_n_add : Constr.t;
-  nt_n_mul : Constr.t;
-  nt_n_pow : Constr.t;
-  nt_nat_eq : Constr.t;
-  nt_transport : Constr.t;
-}
-
-(* [None] when one of them is not registered (src/Lean.v without the transport lemmas). *)
-let nat_transport_refs () =
-  let get s = match Rocqlib.lib_ref_opt s with Some r -> r | None -> raise Not_found in
-  let term s = Constr.mkRef (get s, UVars.Instance.empty) in
-  try
-    match (get "lean.Nat", get ("lean." ^ nat_double), get "lean.Eq") with
-    | GlobRef.IndRef nt_nat, GlobRef.ConstRef nt_double, GlobRef.IndRef nt_eq ->
-      Some
-        {
-          nt_nat;
-          nt_double;
-          nt_eq;
-          nt_n = term "num.N.type";
-          nt_n0 = term "num.N.N0";
-          nt_npos = term "num.N.Npos";
-          nt_xh = term "num.pos.xH";
-          nt_xo = term "num.pos.xO";
-          nt_xi = term "num.pos.xI";
-          nt_refl = term "core.eq.refl";
-          nt_succ_step = term "lean.toN_succ_step";
-          nt_double_step = term "lean.toN_double_step";
-          nt_unfold_step = term "lean.toN_unfold_step";
-          nt_op_step = term "lean.toN_op_step";
-          nt_toN_add = term "lean.toN_add";
-          nt_toN_mul = term "lean.toN_mul";
-          nt_toN_pow = term "lean.toN_pow";
-          nt_n_add = term "lean.N.add";
-          nt_n_mul = term "lean.N.mul";
-          nt_n_pow = term "lean.N.pow";
-          nt_nat_eq = term "lean.Nat_eq_of_toN";
-          nt_transport = term "lean.sprop_transport";
-        }
-    | _ -> None
-  with Not_found -> None
-
-(* The constants of every declared instance of the export's [path]. *)
+(* The constants of every declared instance of the export's entry [path]. *)
 let lean_consts path =
   match N.Map.find_opt (N.append_list N.anon path) !declared with
   | None -> []
   | Some m ->
-    Int.Map.fold
-      (fun _ { ref; _ } acc -> match ref with GlobRef.ConstRef c -> c :: acc | _ -> acc)
-      m []
+    Int.Map.fold (fun _ { ref; _ } acc -> match ref with GlobRef.ConstRef c -> c :: acc | _ -> acc) m []
 
-(* The export's [path] at instance 0 when it is a constant without universes. *)
-let lean_const0 path =
-  match N.Map.find_opt (N.append_list N.anon path) !declared with
-  | None -> None
-  | Some m ->
-    (match Int.Map.find_opt 0 m with
-    | Some { ref = GlobRef.ConstRef c; algs = [] }
-      when UVars.AbstractContext.is_empty
-             (Declareops.constant_polymorphic_context (Global.lookup_constant c)) ->
-      Some (Constr.mkConstU (c, UVars.Instance.empty))
-    | _ -> None)
-
-(* The export's Nat operations and instances the finder reads, by their Lean names. *)
-type nat_ops = {
-  op_of_nat : Constant.t list;
-  op_inst_of_nat : Constant.t list;
-  op_hadd : Constant.t list;
-  op_inst_hadd : Constant.t list;
-  op_inst_add : Constant.t list;
-  op_hmul : Constant.t list;
-  op_inst_hmul : Constant.t list;
-  op_inst_mul : Constant.t list;
-  op_hpow : Constant.t list;
-  op_inst_hpow : Constant.t list;
-  op_inst_pow : Constant.t list;
-  op_inst_nat_pow : Constant.t list;
-  op_add : Constant.t list;
-  op_mul : Constant.t list;
-  op_pow : Constant.t list;
-}
-
-let nat_ops () =
+(* What the transport pass reads of the importer's state, for the entry [name]: the export's constants, a
+   way to declare a lemma and a way to log a line about the entry. *)
+let nat_transport_context name =
   {
-    op_of_nat = lean_consts [ "OfNat"; "ofNat" ];
-    op_inst_of_nat = lean_consts [ "instOfNatNat" ];
-    op_hadd = lean_consts [ "HAdd"; "hAdd" ];
-    op_inst_hadd = lean_consts [ "instHAdd" ];
-    op_inst_add = lean_consts [ "instAddNat" ];
-    op_hmul = lean_consts [ "HMul"; "hMul" ];
-    op_inst_hmul = lean_consts [ "instHMul" ];
-    op_inst_mul = lean_consts [ "instMulNat" ];
-    op_hpow = lean_consts [ "HPow"; "hPow" ];
-    op_inst_hpow = lean_consts [ "instHPow" ];
-    op_inst_pow = lean_consts [ "instPowNat" ];
-    op_inst_nat_pow = lean_consts [ "instNatPowNat" ];
-    op_add = lean_consts [ "Nat"; "add" ];
-    op_mul = lean_consts [ "Nat"; "mul" ];
-    op_pow = lean_consts [ "Nat"; "pow" ];
+    LeanNatTransport.consts = lean_consts;
+    declare =
+      (fun id ty c ->
+        quickdef ~name:id ~types:(Some ty)
+          ~univs:(UState.Polymorphic_entry UContext.empty, UnivNames.empty_binders)
+          c);
+    log = (fun msg -> line_msg ~msg name);
   }
-
-let mem_const c l = List.exists (Constant.CanOrd.equal c) l
-
-let is_nat_ind nt c =
-  match Constr.kind c with Constr.Ind (ind, _) -> Ind.CanOrd.equal ind nt.nt_nat | _ -> false
-
-(* The arguments of [c] when it is one of the constants [l] applied to [nargs] arguments. *)
-let app_of l nargs c =
-  let h, args = Constr.decompose_app c in
-  match Constr.kind h with
-  | Constr.Const (k, _) when Array.length args = nargs && mem_const k l -> Some args
-  | _ -> None
-
-(* The Nat instances of [HAdd.hAdd], [HMul.hMul] and [HPow.hPow] as Lean's prelude builds them. *)
-let inst_hadd_ok nt ops i =
-  match app_of ops.op_inst_hadd 2 i with
-  | Some a -> is_nat_ind nt a.(0) && Option.has_some (app_of ops.op_inst_add 0 a.(1))
-  | None -> false
-
-let inst_hmul_ok nt ops i =
-  match app_of ops.op_inst_hmul 2 i with
-  | Some a -> is_nat_ind nt a.(0) && Option.has_some (app_of ops.op_inst_mul 0 a.(1))
-  | None -> false
-
-let inst_hpow_ok nt ops i =
-  match app_of ops.op_inst_hpow 3 i with
-  | Some a ->
-    is_nat_ind nt a.(0) && is_nat_ind nt a.(1)
-    && (match app_of ops.op_inst_pow 2 a.(2) with
-       | Some b -> is_nat_ind nt b.(0) && Option.has_some (app_of ops.op_inst_nat_pow 0 b.(1))
-       | None -> false)
-  | None -> false
-
-let nat_args3 nt args = is_nat_ind nt args.(0) && is_nat_ind nt args.(1) && is_nat_ind nt args.(2)
-
-(* The body of the constant [cu] when it is a transparent constant of type Nat. *)
-let nat_const_body env nt ((c, _) as cu) =
-  match Environ.lookup_constant_opt c env with
-  | Some cb when is_nat_ind nt cb.Declarations.const_type && Declareops.constant_has_body cb
-                 && not (Declareops.is_opaque cb) ->
-    (try Some (Environ.constant_value_in env cu) with Environ.NotEvaluableConst _ -> None)
-  | _ -> None
-
-exception Not_nat
-
-(* The value of the closed Nat term [c]: a literal of the importer's form ([Nat_zero], [Nat_succ],
-   [Nat_double]), a constant of type Nat whose body has a value, [OfNat.ofNat Nat n (instOfNatNat n)], the
-   export's [Nat.add], [Nat.mul], [Nat.pow] or [HAdd.hAdd], [HMul.hMul], [HPow.hPow] at their Nat
-   instances, applied to terms with a value. Not trusted: it only finds the places to transport. *)
-let rec nat_value env nt ops fuel c =
-  let value c = nat_value env nt ops fuel c in
-  let checked v = if Z.numbits v <= transport_max_bits then v else raise Not_nat in
-  let pow b e =
-    if Z.gt e (Z.of_int transport_max_bits) then raise Not_nat
-    else if Z.leq b Z.one then (if Z.equal e Z.zero then Z.one else b)
-    else if Z.numbits b * Z.to_int e > 2 * transport_max_bits then raise Not_nat
-    else checked (Z.pow b (Z.to_int e))
-  in
-  let h, args = Constr.decompose_app c in
-  match (Constr.kind h, Array.length args) with
-  | Constr.Construct ((ind, 1), _), 0 when Ind.CanOrd.equal ind nt.nt_nat -> Z.zero
-  | Constr.Construct ((ind, 2), _), 1 when Ind.CanOrd.equal ind nt.nt_nat -> checked (Z.succ (value args.(0)))
-  | Constr.Const (k, _), 1 when Constant.CanOrd.equal k nt.nt_double ->
-    checked (Z.mul (Z.of_int 2) (value args.(0)))
-  | Constr.Const cu, 0 when fuel > 0 ->
-    (match nat_const_body env nt cu with
-    | Some b -> nat_value env nt ops (fuel - 1) b
-    | None -> raise Not_nat)
-  | Constr.Const (k, _), 3 when mem_const k ops.op_of_nat ->
-    if is_nat_ind nt args.(0) && Option.has_some (app_of ops.op_inst_of_nat 1 args.(2))
-       && Vars.closed0 args.(2)
-    then value args.(1)
-    else raise Not_nat
-  | Constr.Const (k, _), 6 when mem_const k ops.op_hadd && nat_args3 nt args && inst_hadd_ok nt ops args.(3) ->
-    checked (Z.add (value args.(4)) (value args.(5)))
-  | Constr.Const (k, _), 6 when mem_const k ops.op_hmul && nat_args3 nt args && inst_hmul_ok nt ops args.(3) ->
-    checked (Z.mul (value args.(4)) (value args.(5)))
-  | Constr.Const (k, _), 6 when mem_const k ops.op_hpow && nat_args3 nt args && inst_hpow_ok nt ops args.(3) ->
-    pow (value args.(4)) (value args.(5))
-  | Constr.Const (k, _), 2 when mem_const k ops.op_add -> checked (Z.add (value args.(0)) (value args.(1)))
-  | Constr.Const (k, _), 2 when mem_const k ops.op_mul -> checked (Z.mul (value args.(0)) (value args.(1)))
-  | Constr.Const (k, _), 2 when mem_const k ops.op_pow -> pow (value args.(0)) (value args.(1))
-  | _ -> raise Not_nat
-
-(* Whether [c] is a literal of the importer's form ([nat_int]). *)
-let rec is_nat_literal nt c =
-  match Constr.kind c with
-  | Constr.Construct ((ind, 1), _) -> Ind.CanOrd.equal ind nt.nt_nat
-  | Constr.App (h, [| m |]) ->
-    (match Constr.kind h with
-    | Constr.Construct ((ind, 2), _) -> Ind.CanOrd.equal ind nt.nt_nat && is_nat_literal nt m
-    | Constr.Const (k, _) -> Constant.CanOrd.equal k nt.nt_double && is_nat_literal nt m
-    | _ -> false)
-  | _ -> false
-
-(* The literal [c] unfolds to through constants and [OfNat.ofNat], if it is one: the kernel converts two
-   terms of the same literal without arithmetic. *)
-let rec literal_of env nt ops fuel c =
-  if is_nat_literal nt c then Some c
-  else if fuel <= 0 then None
-  else
-    let h, args = Constr.decompose_app c in
-    match (Constr.kind h, Array.length args) with
-    | Constr.Const cu, 0 -> Option.bind (nat_const_body env nt cu) (literal_of env nt ops (fuel - 1))
-    | Constr.Const (k, _), 3 when mem_const k ops.op_of_nat -> literal_of env nt ops (fuel - 1) args.(1)
-    | _ -> None
-
-(* The generated lemmas, per pair of terms: a later argument with the same two terms reuses the lemma. *)
-let nat_eq_lemmas : ((Constr.t * Constr.t) * Constant.t) list ref =
-  Summary.ref ~name:"lean-nat-eq-lemmas" []
-
-type nat_transport = {
-  ts_refs : nat_transport_refs;
-  ts_ops : nat_ops;
-  ts_sigma : Evd.evar_map;
-  ts_name : N.t;  (** the entry *)
-  ts_id : Id.t;  (** the Rocq name of the entry *)
-  ts_op_lemmas :
-    ((Constr.t * Constr.t) option * (Constr.t * Constr.t) option * (Constr.t * Constr.t) option) Lazy.t;
-      (** for the export's [Nat.add], [Nat.mul], [Nat.pow]: the constant and its [toN] lemma *)
-  mutable ts_count : int;  (** arguments transported *)
-  mutable ts_lemmas : Id.t list;  (** the lemmas they use, last first *)
-  mutable ts_next : int;  (** the number of the next lemma this entry generates *)
-}
-
-let nat_type nt = Constr.mkIndU (nt.nt_nat, UVars.Instance.empty)
-let nat_zero nt = Constr.mkConstructU ((nt.nt_nat, 1), UVars.Instance.empty)
-let nat_succ nt t = Constr.mkApp (Constr.mkConstructU ((nt.nt_nat, 2), UVars.Instance.empty), [| t |])
-let refl_nat nt t = Constr.mkApp (nt.nt_refl, [| nat_type nt; t |])
-let refl_n nt w = Constr.mkApp (nt.nt_refl, [| nt.nt_n; w |])
-let lam1 nt body = Constr.mkLambda (Context.nameR (Id.of_string "n"), nat_type nt, body)
-
-let lam2 nt body =
-  Constr.mkLambda
-    ( Context.nameR (Id.of_string "a"),
-      nat_type nt,
-      Constr.mkLambda (Context.nameR (Id.of_string "b"), nat_type nt, body) )
-
-(* The binary literal of [v] (Rocq's [N]). *)
-let n_literal nt v =
-  let rec pos v =
-    if Z.equal v Z.one then nt.nt_xh
-    else
-      Constr.mkApp ((if Z.testbit v 0 then nt.nt_xi else nt.nt_xo), [| pos (Z.shift_right v 1) |])
-  in
-  if Z.equal v Z.zero then nt.nt_n0 else Constr.mkApp (nt.nt_npos, [| pos v |])
-
-(* The export's [Nat.add], [Nat.mul] and [Nat.pow] with their [toN] lemmas, each defining equation closed
-   by [Logic.eq_refl] on open terms (as Lean's [Nat.pow_succ := rfl]). *)
-let op_lemmas nt =
-  let app f a = Constr.mkApp (f, a) in
-  let r1 = Constr.mkRel 1 and r2 = Constr.mkRel 2 in
-  let hadd =
-    Option.map
-      (fun add ->
-        let add_0 = lam1 nt (refl_nat nt r1) in
-        let add_S = lam2 nt (refl_nat nt (nat_succ nt (app add [| r2; r1 |]))) in
-        (add, app nt.nt_toN_add [| add; add_0; add_S |]))
-      (lean_const0 [ "Nat"; "add" ])
-  in
-  let hmul =
-    match (hadd, lean_const0 [ "Nat"; "mul" ]) with
-    | Some (add, hadd), Some mul ->
-      let mul_0 = lam1 nt (refl_nat nt (nat_zero nt)) in
-      let mul_S = lam2 nt (refl_nat nt (app add [| app mul [| r2; r1 |]; r2 |])) in
-      Some (mul, app nt.nt_toN_mul [| add; mul; hadd; mul_0; mul_S |])
-    | _ -> None
-  in
-  let hpow =
-    match (hmul, lean_const0 [ "Nat"; "pow" ]) with
-    | Some (mul, hmul), Some pow ->
-      let pow_0 = lam1 nt (refl_nat nt (nat_succ nt (nat_zero nt))) in
-      let pow_S = lam2 nt (refl_nat nt (app mul [| app pow [| r2; r1 |]; r2 |])) in
-      Some (pow, app nt.nt_toN_pow [| mul; pow; hmul; pow_0; pow_S |])
-    | _ -> None
-  in
-  (hadd, hmul, hpow)
-
-let value_of st env c = nat_value env st.ts_refs st.ts_ops transport_fuel c
-
-(* A proof of [Logic.eq (toN t) w], [w] the binary literal of [t]'s value, step by step along [t]: every
-   step states its own term, so that the kernel only compares a term with itself, and checks each binary
-   operation on literals. Raises [Not_nat] when [t] has no value or an operation it needs is missing. *)
-let rec nat_certificate st env t =
-  let nt = st.ts_refs and ops = st.ts_ops in
-  let v = value_of st env t in
-  let w = n_literal nt v in
-  if Z.lt v transport_small_literal && is_nat_literal nt t then refl_n nt w
-  else
-    let h, args = Constr.decompose_app t in
-    let need = function Some x -> x | None -> raise Not_nat in
-    let step lemma m =
-      Constr.mkApp
-        (lemma, [| m; n_literal nt (value_of st env m); w; nat_certificate st env m; refl_n nt w |])
-    in
-    let unfold b =
-      Constr.mkApp (nt.nt_unfold_step, [| t; b; w; refl_nat nt t; nat_certificate st env b |])
-    in
-    let op (g, hg) hn f a b =
-      let hfg = lam2 nt (refl_nat nt (Constr.mkApp (Vars.lift 2 f, [| Constr.mkRel 2; Constr.mkRel 1 |]))) in
-      Constr.mkApp
-        ( nt.nt_op_step,
-          [| f; g; hn; hfg; hg; a; b; n_literal nt (value_of st env a); n_literal nt (value_of st env b); w;
-             nat_certificate st env a; nat_certificate st env b; refl_n nt w |] )
-    in
-    let hadd, hmul, hpow = Lazy.force st.ts_op_lemmas in
-    let head4 () = Constr.mkApp (h, Array.sub args 0 4) in
-    match (Constr.kind h, Array.length args) with
-    | Constr.Construct ((ind, 2), _), 1 when Ind.CanOrd.equal ind nt.nt_nat -> step nt.nt_succ_step args.(0)
-    | Constr.Const (k, _), 1 when Constant.CanOrd.equal k nt.nt_double -> step nt.nt_double_step args.(0)
-    | Constr.Const cu, 0 -> unfold (need (nat_const_body env nt cu))
-    | Constr.Const (k, _), 3 when mem_const k ops.op_of_nat -> unfold args.(1)
-    | Constr.Const (k, _), 6 when mem_const k ops.op_hadd -> op (need hadd) nt.nt_n_add (head4 ()) args.(4) args.(5)
-    | Constr.Const (k, _), 6 when mem_const k ops.op_hmul -> op (need hmul) nt.nt_n_mul (head4 ()) args.(4) args.(5)
-    | Constr.Const (k, _), 6 when mem_const k ops.op_hpow -> op (need hpow) nt.nt_n_pow (head4 ()) args.(4) args.(5)
-    | Constr.Const (k, _), 2 when mem_const k ops.op_add -> op (need hadd) nt.nt_n_add h args.(0) args.(1)
-    | Constr.Const (k, _), 2 when mem_const k ops.op_mul -> op (need hmul) nt.nt_n_mul h args.(0) args.(1)
-    | Constr.Const (k, _), 2 when mem_const k ops.op_pow -> op (need hpow) nt.nt_n_pow h args.(0) args.(1)
-    | _ -> raise Not_nat
-
-(* The lemma [x = y] for two closed Nat terms of equal value, generated and declared on first use. A lemma
-   the kernel refuses is logged and not used. *)
-let nat_eq_lemma st env x y =
-  match List.find_opt (fun ((x', y'), _) -> Constr.equal x x' && Constr.equal y y') !nat_eq_lemmas with
-  | Some (_, c) -> Some c
-  | None ->
-    let nt = st.ts_refs in
-    let levels = Vars.universes_of_constr ~init:(Vars.universes_of_constr x) y in
-    if not (Vars.closed0 x && Vars.closed0 y)
-       || Result.is_error (UGraph.check_declared_universes (Global.universes ()) levels)
-    then None
-    else
-      match (nat_certificate st env x, nat_certificate st env y) with
-      | exception Not_nat -> None
-      | cx, cy ->
-        let w = n_literal nt (value_of st env x) in
-        let eq = Constr.mkIndU (nt.nt_eq, UVars.Instance.of_array ([||], [| Level.set |])) in
-        let ty = Constr.mkApp (eq, [| nat_type nt; x; y |]) in
-        let proof = Constr.mkApp (nt.nt_nat_eq, [| x; y; w; cx; cy |]) in
-        st.ts_next <- st.ts_next + 1;
-        let id = Id.of_string (Id.to_string st.ts_id ^ "__nat_eq_" ^ string_of_int st.ts_next) in
-        let id =
-          if Global.exists_objlabel id then Namegen.next_global_ident_away (Global.safe_env ()) id Id.Set.empty
-          else id
-        in
-        let univs = (UState.Polymorphic_entry UContext.empty, UnivNames.empty_binders) in
-        (match quickdef ~name:id ~types:(Some ty) ~univs proof with
-        | GlobRef.ConstRef c ->
-          nat_eq_lemmas := ((x, y), c) :: !nat_eq_lemmas;
-          Some c
-        | _ -> None
-        | exception e when CErrors.noncritical e ->
-          let env = Global.env () in
-          let pr = Printer.pr_constr_env env (Evd.from_env env) in
-          Feedback.msg_info
-            Pp.(
-              str "line " ++ int !lcnt ++ str ": " ++ N.pp st.ts_name ++ str ": the generated lemma "
-              ++ Id.print id ++ str " : " ++ pr x ++ str " = " ++ pr y ++ str " is refused by the kernel: "
-              ++ CErrors.print e);
-          None)
-
-(* Where two types differ: [Keep] takes the expected type's subterm (a difference there is the kernel's to
-   convert, as before), [Hole k] the [k]th pair of closed Nat terms of equal value. *)
-type nat_shape =
-  | Keep
-  | Hole of int
-  | App_s of nat_shape * nat_shape array
-  | Prod_s of nat_shape * nat_shape
-  | Lambda_s of nat_shape * nat_shape
-  | LetIn_s of nat_shape * nat_shape * nat_shape
-  | Proj_s of nat_shape
-
-(* Two closed Nat terms of different values: the types cannot be converted, the argument is left as is. *)
-exception Other_values
-
-let is_keep = function Keep -> true | _ -> false
-
-(* The shape of the differences of [a] (the argument's type) and [d] (the expected type), and the pairs
-   [(x, y)] of the holes: [x] in [a], [y] in [d], of equal value from [transport_min] on, [y] not the same
-   literal as [x]. *)
-let nat_diff st env a d =
-  let nt = st.ts_refs and ops = st.ts_ops in
-  let pairs = ref [] and count = ref 0 in
-  let hole x y =
-    match List.find_opt (fun (_, x', y') -> Constr.equal x x' && Constr.equal y y') !pairs with
-    | Some (k, _, _) -> Hole k
-    | None ->
-      let k = !count in
-      incr count;
-      pairs := (k, x, y) :: !pairs;
-      Hole k
-  in
-  let nat_pair a d =
-    match (value_of st env a, value_of st env d) with
-    | exception Not_nat -> None
-    | va, vd ->
-      if not (Z.equal va vd) then raise Other_values
-      else if Z.lt va transport_min || Constr.equal a d then Some Keep
-      else
-        match (literal_of env nt ops transport_fuel a, literal_of env nt ops transport_fuel d) with
-        | Some la, Some ld when Constr.equal la ld -> Some Keep
-        | _ -> Some (hole a d)
-  in
-  let rec go a d =
-    if a == d then Keep
-    else
-      match nat_pair a d with
-      | Some s -> s
-      | None ->
-        (match (Constr.kind a, Constr.kind d) with
-        | Constr.App _, Constr.App _ ->
-          let ha, aa = Constr.decompose_app a and hd, ad = Constr.decompose_app d in
-          if Array.length aa <> Array.length ad then Keep
-          else
-            let sh = go ha hd in
-            let sargs = Array.map2 go aa ad in
-            if is_keep sh && Array.for_all is_keep sargs then Keep else App_s (sh, sargs)
-        | Constr.Prod (_, a1, a2), Constr.Prod (_, d1, d2) ->
-          let s1 = go a1 d1 in
-          let s2 = go a2 d2 in
-          if is_keep s1 && is_keep s2 then Keep else Prod_s (s1, s2)
-        | Constr.Lambda (_, a1, a2), Constr.Lambda (_, d1, d2) ->
-          let s1 = go a1 d1 in
-          let s2 = go a2 d2 in
-          if is_keep s1 && is_keep s2 then Keep else Lambda_s (s1, s2)
-        | Constr.LetIn (_, a1, a2, a3), Constr.LetIn (_, d1, d2, d3) ->
-          let s1 = go a1 d1 in
-          let s2 = go a2 d2 in
-          let s3 = go a3 d3 in
-          if is_keep s1 && is_keep s2 && is_keep s3 then Keep else LetIn_s (s1, s2, s3)
-        | Constr.Proj (pa, _, a1), Constr.Proj (pd, _, d1) when Projection.CanOrd.equal pa pd ->
-          let s1 = go a1 d1 in
-          if is_keep s1 then Keep else Proj_s s1
-        | _ -> Keep)
-  in
-  let shape = go a d in
-  let holes = Array.make !count (a, d) in
-  List.iter (fun (k, x, y) -> holes.(k) <- (x, y)) !pairs;
-  (shape, holes)
-
-(* [d] with each hole [k] at binder depth [depth] replaced by [hole k depth]. *)
-let rec nat_fill shape d depth hole =
-  match shape with
-  | Keep -> d
-  | Hole k -> hole k depth
-  | App_s (sh, sargs) ->
-    let h, args = Constr.decompose_app d in
-    Constr.mkApp (nat_fill sh h depth hole, Array.map2 (fun s c -> nat_fill s c depth hole) sargs args)
-  | Prod_s (s1, s2) ->
-    (match Constr.kind d with
-    | Constr.Prod (na, t, b) -> Constr.mkProd (na, nat_fill s1 t depth hole, nat_fill s2 b (depth + 1) hole)
-    | _ -> assert false)
-  | Lambda_s (s1, s2) ->
-    (match Constr.kind d with
-    | Constr.Lambda (na, t, b) -> Constr.mkLambda (na, nat_fill s1 t depth hole, nat_fill s2 b (depth + 1) hole)
-    | _ -> assert false)
-  | LetIn_s (s1, s2, s3) ->
-    (match Constr.kind d with
-    | Constr.LetIn (na, v, t, b) ->
-      Constr.mkLetIn (na, nat_fill s1 v depth hole, nat_fill s2 t depth hole, nat_fill s3 b (depth + 1) hole)
-    | _ -> assert false)
-  | Proj_s s1 ->
-    (match Constr.kind d with
-    | Constr.Proj (p, r, c) -> Constr.mkProj (p, r, nat_fill s1 c depth hole)
-    | _ -> assert false)
-
-exception Nat_found
-
-(* Whether [c] has a closed Nat subterm of value [transport_min] or more. *)
-let has_big_nat st env c =
-  let rec scan c =
-    match value_of st env c with
-    | v -> if Z.geq v transport_min then raise_notrace Nat_found
-    | exception Not_nat -> Constr.iter scan c
-  in
-  try scan c; false with Nat_found -> true
-
-let has_beta_redex c =
-  let rec scan c =
-    match Constr.kind c with
-    | Constr.App (h, _) when Constr.isLambda h -> raise_notrace Nat_found
-    | _ -> Constr.iter scan c
-  in
-  try scan c; false with Nat_found -> true
-
-let on_econstr f c = EConstr.Unsafe.to_constr (f (EConstr.of_constr c))
-let beta st env c = if has_beta_redex c then on_econstr (Reductionops.nf_beta env st.ts_sigma) c else c
-let retype st env c = on_econstr (Retyping.get_type_of ~lax:true env st.ts_sigma) c
-let whd_all st env c = on_econstr (Reductionops.whd_all env st.ts_sigma) c
-
-let is_irrelevant_binder na =
-  match Context.binder_relevance na with Sorts.Irrelevant -> true | _ -> false
-
-(* [arg], whose expected type is the SProp type [dom], cast along the lemmas of its holes, or [None] when
-   its type differs from [dom] at no pair of closed Nat terms that needs one. *)
-let transport_arg st env arg dom =
-  let dom = beta st env dom in
-  if not (has_big_nat st env dom) then None
-  else
-    match nat_diff st env (beta st env (retype st env arg)) dom with
-    | exception Other_values -> None
-    | _, [||] -> None
-    | shape, pairs ->
-      let lemmas = Array.map (fun (x, y) -> nat_eq_lemma st env x y) pairs in
-      if Array.exists Option.is_empty lemmas then None
-      else begin
-        let nt = st.ts_refs in
-        let dl = Vars.lift 1 dom in
-        let side k j = if j < k then snd pairs.(j) else fst pairs.(j) in
-        let cast p k (x, y) =
-          let body = nat_fill shape dl 0 (fun j depth -> if j = k then Constr.mkRel (depth + 1) else side k j) in
-          let motive = Constr.mkLambda (Context.anonR, nat_type nt, body) in
-          let lemma = Constr.mkConstU (Option.get lemmas.(k), UVars.Instance.empty) in
-          Constr.mkApp (nt.nt_transport, [| motive; x; y; lemma; p |])
-        in
-        let p = ref arg in
-        Array.iteri (fun k xy -> p := cast !p k xy) pairs;
-        st.ts_count <- st.ts_count + 1;
-        Array.iter
-          (fun c ->
-            let id = Constant.label (Option.get c) in
-            if not (List.exists (Id.equal id) st.ts_lemmas) then st.ts_lemmas <- id :: st.ts_lemmas)
-          lemmas;
-        Some !p
-      end
-
-(* [args], the arguments of [f], each SProp argument transported where it needs it. *)
-let transport_args st env f args =
-  let n = Array.length args in
-  let out = ref args in
-  let set k a =
-    if !out == args then out := Array.copy args;
-    !out.(k) <- a
-  in
-  let attempt k dom =
-    match transport_arg st env !out.(k) dom with
-    | Some a -> set k a
-    | None -> ()
-    | exception e when CErrors.noncritical e -> ()
-  in
-  (* [ty] is the type of [f] applied to the arguments before [k], under their binders: [subst] holds those
-     arguments, the last first. *)
-  let rec loop k ty subst =
-    if k < n then
-      match Constr.kind ty with
-      | Constr.Prod (na, dom, codom) ->
-        if is_irrelevant_binder na then attempt k (Vars.substl subst dom);
-        loop (k + 1) codom (!out.(k) :: subst)
-      | _ ->
-        let ty = whd_all st env (Vars.substl subst ty) in
-        if Constr.isProd ty then loop k ty []
-  in
-  (try loop 0 (retype st env f) [] with e when CErrors.noncritical e -> ());
-  !out
-
-let rec transport_walk st env c =
-  let push d = Environ.push_rel d env in
-  match Constr.kind c with
-  | Constr.App (f, args) ->
-    let f' = transport_walk st env f in
-    let args' = transport_args st env f' (CArray.Smart.map (transport_walk st env) args) in
-    if f' == f && args' == args then c else Constr.mkApp (f', args')
-  | Constr.Lambda (na, t, b) ->
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (RelDecl.LocalAssum (na, t'))) b in
-    if t' == t && b' == b then c else Constr.mkLambda (na, t', b')
-  | Constr.Prod (na, t, b) ->
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (RelDecl.LocalAssum (na, t'))) b in
-    if t' == t && b' == b then c else Constr.mkProd (na, t', b')
-  | Constr.LetIn (na, v, t, b) ->
-    let v' = transport_walk st env v in
-    let t' = transport_walk st env t in
-    let b' = transport_walk st (push (RelDecl.LocalDef (na, v', t'))) b in
-    if v' == v && t' == t && b' == b then c else Constr.mkLetIn (na, v', t', b')
-  | Constr.Proj (p, r, c0) ->
-    let c0' = transport_walk st env c0 in
-    if c0' == c0 then c else Constr.mkProj (p, r, c0')
-  | _ -> c
-
-(* [body], whose declared type is [ty], with its SProp result transported to [ty] under its binders. *)
-let rec transport_result st env body ty =
-  match (Constr.kind body, Constr.kind ty) with
-  | Constr.Lambda (na, t, b), Constr.Prod (_, _, tb) ->
-    let b' = transport_result st (Environ.push_rel (RelDecl.LocalAssum (na, t)) env) b tb in
-    if b' == b then body else Constr.mkLambda (na, t, b')
-  | _ ->
-    let wanted () =
-      has_big_nat st env ty
-      && Sorts.relevance_equal Sorts.Irrelevant
-           (EConstr.Unsafe.to_relevance (Retyping.relevance_of_type env st.ts_sigma (EConstr.of_constr ty)))
-    in
-    (try if wanted () then Option.default body (transport_arg st env body ty) else body
-     with e when CErrors.noncritical e -> body)
-
-(* Whether the entry may need the pass: [ty], [body] or the type of a global they name holds one of the
-   export's Nat operations, a literal of [Nat_double] form or a constant of type Nat of large value. *)
-let transport_may_apply st env ty body =
-  let nt = st.ts_refs and ops = st.ts_ops in
-  let triggers = List.concat [ ops.op_hadd; ops.op_hmul; ops.op_hpow; ops.op_add; ops.op_mul; ops.op_pow ] in
-  let big_const cu =
-    match nat_const_body env nt cu with
-    | Some b -> (try Z.geq (nat_value env nt ops transport_fuel b) transport_min with Not_nat -> false)
-    | None -> false
-  in
-  let seen = ref GlobRef.Set_env.empty in
-  let rec scan types c =
-    match Constr.kind c with
-    | Constr.Const ((k, _) as cu) ->
-      if Constant.CanOrd.equal k nt.nt_double || mem_const k triggers || big_const cu then
-        raise_notrace Nat_found;
-      if types then global (GlobRef.ConstRef k)
-    | Constr.Ind (ind, _) -> if types then global (GlobRef.IndRef ind)
-    | Constr.Construct (cs, _) -> if types then global (GlobRef.ConstructRef cs)
-    | _ -> Constr.iter (scan types) c
-  and global g =
-    if not (GlobRef.Set_env.mem g !seen) then begin
-      seen := GlobRef.Set_env.add g !seen;
-      scan false (fst (Typeops.type_of_global_in_context env g))
-    end
-  in
-  try scan true ty; scan true body; false with Nat_found -> true
-
-(* The value [body] of the entry [name] (Rocq name [id]) of type [ty], at the universes of [uconv], with its
-   SProp arguments transported where they need it, and a line in the import's output that names the
-   lemmas; [body] itself when the pass changes nothing. On the new path only. *)
-let transport_value ~name ~id uconv ty body =
-  match (on_new_path (), nat_transport_refs ()) with
-  | true, Some nt ->
-    let env = Environ.set_universes uconv.graph (Global.env ()) in
-    let st =
-      {
-        ts_refs = nt;
-        ts_ops = nat_ops ();
-        ts_sigma = Evd.from_env env;
-        ts_name = name;
-        ts_id = id;
-        ts_op_lemmas = lazy (op_lemmas nt);
-        ts_count = 0;
-        ts_lemmas = [];
-        ts_next = 0;
-      }
-    in
-    if not (transport_may_apply st env ty body) then body
-    else
-      let body' = transport_result st env (transport_walk st env body) ty in
-      if st.ts_count = 0 then body
-      else begin
-        Feedback.msg_info
-          Pp.(
-            str "line " ++ int !lcnt ++ str ": " ++ N.pp name ++ str ": " ++ int st.ts_count
-            ++ str " argument(s) transported (" ++ prlist_with_sep (fun () -> str ", ") Id.print (List.rev st.ts_lemmas)
-            ++ str ")");
-        body'
-      end
-  | _ -> body
 
 let rec to_constr =
   let open Constr in
@@ -2006,51 +1336,53 @@ let rec to_constr =
           ()
       in
       ret (nat_int nat double i)
-    | String s when on_new_path () -> to_constr env (string_lit_expr s)
-    | String s ->
-      (* instantiate (N.append N.anon "Char") [] >>= fun char -> *)
-      (* let (_, charu) = Constr.destInd char in *)
-      instantiate (N.append N.anon "String") [] >>= fun string ->
-      let string, _ = Constr.destInd string in
-      instantiate (N.append (N.append N.anon "String") "mk") []
-      >>= fun string_mk ->
-      get_uconv >>= fun uconv ->
-      let list, char =
-        with_env_evm env uconv
-          (fun env evd () ->
-            let ty =
-              Retyping.get_type_of env evd (EConstr.of_constr string_mk)
-            in
-            let _, list_char, _ = EConstr.destProd evd ty in
-            let list, char =
-              match EConstr.destApp evd list_char with
-              | list, [| char |] -> (list, char)
-              | _ ->
-                CErrors.user_err
-                  Pp.(
-                    str "Invalid type for string constructor: "
-                    ++ Printer.pr_type_env env evd (EConstr.to_constr evd ty)
-                    ++ str " ("
-                    ++ Printer.pr_type_env env evd
-                         (EConstr.to_constr evd list_char)
-                    ++ str " should be an application of list to char)")
-            in
-            (EConstr.to_constr evd list, EConstr.to_constr evd char))
-          ()
-      in
-      (* instantiate (N.append N.anon "List") [] >>= fun list -> *)
-      let list, _ = Constr.destInd list in
-      get_uconv >>= fun uconv ->
-      let mkChar =
-        with_env_evm env uconv
-          (fun env evd () ->
-            let _, mkChar =
-              Evd.fresh_global env evd (lookup_char_prim_ref ())
-            in
-            EConstr.to_constr evd mkChar)
-          ()
-      in
-      ret (mk_string char string list UVars.Instance.empty mkChar s)
+    | String s -> (
+      match !current_path with
+      | LeanParseNdjson.New version -> to_constr env (string_lit_expr version s)
+      | LeanParseNdjson.Legacy ->
+        (* instantiate (N.append N.anon "Char") [] >>= fun char -> *)
+        (* let (_, charu) = Constr.destInd char in *)
+        instantiate (N.append N.anon "String") [] >>= fun string ->
+        let string, _ = Constr.destInd string in
+        instantiate (N.append (N.append N.anon "String") "mk") []
+        >>= fun string_mk ->
+        get_uconv >>= fun uconv ->
+        let list, char =
+          with_env_evm env uconv
+            (fun env evd () ->
+              let ty =
+                Retyping.get_type_of env evd (EConstr.of_constr string_mk)
+              in
+              let _, list_char, _ = EConstr.destProd evd ty in
+              let list, char =
+                match EConstr.destApp evd list_char with
+                | list, [| char |] -> (list, char)
+                | _ ->
+                  CErrors.user_err
+                    Pp.(
+                      str "Invalid type for string constructor: "
+                      ++ Printer.pr_type_env env evd (EConstr.to_constr evd ty)
+                      ++ str " ("
+                      ++ Printer.pr_type_env env evd
+                           (EConstr.to_constr evd list_char)
+                      ++ str " should be an application of list to char)")
+              in
+              (EConstr.to_constr evd list, EConstr.to_constr evd char))
+            ()
+        in
+        (* instantiate (N.append N.anon "List") [] >>= fun list -> *)
+        let list, _ = Constr.destInd list in
+        get_uconv >>= fun uconv ->
+        let mkChar =
+          with_env_evm env uconv
+            (fun env evd () ->
+              let _, mkChar =
+                Evd.fresh_global env evd (lookup_char_prim_ref ())
+              in
+              EConstr.to_constr evd mkChar)
+            ()
+        in
+        ret (mk_string char string list UVars.Instance.empty mkChar s))
 
 and instantiate n univs uconv =
   assert (List.length univs < Sys.int_size);
@@ -2132,7 +1464,13 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
       let uconv, ty = to_constr empty_env ty uconv in
       let uconv, body = to_constr empty_env body uconv in
       let id = name_for n i in
-      let transported = transport_value ~name:n ~id uconv ty body in
+      let transported =
+        if not (on_new_path ()) then None
+        else
+          LeanNatTransport.transport (nat_transport_context n)
+            (Environ.set_universes uconv.graph (Global.env ()))
+            ~entry:id ty body
+      in
       let univs, algs = univ_entry uconv univs in
       let declare body =
         try quickdef ~name:id ~types:(Some ty) ~univs body
@@ -2154,18 +1492,30 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
                      ty);
           Exninfo.iraise e
       in
-      (* A transported value the kernel refuses is logged, and Lean's own value is declared instead, as
-         without the transport. *)
+      (* The transported value, when the pass changes it, is declared first: a value the kernel refuses
+         is logged, and Lean's own value is declared instead. The log line is printed once a value is
+         declared. *)
       let ref =
-        if transported == body then declare body
-        else
-          try quickdef ~name:id ~types:(Some ty) ~univs transported
-          with e when CErrors.noncritical e ->
-            Feedback.msg_info
-              Pp.(
-                str "line " ++ int !lcnt ++ str ": " ++ N.pp n
-                ++ str ": the transported value is refused, Lean's value is declared: " ++ CErrors.print e);
-            declare body
+        match transported with
+        | None -> declare body
+        | Some { LeanNatTransport.value; count; lemmas } -> (
+          match quickdef ~name:id ~types:(Some ty) ~univs value with
+          | ref ->
+            line_msg n
+              ~msg:
+                Pp.(
+                  int count ++ str " argument(s) transported ("
+                  ++ prlist_with_sep (fun () -> str ", ") Id.print lemmas
+                  ++ str ")");
+            ref
+          | exception e when CErrors.noncritical e ->
+            let ref = declare body in
+            line_msg n
+              ~msg:
+                Pp.(
+                  str "the transported value is refused (" ++ CErrors.print e
+                  ++ str "); Lean's value is declared");
+            ref)
       in
       (ref, algs)
   in
@@ -3017,15 +2367,12 @@ let rec do_input state ~from ~until ch =
           incr lcnt;
           do_input state ~from ~until ch
         | false, Some (Entry entry) ->
-          (* The path and the Lean version the export's metadata gave before
+          (* The path (with the Lean version) the export's metadata gave before
              its first entry. *)
-          (match state.pstate with
-          | OldParser _ ->
-            current_path := LeanParseNdjson.Legacy;
-            current_version := None
-          | NdjsonParser pstate ->
-            current_path := LeanParseNdjson.path pstate;
-            current_version := LeanParseNdjson.version pstate);
+          current_path :=
+            (match state.pstate with
+            | OldParser _ -> LeanParseNdjson.Legacy
+            | NdjsonParser pstate -> LeanParseNdjson.path pstate);
           (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
           let st = freeze () in
           (match add_entry_in_time entry with

@@ -10,6 +10,8 @@ src/lean.mli
 src/leanExpr.mli
 src/leanName.ml
 src/leanName.mli
+src/leanNatTransport.ml
+src/leanNatTransport.mli
 src/leanParseShared.ml
 src/leanParseShared.mli
 src/leanParse.ml

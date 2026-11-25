@@ -371,13 +371,23 @@ either path. A literal below 5000 becomes `Nat_succ` applied to the
 literal one below (shared between literals). A literal `i` of 5000 or
 more becomes `Nat_succ` applied `r` times (1 to 8) to the binary form
 of `i - r` (`Nat_double` and `Nat_succ` over its bits), with `r` chosen
-so that `i - r` is 4 modulo 8. Within a block of 8 the predecessor of
-such a literal is, term for term, the literal one below, so the kernel
-compares the predecessors of two equal literals without unfolding
-`Nat_double`: comparing `-(-x)` with `x` for `x = -134217728` otherwise
-needs a stack as deep as the value. Before this form a literal of 5000
-or more was the binary form of `i` itself; a tool that reads the
-translated terms must accept up to 8 leading `Nat_succ`.
+so that `i - r` is 4 modulo 8. For each such `b`, large literals in
+the block `b + 1` through `b + 8` use the same binary form of `b`.
+If `j` and `j - 1` are both large literals in that block, the predecessor
+of the literal `j` is, term for term, the literal `j - 1`, and
+the kernel compares two such predecessors without unfolding
+`Nat_double`; the predecessor of the literal `b + 1` is the binary form
+of `b`, which is not the literal `b`. So a conversion that takes `k`
+`Nat_succ` off the literal `j` and meets the literal `j - k` is cheap
+when `j - k` is in the block of `j` (comparing `-(-x)` with `x` for
+`x = -134217728`, 134217728 being `b + 4`, where the plain binary form
+needs a stack as deep as the value). Crossing the block boundary can
+still force a unary walk: for example, `Nat.pred` of the literal
+134217733 reaches the binary form of 134217732, not the literal
+134217732. Before this form a literal of 5000 or more was the binary
+form of `i` itself; a tool that reads the translated terms must accept
+up to 8 leading
+`Nat_succ`.
 
 Lean's kernel computes `Nat` arithmetic on literals with GMP. Rocq's
 kernel reduces Lean's own `Nat.add`, `Nat.sub`, `Nat.mul` and `Nat.pow`
@@ -415,16 +425,19 @@ What it changes:
 - The lemma `<entry>__nat_eq_<k>` (`Char_ofNatAux__nat_eq_1 :
   UInt32.size = 2 ^ 32`, say) is declared before the entry, as a
   constant the kernel checks like any other. Its proof goes through
-  Rocq's binary `N` (`toN` and the lemmas after it in `src/Lean.v`,
-  proved by induction): the export's own `Nat.add`, `Nat.mul` and
-  `Nat.pow`, whose defining equations the kernel checks by
-  `Logic.eq_refl` on open terms, a step per bit of each literal, and
-  each binary computation checked on literals. A later argument with
-  the same two terms reuses the lemma. The values the importer
-  computes only find the places: a wrong one gives a lemma the kernel
-  refuses, which is logged (`line N: NAME: the generated lemma ... is
-  refused by the kernel: ...`) and not used.
-- The import's output has one line per entry whose value changes:
+  Rocq's binary `N` (`toN` and the lemmas after it in `src/Lean.v`):
+  the export's own `Nat.add`, `Nat.mul` and `Nat.pow`, whose defining
+  equations the kernel checks by `Logic.eq_refl` on open terms, a step
+  per bit of each literal, and each binary computation checked on
+  literals. A later argument with the same two terms reuses the
+  lemma, within the Rocq file that runs the imports: the cache is not
+  kept in a compiled file, so a file that Requires one with an earlier
+  import generates the lemmas it needs again, under new names. The
+  values the importer computes only find the places: a wrong one gives
+  a lemma the kernel refuses, which is logged (`line N: NAME: the
+  generated lemma ... is refused by the kernel: ...`) and not used.
+- The import's output has one line per entry whose value changes,
+  printed once the kernel has accepted that value:
   `line N: NAME: <k> argument(s) transported (<lemmas>)`.
 
 What it does not change: an entry's declared type (its statement),
@@ -434,15 +447,25 @@ the axioms: no imported entry becomes an axiom, the `toN` lemmas of
 `src/Lean.v` are closed under the global context, `Nat_eq_of_toN`
 and `sprop_transport` rely only on the definitional UIP of `eq` (as
 every entry that names `eq` does), and a generated lemma relies on no
-axiom (`Print Assumptions`). An entry where nothing needs a cast is
-declared with Lean's own value, exactly as without the transport; a
-cheap scan for the export's `Nat` operations and large literals in
-the entry and the types of the constants it names decides which
-entries are looked at. Two closed `Nat` terms of different values
-give no lemma: the kernel refuses the entry as before. If the kernel
-refuses a transported value, the import logs it (`line N: NAME: the
-transported value is refused, Lean's value is declared: ...`) and
-declares Lean's value instead.
+axiom (`Print Assumptions`). An entry where the pass casts nothing is
+declared with Lean's own value; a cheap scan for the export's `Nat`
+operations and large literals in the entry and the types of the
+constants it names decides which entries are looked at. Two closed
+`Nat` terms of different values give no lemma: the kernel refuses the
+entry as before. If the kernel refuses a transported value, the import
+declares Lean's value instead, then logs `line N: NAME: the transported
+value is refused (...); Lean's value is declared`. If the entry is
+accepted, any lemmas the pass already declared remain, even if another
+place gets no lemma, the pass stops, or Lean's original value is used.
+
+The pass memoizes values per entry, by constant or by shared term.
+It caps the scans, natural number evaluation and certificate construction
+at a total of 1 000 000 steps; a reused certificate counts again at
+its full size because the kernel checks the proof tree. The finder
+also caps nesting at 10 000. When a limit is reached, the importer
+logs `line N: NAME: the transport pass stops: ...` and submits the
+original value for the usual kernel check. An error in the pass takes
+the same path and logs `the transport pass fails; ...`.
 
 Limits: only on the new path; only proof (`SProp`) positions. A
 mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size
@@ -451,7 +474,8 @@ the kernel. The places are found in the types the arguments and the
 function have as written, not after unfolding a constant, and the
 operations are the six above: `Nat.sub`, `Nat.div`, `Nat.mod`,
 `Nat.ble` and `Nat.beq` (`decide` on large numbers) are not covered.
-Values are computed up to 1024 bits.
+Values are computed up to 1024 bits. `USize.size` (`2 ^
+System.Platform.numBits`) has no closed value.
 
 ## Additional note on recursors
 
@@ -596,10 +620,12 @@ inductive type.
 
 A string option: `"Fail"` (the default), `"Stop"` or `"Skip"`. It decides
 what `Lean Import` does with a line it refuses: a line whose entry it cannot
-declare, or a line it cannot parse. A line before the first line to import
-(`Lean Import "file" FROM` starts at line FROM) is parsed for its names,
-levels and expressions only; when it cannot be parsed, it is refused like
-any other line. The refusal reads `Error at line N (for NAME)`, followed by the
+declare, or a line it cannot parse. In an NDJSON export, a line before
+the first line to import (`Lean Import "file" FROM` starts at line FROM)
+is parsed for its names, levels and expressions only (a declaration
+there is not read); when it cannot be parsed, it is refused like any
+other line. The old text format reads nothing before line FROM. The
+refusal reads `Error at line N (for NAME)`, followed by the
 line and the error. NAME is the entry's name. For a line that cannot be
 parsed, it is the name the NDJSON parser read before the error, else
 `line-N`.

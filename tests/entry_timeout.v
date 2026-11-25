@@ -15,11 +15,14 @@ Redirect "entry_timeout_negative.log" Fail Set Lean Entry Timeout -1.
 Set Lean Entry Timeout 1073741824.
 Redirect "entry_timeout_large.log" Succeed Lean Import "../dumps/lean434/timeout.ndjson" 1 132.
 
-(* T1, T14: Unset removes the limit: the decide proof slow_sum, which takes
-   more than 1 s, imports. *)
+(* T1, T14: Unset removes the limit. The decide proof slow_sum takes
+   more than 1 s. On the Rocq 9.2 cut it took 49.3 s and 59.8 s at
+   an 8 MiB stack in two trials, and more than 60 s in another.
+   The outer timeout gives the proof time to finish and still bounds
+   the test if the import does not finish. *)
 Set Lean Entry Timeout 1.
 Unset Lean Entry Timeout.
-Redirect "entry_timeout_unset.log" Succeed Timeout 60 Lean Import "../dumps/lean434/timeout.ndjson" 1 2196.
+Redirect "entry_timeout_unset.log" Succeed Timeout 300 Lean Import "../dumps/lean434/timeout.ndjson" 1 2196.
 
 (* T8: an outer Timeout shorter than the entry limit fires first: the command
    ends in Timeout!, and no entry is refused for the entry limit. *)
