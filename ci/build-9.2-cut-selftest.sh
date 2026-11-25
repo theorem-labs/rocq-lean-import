@@ -3,7 +3,7 @@
 # runs self_test. It reads the settings and helpers of that script (SELF, SETTINGS, SCRIPT_REL, INVENTORY, ...).
 
 # ---- Self-test ------------------------------------------------------------------------------------------------
-# One row per rule of ci/build-9.2-cut.sh, S0 to S24c, the rule stated in the comment above the row. Each case of
+# One row per rule of ci/build-9.2-cut.sh (S0 to S24c and V1 to V16), stated in the comments below. Each case of
 # a row runs on its own copy of a scratch git repository (made with git init and real commits under a mktemp -d
 # of $TMPDIR), through a copy of the script with the stubs its "Self-test stubs" section describes. A row passes
 # only when every one of its cases shows the exit status and the lines or files the row names.
@@ -21,7 +21,7 @@ st_tsv() {
 
 st_inventory() { # <rows...>: an inventory with a header comment (line 1) and the rows from line 2
   local r
-  printf '# file\tfeatures\tbase_entry\town_entry\tstatus\tcommits\n'
+  printf '# file\tfeatures\tbase_entry\town_entry\tstatus\tcommits\tstack\n'
   for r in "$@"; do printf '%s\n' "$r"; done
 }
 
@@ -112,11 +112,16 @@ st_stubs() {
   mkdir -p "$s" || return 1
   cat >"$s/run-test" <<'EOF'
 #!/usr/bin/env bash
-# Self-test stand-in for RUN_TEST. $1: suite|one, $2: tree, $3: test name; ST_OUTCOME picks the outcome. Each call
-# is recorded with the opam root and switch its environment selects ("<unset>" when none).
+# Self-test stand-in for RUN_TEST. $1: suite|one, $2: tree, $3: test name. The side selects the outcome.
 src_marker=$(<"$2/src/marker") tests_marker=$(<"$2/tests/marker") fixes=$(cd "$2/src" && echo fix_*.ml)
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:-}" "$src_marker" "$tests_marker" "$fixes" \
-  "${OPAMROOT-<unset>}" "${OPAMSWITCH-<unset>}" >>"$ST_CALLS"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:--}" "$src_marker" "$tests_marker" "$fixes" \
+  "${OPAMROOT-<unset>}" "${OPAMSWITCH-<unset>}" "${CUT_RUN_SIDE-<unset>}" "${CUT_RUN_STACK_WANT-<unset>}" >>"$ST_CALLS"
+case ${CUT_RUN_SIDE-} in
+  head) ST_OUTCOME=$ST_OUTCOME_HEAD ;;
+  parent) ST_OUTCOME=$ST_OUTCOME_PARENT ;;
+  suite) ;;
+  *) echo "stub: unknown CUT_RUN_SIDE '${CUT_RUN_SIDE-}'" >&2; exit 99 ;;
+esac
 echo "STUB RUN-TEST $1 ${3:-}"
 case $ST_OUTCOME in
   pass) echo "stub: the test passes"; exit 0 ;;
@@ -175,8 +180,13 @@ EOF
 #!/usr/bin/env bash
 # Self-test stand-in for the stack read-back. $1: soft|hard, $2: the KiB the setter was asked for, or "-". As the real
 # setter (stack_apply) does, a value asked for lowers a hard limit of "unlimited" to it.
+soft=$ST_SOFT
+case ${CUT_RUN_SIDE-} in
+  head) soft=${ST_SOFT_HEAD:-$soft} ;;
+  parent) soft=${ST_SOFT_PARENT:-$soft} ;;
+esac
 case $1 in
-  soft) if [[ -n $ST_SOFT ]]; then echo "$ST_SOFT"; elif [[ $2 == - ]]; then echo "$ST_DEFAULT_SOFT"; else echo "$2"; fi ;;
+  soft) if [[ -n $soft ]]; then echo "$soft"; elif [[ $2 == - ]]; then echo "$ST_DEFAULT_SOFT"; else echo "$2"; fi ;;
   hard) if [[ $ST_HARD == unlimited && $2 != - ]]; then echo "$2"; else echo "$ST_HARD"; fi ;;
 esac
 EOF
@@ -193,7 +203,7 @@ EOF
   cat >"$s/compile" <<'EOF'
 #!/usr/bin/env bash
 # Self-test stand-in for `opam exec -- rocq compile`.
-printf 'compile\t%s\t%s\n' "$PWD" "$*" >>"$ST_CALLS"
+printf 'compile\t%s\t%s\t%s\t%s\n' "$PWD" "$*" "${CUT_RUN_SIDE-<unset>}" "${CUT_RUN_STACK_WANT-<unset>}" >>"$ST_CALLS"
 echo "stub compile stdout"
 echo "stub compile stderr" >&2
 if [[ $ST_OUTCOME == fail ]]; then
@@ -204,7 +214,7 @@ EOF
   cat >"$s/check" <<'EOF'
 #!/usr/bin/env bash
 # Self-test stand-in for `opam exec -- rocqchk`.
-printf 'check\t%s\t%s\n' "$PWD" "$*" >>"$ST_CALLS"
+printf 'check\t%s\t%s\t%s\t%s\n' "$PWD" "$*" "${CUT_RUN_SIDE-<unset>}" "${CUT_RUN_STACK_WANT-<unset>}" >>"$ST_CALLS"
 echo "stub check stdout"
 echo "stub check stderr" >&2
 if [[ $ST_OUTCOME == fail ]]; then
@@ -254,10 +264,10 @@ st_template() { # the repository every case copies: base, three fix commits, the
     '(* planted: Planted.unstarted *)' 'Redirect "planted_unstarted.log" Lean Import "../dumps/small.ndjson".' \
     '(* planted: Planted.cross *)' 'Redirect "planted_cross.log" Lean Import "../dumps/small.ndjson".' \
     >"$t/tests/planted_sa.v"
-  ST_ROW_A=$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_A")
-  ST_ROW_B=$(st_tsv tests/lean434_b.v 'F2 F3' Beta.base Beta.own fixed "$ST_FIX_B")
-  ST_ROW_C=$(st_tsv tests/lean434_c.v F4 Gamma.one - listed -)
-  ST_ROW_OPT=$(st_tsv tests/lean434_opt.v F5 'option:Lean Entry Timeout' - fixed "$ST_FIX_OPT")
+  ST_ROW_A=$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_A" -)
+  ST_ROW_B=$(st_tsv tests/lean434_b.v 'F2 F3' Beta.base Beta.own fixed "$ST_FIX_B" -)
+  ST_ROW_C=$(st_tsv tests/lean434_c.v F4 Gamma.one - listed - -)
+  ST_ROW_OPT=$(st_tsv tests/lean434_opt.v F5 'option:Lean Entry Timeout' - fixed "$ST_FIX_OPT" -)
   st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$t/$INVENTORY"
   st_git_commit "$t" "head: inventory" || return 1
 }
@@ -299,7 +309,7 @@ st_fx() { # <file> <text, printf %b>: a file of the case's play:<status> outcome
 st_r5_test() { # <name> <entry>: tests/<name>.v from stdin, listed in tests/_CoqProject, its row fixed by fix a
   { cat >"$ST_REPO/tests/$1.v" && printf '%s.v\n' "$1" >>"$ST_REPO/tests/_CoqProject" &&
     st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" \
-      "$(st_tsv "tests/$1.v" F9 "$2" - fixed "$ST_FIX_A")" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
+      "$(st_tsv "tests/$1.v" F9 "$2" - fixed "$ST_FIX_A" -)" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
   st_commit "test $1"
 }
 
@@ -323,11 +333,18 @@ st_run() { # [VAR=value...] -- [script args...]: run the case's copy of the scri
         PATH="$ST_CASE/caller/opam/cut/bin:$PATH" \
         CUT_STUB_RUN_TEST="$ST_ROOT/stubs/run-test" CUT_STUB_ULIMIT="$ST_ROOT/stubs/ulimit" \
         CUT_STUB_UNAME_R="$ST_ROOT/stubs/uname" CUT_STUB_COMPILE="$ST_ROOT/stubs/compile" \
-        CUT_STUB_CHECK="$ST_ROOT/stubs/check" ST_CALLS="$ST_CASE/calls" ST_OUTCOME=pass ST_SOFT= \
+        CUT_STUB_CHECK="$ST_ROOT/stubs/check" ST_CALLS="$ST_CASE/calls" ST_OUTCOME=pass \
+        ST_OUTCOME_HEAD=pass ST_OUTCOME_PARENT=pass ST_SOFT= ST_SOFT_HEAD= ST_SOFT_PARENT= \
         ST_DEFAULT_SOFT=8192 ST_HARD=unlimited ST_UNAME=generic ST_FX="$ST_CASE/fx" "${envs[@]}" \
         bash "$ST_REPO/$SCRIPT_REL" "$@"
   ) >"$ST_CASE/out" 2>"$ST_CASE/err" </dev/null
   ST_RC=$?
+}
+
+st_revert() { # <parent outcome> <test> [VAR=value...]: head passes unless overridden
+  local outcome=$1 test=$2
+  shift 2
+  st_run "ST_OUTCOME_PARENT=$outcome" "$@" -- --revert-fix "$test"
 }
 
 st_bad() { if [[ -z $ST_WHY ]]; then ST_WHY="$ST_LABEL: $*"; fi; }
@@ -351,10 +368,58 @@ st_count() { # <exact line> <n>
 st_ran() { grep -q "^$1"$'\t' -- "$ST_CASE/calls" || st_bad "no test command ran as '$1'"; }
 st_not_ran() { [[ ! -s $ST_CASE/calls ]] || st_bad "a test command ran: $(head -n 1 -- "$ST_CASE/calls")"; }
 st_file_is() { [[ -f $1 && $(<"$1") == "$2" ]] || st_bad "$1 does not hold exactly: $2"; }
-st_call_field() { # <field number>: that field of the first recorded call
+st_call_field() { # <field number> [call number]: that field of the recorded call (the first by default)
   local -a fields
-  IFS=$'\t' read -r -a fields <"$ST_CASE/calls"
-  printf '%s' "${fields[$1 - 1]:-}"
+  local n=0
+  while IFS=$'\t' read -r -a fields; do
+    if ((++n == ${2:-1})); then
+      printf '%s' "${fields[$1 - 1]:-}"
+      break
+    fi
+  done <"$ST_CASE/calls"
+}
+
+# Check each call's side, requested stack and src/ marker, in order.
+st_calls() {
+  local kind tree name src tests fixes opam switch side want got=''
+  while IFS=$'\t' read -r kind tree name src tests fixes opam switch side want; do
+    got+="${got:+; }$side:$want:$src"
+  done <"$ST_CASE/calls"
+  [[ $got == "$1" ]] || st_bad "calls '$got', expected '$1'"
+}
+
+st_two_calls() { # <head want> <parent want> <head marker> <parent marker>
+  st_calls "head:$1:$3; parent:$2:$4"
+  [[ $(st_call_field 2) != "$(st_call_field 2 2)" && $(st_call_field 2) != "$ST_REPO" &&
+    $(st_call_field 2 2) != "$ST_REPO" ]] || st_bad "the sides did not run in separate scratch trees"
+  [[ $(st_call_field 5) == 'tests at head' && $(st_call_field 5 2) == 'tests at head' ]] ||
+    st_bad "both sides must use the head's tests"
+}
+
+st_control_row() { # <commits> <stack> [status]: replace row a
+  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - "${3:-fixed}" "$1" "$2")" \
+    "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$INVENTORY"
+}
+
+st_stack_fix() { # <parent's stack value|none|absent>: fix the stack, then edit src/ on the head
+  if [[ $1 == absent ]]; then
+    rm -- "$ST_REPO/$SCRIPT_REL"
+  else
+    st_set_stack "$ST_REPO/$SCRIPT_REL" "$1"
+  fi
+  st_commit "set up the stack fix's parent"
+  ST_STACK_PARENT=$(git -C "$ST_REPO" rev-parse HEAD)
+  if [[ $1 == absent ]]; then cp -- "$SELF" "$ST_REPO/$SCRIPT_REL"; fi
+  st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
+  st_commit "fix only the stack"
+  ST_STACK_FIX=$(git -C "$ST_REPO" rev-parse HEAD)
+  printf 'src after fix\n' >"$ST_REPO/src/marker"
+  st_control_row "$ST_STACK_FIX" -
+  st_commit "row a and a later source change"
+}
+
+st_stack_calls() { # <head want> <parent want>: both sides use the later source
+  st_two_calls "$1" "$2" 'src after fix' 'src after fix'
 }
 st_tree_untouched() { # the caller's repository: clean, HEAD where it was, no worktree, nothing left in TMPDIR
   [[ -z $(git -C "$ST_REPO" status --porcelain) ]] || st_bad "the caller's tree changed"
@@ -375,8 +440,9 @@ st_row() { # <id>: print the row's verdict
 }
 
 st_rows() {
-  local head v dangling inv=$INVENTORY plain work parent fix c
-  local at_a="src/ of $ST_BASE, the parent of the first fix commit $ST_FIX_A"
+  local head v dangling inv=$INVENTORY plain work c
+  local stack_head='STACK soft=131072 hard=131072'
+  local at_a="src/ of $ST_BASE, $stack_head"
   local stack1='STACK soft=8192 hard=unlimited'
 
   # S0: a clean tree passes every check and goes on to build and run the suite (SUITE PASS), plain and with
@@ -401,9 +467,9 @@ st_rows() {
     st_new "S1/$v"
     printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_d.v"
     if [[ $v == open ]]; then
-      st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_d.v F6 Delta.one - open -)" >"$ST_REPO/$inv"
+      st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_d.v F6 Delta.one - open - -)" >"$ST_REPO/$inv"
     else
-      st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_d.v F6 Delta.one - fixed "$ST_FIX_A")" >"$ST_REPO/$inv"
+      st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_d.v F6 Delta.one - fixed "$ST_FIX_A" -)" >"$ST_REPO/$inv"
     fi
     st_commit "row d"
     st_run --
@@ -449,9 +515,9 @@ st_rows() {
       dangling) c=$dangling ;;
       unknown) c=0123456789abcdef0123456789abcdef01234567 ;;
     esac
-    st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$c")" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+    st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$c" -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
     st_commit "row a: $v"
-    if [[ $v == blank-revert ]]; then st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v; else st_run --; fi
+    if [[ $v == blank-revert ]]; then st_revert fail:Alpha.one tests/lean434_a.v; else st_run --; fi
     st_rc nonzero
     case $v in
       none) st_has "$inv line 2 (tests/lean434_a.v): status fixed, but the row names no commit" ;;
@@ -468,7 +534,7 @@ st_rows() {
   # S3b: --handoff fails while a row is still open; the plain run of the same tree, the control, passes.
   for v in plain --handoff; do
     st_new "S3b/$v"
-    st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - open -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+    st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - open - -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
     st_commit "row a open"
     if [[ $v == plain ]]; then
       st_run --
@@ -519,23 +585,21 @@ st_rows() {
   printf 'let fix_a = 2\n' >"$ST_REPO/src/fix_a.ml"
   st_commit "change fix a again"
   head=$(git -C "$ST_REPO" rev-parse HEAD)
-  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_revert fail:Alpha.one tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
-  st_ran one
-  [[ $(st_call_field 4) == 'src at base' && $(st_call_field 6) == 'fix_*.ml' ]] ||
-    st_bad "src/ is not the parent's of fix a: $(st_call_field 4), $(st_call_field 6)"
-  [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
+  st_two_calls 131072 131072 'src at head' 'src at base'
+  [[ $(st_call_field 6 2) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6 2)"
   st_tree_untouched "$head"
   st_row S5
 
   # S6: --revert-fix fails ("R5 negative not met") when the test passes at the parent's src/, and names it.
   st_new S6
-  st_run ST_OUTCOME=pass -- --revert-fix tests/lean434_a.v
+  st_revert pass tests/lean434_a.v
   st_rc nonzero
   st_has "R5 negative not met: the test passes ($at_a)"
   st_lacks 'R5 NEGATIVE MET'
-  st_ran one
+  st_two_calls 131072 131072 'src at head' 'src at base'
   st_row S6
 
   # S7: --revert-fix, built from the src/ of the parent of the row's first fix commit, fails when the test fails
@@ -544,24 +608,24 @@ st_rows() {
   # line N (for X)" line names an entry; the line names the parent.
   for v in Alpha.two Alpha.on Alpha.one.x; do
     st_new "S7/$v"
-    st_run "ST_OUTCOME=fail:$v" -- --revert-fix tests/lean434_a.v
+    st_revert "fail:$v" tests/lean434_a.v
     st_rc nonzero
     st_has "the test fails at $v, but its row names Alpha.one ($at_a)"
     st_lacks 'R5 NEGATIVE MET'
   done
   st_new S7/own-entry
-  st_run ST_OUTCOME=fail:Beta.base -- --revert-fix tests/lean434_b.v
+  st_revert fail:Beta.base tests/lean434_b.v
   st_rc nonzero
-  st_has "the test fails at Beta.base, but its row names Beta.own (src/ of $ST_FIX_A, the parent of the first fix commit $ST_FIX_B)"
+  st_has "the test fails at Beta.base, but its row names Beta.own (src/ of $ST_FIX_A, $stack_head)"
   st_lacks 'R5 NEGATIVE MET'
   st_new S7/option
-  st_run ST_OUTCOME=fail:Gamma.x -- --revert-fix tests/lean434_opt.v
+  st_revert fail:Gamma.x tests/lean434_opt.v
   st_rc nonzero
   st_has 'the test fails at Gamma.x, not at its Set line'
-  st_has "option:Lean Entry Timeout (src/ of $ST_FIX_B, the parent of the first fix commit $ST_FIX_OPT)"
+  st_has "option:Lean Entry Timeout (src/ of $ST_FIX_B, $stack_head)"
   st_lacks 'R5 NEGATIVE MET'
   st_new S7/no-entry
-  st_run ST_OUTCOME=fail-noentry -- --revert-fix tests/lean434_a.v
+  st_revert fail-noentry tests/lean434_a.v
   st_rc nonzero
   st_has 'R5 negative not met: the test fails at no "Error at line N (for X)" line'
   st_has "($at_a)"
@@ -574,32 +638,29 @@ st_rows() {
   # names that parent, and the caller's tree is left as it was.
   st_new S7b/base
   head=$(git -C "$ST_REPO" rev-parse HEAD)
-  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_revert fail:Alpha.one tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
-  st_ran one
-  [[ $(st_call_field 3) == lean434_a ]] || st_bad "RUN_TEST did not get the test name lean434_a"
-  [[ $(st_call_field 2) != "$ST_REPO" ]] || st_bad "the test ran in the caller's tree"
-  [[ $(st_call_field 4) == 'src at base' && $(st_call_field 6) == 'fix_*.ml' ]] ||
-    st_bad "src/ is not the parent's of fix a: $(st_call_field 4), $(st_call_field 6)"
-  [[ $(st_call_field 5) == 'tests at head' ]] || st_bad "tests/ is not the head's: $(st_call_field 5)"
-  [[ $(st_call_field 7) == "$ST_CASE/cut/opam" && $(st_call_field 8) == cut ]] ||
-    st_bad "the test did not run on the cut's switch: OPAMROOT $(st_call_field 7), OPAMSWITCH $(st_call_field 8)"
+  st_two_calls 131072 131072 'src at head' 'src at base'
+  [[ $(st_call_field 3 2) == lean434_a ]] || st_bad "RUN_TEST did not get the test name lean434_a"
+  [[ $(st_call_field 6 2) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6 2)"
+  [[ $(st_call_field 7 2) == "$ST_CASE/cut/opam" && $(st_call_field 8 2) == cut ]] ||
+    st_bad "the test did not run on the cut's switch: OPAMROOT $(st_call_field 7 2), OPAMSWITCH $(st_call_field 8 2)"
   st_tree_untouched "$head"
   st_new S7b/own
-  st_run ST_OUTCOME=fail:Beta.own -- --revert-fix lean434_b
+  st_revert fail:Beta.own lean434_b
   st_rc zero
   st_line "R5 NEGATIVE MET: lean434_b at Beta.own (src/ of $ST_FIX_A)"
-  [[ $(st_call_field 6) == fix_a.ml ]] || st_bad "src/ is not the parent's of fix b: $(st_call_field 6)"
+  [[ $(st_call_field 6 2) == fix_a.ml ]] || st_bad "src/ is not the parent's of fix b: $(st_call_field 6 2)"
   st_new S7b/option
-  st_run 'ST_OUTCOME=option:Lean Entry Timeout' -- --revert-fix tests/lean434_opt.v
+  st_revert 'option:Lean Entry Timeout' tests/lean434_opt.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_opt.v at option:Lean Entry Timeout (src/ of $ST_FIX_B)"
   st_new S7b/quoted
   sed -i 's/\tAlpha\.one\t/\t«Alpha».one\t/' "$ST_REPO/tests/lean434_features.txt"
   grep -q '«Alpha».one' "$ST_REPO/tests/lean434_features.txt" || st_bad "the template's row names no Alpha.one to quote"
   st_commit "quote a name component as Lean does"
-  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_revert fail:Alpha.one tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   st_row S7b
@@ -609,7 +670,7 @@ st_rows() {
   st_new S7c
   st_redirect_test lean434_a.log
   st_commit "test a imports under Redirect"
-  st_run ST_OUTCOME=redirect:lean434_a.log=Alpha.one -- --revert-fix tests/lean434_a.v
+  st_revert redirect:lean434_a.log=Alpha.one tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   st_lacks 'Error at line 7 (for Alpha.one)'
@@ -620,7 +681,7 @@ st_rows() {
   st_new S7d
   st_redirect_test lean434_a.log
   st_commit "test a imports under Redirect"
-  st_run ST_OUTCOME=redirect:lean434_a.log=Alpha.two -- --revert-fix tests/lean434_a.v
+  st_revert redirect:lean434_a.log=Alpha.two tests/lean434_a.v
   st_rc nonzero
   st_has "R5 negative not met: the test fails at Alpha.two, but its row names Alpha.one ($at_a)"
   st_lacks 'R5 NEGATIVE MET'
@@ -631,7 +692,7 @@ st_rows() {
   st_new S7e
   st_redirect_test lean434_a_1.log lean434_a_2.log
   st_commit "test a imports under two Redirects"
-  st_run 'ST_OUTCOME=redirect:lean434_a_2.log=Alpha.one lean434_a_1.log=Alpha.two' -- --revert-fix tests/lean434_a.v
+  st_revert 'redirect:lean434_a_2.log=Alpha.one lean434_a_1.log=Alpha.two' tests/lean434_a.v
   st_rc nonzero
   st_has "R5 negative not met: the test fails at Alpha.two, but its row names Alpha.one ($at_a)"
   st_lacks 'R5 NEGATIVE MET'
@@ -642,7 +703,7 @@ st_rows() {
   st_new S7f
   st_redirect_test lean434_a.log
   st_commit "test a imports under Redirect"
-  st_run 'ST_OUTCOME=redirect:lean434_a.log=Alpha.two -=Alpha.one' -- --revert-fix tests/lean434_a.v
+  st_revert 'redirect:lean434_a.log=Alpha.two -=Alpha.one' tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
   st_row S7f
@@ -650,12 +711,12 @@ st_rows() {
   # S7g: a row naming two fix commits, the later one first: its first fix commit is the earlier one in the history
   # of HEAD, and --revert-fix builds the src/ of that commit's parent.
   st_new S7g
-  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_B $ST_FIX_A")" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - fixed "$ST_FIX_B $ST_FIX_A" -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
   st_commit "row a: two fix commits"
-  st_run ST_OUTCOME=fail:Alpha.one -- --revert-fix tests/lean434_a.v
+  st_revert fail:Alpha.one tests/lean434_a.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
-  [[ $(st_call_field 6) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6)"
+  [[ $(st_call_field 6 2) == 'fix_*.ml' ]] || st_bad "src/ is not the parent's of fix a: $(st_call_field 6 2)"
   st_row S7g
 
   # S7h: a test whose failure before its fix is a missing binding after a parser refusal says so in r5 lines
@@ -694,7 +755,7 @@ EOF
       other-line) st_fx run.log "${p_err/line 6,/line 2,}" ;;
       other-redirect) st_fx case_p.log.out "$p_132" && st_fx case_p_other.log.out "$p_full" ;;
     esac
-    if [[ $v == pass ]]; then st_run -- --revert-fix tests/case_p.v; else st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_p.v; fi
+    if [[ $v == pass ]]; then st_revert pass tests/case_p.v; else st_revert play:1 tests/case_p.v; fi
     case $v in
       met)
         st_rc zero
@@ -721,7 +782,7 @@ EOF
       symptom-row) st_has 'the Rocq error at tests/case_p.v line 6 does not name line-133' ;;
     esac
     if [[ $v != met ]]; then st_lacks 'R5 NEGATIVE MET'; fi
-    st_ran one
+    st_two_calls 131072 131072 'src at head' 'src at base'
   done
   for v in prefix-met full-import; do
     st_new "S7h/$v"
@@ -735,7 +796,7 @@ Check PName.
 EOF
     st_fx run.log "${p_err//case_p/case_pp}"
     if [[ $v == prefix-met ]]; then st_fx case_pp.log.out "${p_full#line 131: P.fast\\n}"; else st_fx case_pp.log.out "$p_full"; fi
-    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_pp.v
+    st_revert play:1 tests/case_pp.v
     if [[ $v == prefix-met ]]; then
       st_rc zero
       st_line "R5 NEGATIVE MET: tests/case_pp.v at PName (src/ of $ST_BASE)"
@@ -768,7 +829,7 @@ EOF
       other-constructor) st_fx run.log "${s_err/String_mk/String_ofList}" ;;
       other-entry) st_fx run.log "${s_err/S.pair_eq/S.other_eq}" ;;
     esac
-    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_s.v
+    st_revert play:1 tests/case_s.v
     if [[ $v == met ]]; then
       st_rc zero
       st_line "R5 NEGATIVE MET: tests/case_s.v at S.pair_eq (src/ of $ST_BASE)"
@@ -807,7 +868,7 @@ EOF
       no-log) rm -f -- "$ST_CASE/fx/case_u.log.out" ;;
       no-assertion) st_fx run.log 'make: *** [Makefile:9: submake] Error 2\n' ;;
     esac
-    st_run ST_OUTCOME=play:1 -- --revert-fix tests/case_u.v
+    st_revert play:1 tests/case_u.v
     if [[ $v == met ]]; then
       st_rc zero
       st_line "R5 NEGATIVE MET: tests/case_u.v at UInt32 (src/ of $ST_BASE)"
@@ -842,7 +903,7 @@ EOF
     esac
     if [[ $v == option-row ]]; then c='option:Lean Entry Timeout'; else c=M; fi
     st_r5_test case_m "$c" <<<"$m_lines"
-    st_run ST_OUTCOME=fail:M -- --revert-fix tests/case_m.v
+    st_revert fail:M tests/case_m.v
     st_rc nonzero
     case $v in
       kind) st_has 'tests/case_m.v line 2: an r5 line of no known kind: (* r5 maybe: "case_m.log" x *)' ;;
@@ -935,15 +996,15 @@ EOF
     st_new "S12/$v"
     case $v in
       fields) st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_x.v F7 X.one - open)" >"$ST_REPO/$inv" ;;
-      status) st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_x.v F7 X.one - 'done' -)" >"$ST_REPO/$inv" ;;
-      file) st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv '' F7 X.one - listed -)" >"$ST_REPO/$inv" ;;
+      status) st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_x.v F7 X.one - 'done' - -)" >"$ST_REPO/$inv" ;;
+      file) st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv '' F7 X.one - listed - -)" >"$ST_REPO/$inv" ;;
     esac
     st_commit "bad row: $v"
     st_run --
     st_rc nonzero
     st_has "$inv line 6 cannot be read"
     case $v in
-      fields) st_has '5 fields, not 6' ;;
+      fields) st_has '5 fields, not 7' ;;
       status) st_has 'unknown status done' ;;
       file) st_has 'empty file field' ;;
     esac
@@ -971,16 +1032,16 @@ EOF
 
   # S14: --revert-fix fails, and says the plugin build failed at the parent's src/, when that build fails.
   st_new S14
-  st_run ST_OUTCOME=build-fail -- --revert-fix tests/lean434_a.v
+  st_revert build-fail tests/lean434_a.v
   st_rc nonzero
-  st_has "the plugin build failed ($at_a)"
+  st_has "the parent side's plugin build failed ($at_a)"
   st_has 'Error: Unbound value planted_build_error'
   st_lacks 'R5 NEGATIVE MET'
   st_row S14
 
   # S15: --revert-fix of an open row fails: an open row names no fix to revert; no test runs.
   st_new S15
-  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - open -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+  st_inventory "$(st_tsv tests/lean434_a.v F1 Alpha.one - open - -)" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
   st_commit "row a open"
   st_run -- --revert-fix tests/lean434_a.v
   st_rc nonzero
@@ -990,7 +1051,7 @@ EOF
 
   # S16: --revert-fix of a listed row succeeds without running the test, and says it skipped it.
   st_new S16
-  st_run ST_OUTCOME=fail:Gamma.one -- --revert-fix tests/lean434_c.v
+  st_revert fail:Gamma.one tests/lean434_c.v
   st_rc zero
   st_line 'SKIPPED, LISTED: tests/lean434_c.v'
   st_lacks 'R5 NEGATIVE MET'
@@ -1140,56 +1201,7 @@ EOF
   st_not_ran
   st_row S21
 
-  # S22: the fix commit of the row also set CUT_STACK_KIB; the parent of that commit holds no such line (the case
-  # removes the committed one in it), so the test runs at the default stack, and it still has to fail at its entry.
-  # The plain run of the same head (stack 65536) is the control.
-  for v in revert control; do
-    st_new "S22/$v"
-    st_set_stack "$ST_REPO/$SCRIPT_REL" none
-    printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_s.v"
-    printf 'lean434_s.v\n' >>"$ST_REPO/tests/_CoqProject"
-    st_commit "test s"
-    parent=$(git -C "$ST_REPO" rev-parse HEAD)
-    st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
-    printf 'let fix_s = 1\n' >"$ST_REPO/src/fix_s.ml"
-    st_commit "fix s, with a larger stack"
-    st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" \
-      "$(st_tsv tests/lean434_s.v F8 Sigma.one - fixed "$(git -C "$ST_REPO" rev-parse HEAD)")" >"$ST_REPO/$inv"
-    st_commit "row s"
-    if [[ $v == revert ]]; then
-      st_run ST_OUTCOME=fail:Sigma.one -- --revert-fix tests/lean434_s.v
-      st_rc zero
-      st_line "R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one (src/ of $parent)"
-      st_line "$stack1"
-      st_lacks 'soft=65536'
-    else
-      st_run --
-      st_rc zero
-      st_line 'STACK soft=65536 hard=65536'
-    fi
-  done
-  st_row S22
-
-  # S22b: the CUT_STACK_KIB that the parent of the row's first fix commit sets is the stack of the test, not the
-  # one a later commit set at the head.
-  st_new S22b
-  printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_s.v"
-  printf 'lean434_s.v\n' >>"$ST_REPO/tests/_CoqProject"
-  st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
-  st_commit "test s, with a larger stack"
-  parent=$(git -C "$ST_REPO" rev-parse HEAD)
-  printf 'let fix_s = 1\n' >"$ST_REPO/src/fix_s.ml"
-  st_commit "fix s"
-  fix=$(git -C "$ST_REPO" rev-parse HEAD)
-  st_set_stack "$ST_REPO/$SCRIPT_REL" 32768
-  st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" "$(st_tsv tests/lean434_s.v F8 Sigma.one - fixed "$fix")" >"$ST_REPO/$inv"
-  st_commit "row s, with a smaller stack"
-  st_run ST_OUTCOME=fail:Sigma.one -- --revert-fix tests/lean434_s.v
-  st_rc zero
-  st_line "R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one (src/ of $parent)"
-  st_line 'STACK soft=65536 hard=65536'
-  st_lacks 'soft=32768'
-  st_row S22b
+  st_revert_rows
 
   # S23: --import and --check on a tree without history and with a broken inventory: a missing file, a
   # failing run, a normal run, the stack rules (its script holds no CUT_STACK_KIB line, then a bad one); no
@@ -1218,6 +1230,7 @@ EOF
   st_file_is "$work/Import.v.stack" "$stack1"$'\n'"ROCQ COMMIT $CUT_ROCQ_COMMIT"
   [[ $(st_call_field 2) == "$work" ]] || st_bad "rocq compile did not run in the file's directory"
   [[ $(st_call_field 3) == '-Q /lib Lib Import.v' ]] || st_bad "rocq compile got '$(st_call_field 3)'"
+  [[ $(st_call_field 4) == suite && $(st_call_field 5) == - ]] || st_bad "rocq compile did not get the stack request"
   ST_LABEL=S23/check-missing
   : >"$ST_CASE/calls"
   st_run -- --check "$work/Import.vo" "$work/Missing.vo"
@@ -1235,6 +1248,7 @@ EOF
   st_file_is "$ST_CASE/out" 'stub check stdout'
   st_file_is "$ST_CASE/err" 'stub check stderr'
   [[ $(st_call_field 3) == "-silent -o -Q /lib Lib $work/Import.vo $work/Other.vo" ]] || st_bad "rocqchk got '$(st_call_field 3)'"
+  [[ $(st_call_field 4) == suite && $(st_call_field 5) == - ]] || st_bad "rocqchk did not get the stack request"
   ST_LABEL=S23/import-stack
   : >"$ST_CASE/calls"
   st_set_stack "$plain/$SCRIPT_REL" abc
@@ -1354,6 +1368,352 @@ EOF
   st_lacks 'SOURCE-AT TEST'
   st_lacks 'SOURCE-AT ACCEPTED'
   st_row S24c
+}
+
+st_revert_rows() {
+  local v c head parent mode test=tests/lean434_a.v inv=$INVENTORY hard want s expected
+
+  # V1 (S22c): a source-only fix, with a different stack on its parent and at the head.
+  for v in 32768 none; do
+    st_new "S22c/$v"
+    printf 'src before fix\n' >"$ST_REPO/src/marker"
+    st_set_stack "$ST_REPO/$SCRIPT_REL" "$v"
+    st_commit "parent source and stack"
+    parent=$(git -C "$ST_REPO" rev-parse HEAD)
+    printf 'src after fix\n' >"$ST_REPO/src/marker"
+    printf 'let fix_c = 1\n' >"$ST_REPO/src/fix_c.ml"
+    st_commit "fix only the source"
+    st_control_row "$(git -C "$ST_REPO" rev-parse HEAD)" -
+    st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
+    st_commit "row a and the head stack"
+    st_revert fail:Alpha.one "$test"
+    st_rc 0
+    st_two_calls 65536 65536 'src after fix' 'src before fix'
+    st_line "R5 NEGATIVE MET: $test at Alpha.one (src/ of $parent)"
+  done
+  st_row 'V1 (S22c)'
+
+  # V2 (S22b): stack-only, with a later source change that both builds must use.
+  for v in 32768 none absent; do
+    st_new "S22b/$v"
+    st_stack_fix "$v"
+    head=$(git -C "$ST_REPO" rev-parse HEAD)
+    st_revert fail:Alpha.one "$test"
+    st_rc 0
+    if [[ $v == 32768 ]]; then want=$v; else want=-; fi
+    st_stack_calls 65536 "$want"
+    st_line "R5 NEGATIVE MET: $test at Alpha.one (src/ of $head)"
+  done
+  st_row 'V2 (S22b)'
+
+  # V3 (S22): refuse a control that changes both, in one fix commit or in several.
+  for v in together separate; do
+    st_new "S22/$v"
+    st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
+    if [[ $v == separate ]]; then
+      st_commit "fix the stack first"
+      c="$(git -C "$ST_REPO" rev-parse HEAD) "
+    else
+      c=
+    fi
+    printf 'let fix_s = 1\n' >"$ST_REPO/src/fix_s.ml"
+    st_commit "fix the source"
+    st_control_row "$c$(git -C "$ST_REPO" rev-parse HEAD)" -
+    st_commit "row a"
+    st_revert fail:Alpha.one "$test"
+    st_rc 1
+    st_has "the fix commits of $test change src/ and CUT_STACK_KIB; a control reverts one of them; split the fix"
+    st_not_ran
+  done
+  st_row 'V3 (S22)'
+
+  # V4: editing the script without changing the parsed stack or src/ is not a fix.
+  st_new V4
+  st_set_stack "$ST_REPO/$SCRIPT_REL" '"131072"'
+  st_commit "quote the same stack value"
+  st_control_row "$(git -C "$ST_REPO" rev-parse HEAD)" -
+  st_commit "row a"
+  st_revert fail:Alpha.one "$test"
+  st_rc 1
+  st_has "the fix commits of $test change neither src/ nor CUT_STACK_KIB; there is nothing to revert"
+  st_not_ran
+  st_row V4
+
+  # V4b: a move out of src/ counts as a source change, even with rename detection configured.
+  st_new V4b
+  git -C "$ST_REPO" config diff.renames true
+  printf 'let moved = 1\n' >"$ST_REPO/src/fix_move.ml"
+  printf 'src before fix\n' >"$ST_REPO/src/marker"
+  st_commit "add the file to move"
+  parent=$(git -C "$ST_REPO" rev-parse HEAD)
+  git -C "$ST_REPO" mv src/fix_move.ml tests/fix_move.ml || st_bad "cannot move the file out of src/"
+  st_commit "move the file out of src/"
+  c=$(git -C "$ST_REPO" rev-parse HEAD)
+  [[ $(git -C "$ST_REPO" diff --name-status "$parent" "$c") == R100$'\t'src/fix_move.ml$'\t'tests/fix_move.ml ]] ||
+    st_bad "the fix did not make a rename"
+  st_control_row "$c" -
+  st_commit "row a"
+  st_revert fail:Alpha.one "$test"
+  st_rc 0
+  st_two_calls 131072 131072 'src before fix' 'src before fix'
+  [[ $(st_call_field 6) != *fix_move.ml* && $(st_call_field 6 2) == *fix_move.ml* ]] ||
+    st_bad "the moved file should appear in the parent's src/ only"
+  st_line "R5 NEGATIVE MET: $test at Alpha.one (src/ of $parent)"
+  st_row V4b
+
+  # V4c: reject a merge, a root and a shallow boundary used as a fix.
+  for v in merge root shallow; do
+    st_new "V4c/$v"
+    case $v in
+      merge)
+        git -C "$ST_REPO" switch -qc fix-side || st_bad "cannot start a side branch"
+        printf 'let side = 1\n' >"$ST_REPO/src/fix_side.ml"
+        st_commit "source fix on a side branch"
+        git -C "$ST_REPO" switch -q main && git -C "$ST_REPO" merge -q --no-ff -m merge fix-side ||
+          st_bad "cannot merge the side branch"
+        c=$(git -C "$ST_REPO" rev-parse HEAD)
+        ;;
+      root) c=$ST_BASE ;;
+      shallow) c=$ST_FIX_A ;;
+    esac
+    st_control_row "$c" -
+    if [[ $v == shallow ]]; then
+      printf '%s\n' "$c" >"$ST_REPO/.git/shallow"
+      [[ $(git -C "$ST_REPO" rev-list --parents -n 1 "$c") == "$c" ]] || st_bad "the fix is not a shallow boundary"
+    fi
+    st_revert fail:Alpha.one "$test"
+    st_rc 1
+    st_has "fix commit $c is a merge or has no parent; a control needs one parent"
+    st_not_ran
+  done
+  st_row V4c
+
+  # V4d: refuse a malformed fix hash or a commit outside HEAD before inspecting its paths.
+  for v in malformed unrelated; do
+    st_new "V4d/$v"
+    if [[ $v == malformed ]]; then
+      c=${ST_FIX_A:0:8}
+      expected="'$c' is not a full commit hash"
+    else
+      c=$(git -C "$ST_REPO" commit-tree -m unrelated "$ST_BASE^{tree}")
+      expected="commit $c is not an ancestor of HEAD"
+    fi
+    st_control_row "$c" -
+    st_revert fail:Alpha.one "$test"
+    st_rc 1
+    st_has "$inv line 2 ($test): $expected"
+    st_not_ran
+  done
+  st_row V4d
+
+  # V5 (S22d): neither script's 131072 can override a source control's 8192.
+  st_new S22d
+  st_control_row "$ST_FIX_A" 8192
+  st_commit "row a specifies a lower stack"
+  st_revert fail:Alpha.one "$test"
+  st_rc 0
+  st_two_calls 8192 8192 'src at head' 'src at base'
+  st_line "R5 NEGATIVE MET: $test at Alpha.one (src/ of $ST_BASE)"
+  st_row 'V5 (S22d)'
+
+  # V6: only a source control can specify a stack.
+  st_new V6
+  st_stack_fix 32768
+  st_control_row "$ST_STACK_FIX" 8192
+  st_revert fail:Alpha.one "$test"
+  st_rc 1
+  st_has "a row that states a stack cannot revert a stack fix"
+  st_not_ran
+  st_row V6
+
+  # V7: the stack field is validated in each mode that reads the inventory.
+  for v in '' 0 -1 unlimited 12x abc; do
+    st_new "V7/'$v'"
+    st_control_row "$ST_FIX_A" "$v"
+    if [[ -z $v ]]; then expected='empty stack field'; else expected="stack '$v' is not a positive whole number of KiB"; fi
+    for mode in plain handoff revert; do
+      ST_LABEL="V7/'$v'/$mode"
+      case $mode in
+        plain) st_run -- ;;
+        handoff) st_run -- --handoff ;;
+        revert) st_revert fail:Alpha.one "$test" ;;
+      esac
+      st_rc 1
+      st_has "$inv line 2 cannot be read ($expected)"
+      st_not_ran
+    done
+  done
+  st_row V7
+
+  # V7b: the limits check allows 1; the stub stands in for what the import actually does at that limit.
+  st_new V7b
+  st_control_row "$ST_FIX_A" 1
+  st_revert fail:Alpha.one "$test"
+  st_rc 0
+  st_two_calls 1 1 'src at head' 'src at base'
+  st_row V7b
+
+  # V8: the hard limit includes equality. V8b: the gVisor rule (including unknown kernels) applies to a row.
+  for v in 65535 65536 65537; do
+    st_new "V8/$v"
+    st_control_row "$ST_FIX_A" "$v"
+    st_revert fail:Alpha.one "$test" ST_HARD=65536
+    if ((v <= 65536)); then
+      st_rc 0
+      st_two_calls "$v" "$v" 'src at head' 'src at base'
+    else
+      st_rc 1
+      st_has "$inv line 2 stack=$v is above the hard stack limit of 65536 KiB"
+      st_not_ran
+    fi
+  done
+  st_row V8
+  for v in gvisor:131071 gvisor:131072 gvisor:131073 fail:131073 empty:131073 generic:131073; do
+    st_new "V8b/$v"
+    want=${v#*:} mode=${v%%:*}
+    st_control_row "$ST_FIX_A" "$want"
+    st_revert fail:Alpha.one "$test" "ST_UNAME=$mode"
+    if ((want <= 131072)) || [[ $mode == generic ]]; then
+      st_rc 0
+      st_two_calls "$want" "$want" 'src at head' 'src at base'
+    else
+      st_rc 1
+      st_has "$inv line 2 stack=$want is above 131072 KiB, and gVisor caps the stack at 128 MiB"
+      st_not_ran
+    fi
+  done
+  st_row V8b
+
+  # V9: test the same checks on the stack fix's parent without making the head exceed a limit.
+  for v in abc 65537 65538 131073; do
+    st_new "V9/$v"
+    st_stack_fix "$v"
+    hard=65537 mode=generic
+    if [[ $v == 131073 ]]; then hard=unlimited mode=gvisor; fi
+    st_revert fail:Alpha.one "$test" "ST_HARD=$hard" "ST_UNAME=$mode"
+    if [[ $v == 65537 ]]; then
+      st_rc 0
+      st_stack_calls 65536 "$v"
+    else
+      st_rc 1
+      st_has "parent side (fix parent $ST_STACK_PARENT):"
+      case $v in
+        abc) st_has "CUT_STACK_KIB='abc' is not a positive whole number of KiB" ;;
+        65538) st_has 'CUT_STACK_KIB=65538 is above the hard stack limit of 65537 KiB' ;;
+        131073) st_has 'CUT_STACK_KIB=131073 is above 131072 KiB, and gVisor caps the stack at 128 MiB' ;;
+      esac
+      st_not_ran
+    fi
+  done
+  st_row V9
+
+  # V10: an unset script uses the default, but not an unlimited default.
+  for v in head parent; do
+    st_new "V10/$v"
+    if [[ $v == parent ]]; then st_stack_fix none; else st_set_stack "$ST_REPO/$SCRIPT_REL" none; fi
+    st_revert fail:Alpha.one "$test" ST_DEFAULT_SOFT=unlimited
+    st_rc 1
+    st_has "$v side"
+    st_has 'the default soft stack is unlimited'
+    st_not_ran
+  done
+  st_row V10
+
+  # V10b: the checker refuses a mismatch on either side, before either import.
+  for v in head parent; do
+    st_new "V10b/$v"
+    st_stack_fix 32768
+    if [[ $v == head ]]; then want=65536; else want=32768; fi
+    st_revert fail:Alpha.one "$test" "ST_SOFT_${v^^}=8192"
+    st_rc 1
+    st_has "$v side"
+    st_has "the soft stack read back is 8192 KiB, not CUT_STACK_KIB=$want"
+    st_not_ran
+  done
+  st_row V10b
+
+  # V11: any head failure invalidates the control, even if the parent's outcome would otherwise meet R5.
+  for v in fail:Alpha.one fail-noentry build-fail; do
+    st_new "V11/$v"
+    head=$(git -C "$ST_REPO" rev-parse HEAD)
+    st_revert fail:Alpha.one "$test" "ST_OUTCOME_HEAD=$v"
+    st_rc 1
+    st_has "R5 negative not met: the head side fails at Alpha.one (src/ of $head, STACK soft=131072 hard=131072)"
+    st_calls 'head:131072:src at head'
+    st_lacks 'R5 NEGATIVE MET'
+  done
+  st_row V11
+
+  # V12: all parent failures name the actual source and stack, including when the source is the head's.
+  for v in pass fail:Alpha.two fail-noentry build-fail r5-lines; do
+    st_new "V12/$v"
+    st_stack_fix 32768
+    if [[ $v == r5-lines ]]; then
+      printf '%s\n' '(* r5 error: planted failure *)' 'Check Alpha.' >"$ST_REPO/$test"
+      st_commit "add an r5 line to the head's test"
+    fi
+    head=$(git -C "$ST_REPO" rev-parse HEAD)
+    if [[ $v == r5-lines ]]; then st_revert fail:Alpha.one "$test"; else st_revert "$v" "$test"; fi
+    st_rc 1
+    st_stack_calls 65536 32768
+    case $v in
+      pass) expected='R5 negative not met: the test passes' ;;
+      fail:Alpha.two) expected='the test fails at Alpha.two, but its row names Alpha.one' ;;
+      fail-noentry) expected='the test fails at no "Error at line N (for X)" line' ;;
+      build-fail) expected="the parent side's plugin build failed" ;;
+      r5-lines) expected='the test fails, but not as the r5 lines' ;;
+    esac
+    st_has "$expected"
+    st_has "(src/ of $head, STACK soft=32768 hard=32768)"
+    st_lacks 'R5 NEGATIVE MET'
+  done
+  st_row V12
+
+  # V13: six columns are not a seven-column row with an implicit "-".
+  st_new V13
+  st_inventory "${ST_ROW_A%$'\t'*}" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" >"$ST_REPO/$inv"
+  st_revert fail:Alpha.one "$test"
+  st_rc 1
+  st_has "$inv line 2 cannot be read (6 fields, not 7)"
+  st_not_ran
+  st_row V13
+
+  # V14: both suite modes ignore the control stack, even for a row with a different value.
+  st_new V14
+  st_control_row "$ST_FIX_A" 8192
+  for mode in plain handoff; do
+    ST_LABEL="V14/$mode"
+    : >"$ST_CASE/calls"
+    if [[ $mode == plain ]]; then st_run --; else st_run -- --handoff; fi
+    st_rc 0
+    st_calls 'suite:131072:src at head'
+    st_line 'STACK soft=131072 hard=131072'
+  done
+  st_row V14
+
+  # V15: one record with the two actual src/ commits and read-backs, before the verdict.
+  st_new V15
+  head=$(git -C "$ST_REPO" rev-parse HEAD)
+  st_control_row "$ST_FIX_A" 8192
+  st_revert fail:Alpha.one "$test" ST_HARD=32768
+  st_rc 0
+  st_two_calls 8192 8192 'src at head' 'src at base'
+  s='STACK soft=8192 hard=32768'
+  expected="R5 CONTROL head: src/ of $head, $s; parent: src/ of $ST_BASE, $s"
+  st_count "$expected" 1
+  st_file_is "$ST_CASE/out" "$expected"$'\n'"R5 NEGATIVE MET: $test at Alpha.one (src/ of $ST_BASE)"
+  st_row V15
+
+  # V16: open and listed rows cannot state a stack.
+  for v in open listed; do
+    st_new "V16/$v"
+    st_control_row - 8192 "$v"
+    st_run --
+    st_rc 1
+    st_has "$inv line 2 cannot be read (a stack applies only to a fixed row's control)"
+    st_not_ran
+  done
+  st_row V16
 }
 
 self_test() {

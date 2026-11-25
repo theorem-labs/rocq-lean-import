@@ -756,7 +756,20 @@ The final corpus import uses `Set Lean Entry Timeout 2400.` (2400 seconds)
 and `Set Lean Entry Memory Limit 40.` (40 GiB of major heap growth per
 entry). `ci/build-9.2-cut.sh` sets the soft stack limit to 131072 KiB
 (128 MiB) for tests, `--import` and `--check` via `CUT_STACK_KIB`.
-`--revert-fix` uses the setting from the fix's parent instead.
+`--revert-fix` checks that the head passes and that reverting one fix makes
+the test fail at its expected entry. Both sides use the head's tests and
+dumps, with a separate plugin build for each side.
+
+For a source fix, the parent side builds the source of the parent of the
+first fix commit. Both sides use the head's stack unless the row in
+`tests/lean434_features.txt` sets `stack`, the seventh tab-separated
+column. That column is `-` or a positive whole number of KiB and applies
+only to a fixed row's control, not to the suite or `--handoff`.
+For a stack fix, both sides build the head's source; the parent side
+uses the stack setting of the first fix commit's parent, or the default
+soft limit if it has no setting. A control cannot revert both kinds of
+change. Its `R5 CONTROL` line records the source commit and the stack
+read back for each side.
 
 Lean 4.34.0's entry `_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1`
 (as printed by the importer) fails with `Stack overflow.` at 8, 16, 32

@@ -5,10 +5,9 @@ From LeanImport Require Import Lean.
    appends a numeric name component to the one before it, so the log names it
    _private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1. Every entry before it imports at an 8 MiB soft
    stack; this one does not: its import ends in Stack overflow. at a soft stack of 8, 16, 32 and 64 MiB, and
-   completes at 128 MiB. ci/build-9.2-cut.sh runs each test at the soft stack its line CUT_STACK_KIB=131072 sets
-   (README, "Corpus import settings"). The parent of the commit that adds that line holds no such line, so
-   ci/build-9.2-cut.sh --revert-fix runs this test at the default soft stack (8 MiB on Linux unless raised), and
-   the import refuses this entry first (Stack overflow.). *)
+   completes at 128 MiB. ci/build-9.2-cut.sh --revert-fix uses the head's src/ on both sides. The head side
+   passes at CUT_STACK_KIB=131072. The parent side keeps the default soft stack (8 MiB on Linux unless raised),
+   because the parent of the stack fix has no CUT_STACK_KIB line. At 8 MiB the import refuses this entry first. *)
 Set Lean Error Mode "Fail".
 Redirect "lean434_stack.log" Lean Import "../dumps/lean434/tonat_le.ndjson".
 

@@ -6,7 +6,7 @@
 # Layout: settings, helpers, main. The pins and settings build_switch builds the opam root from are in
 # ci/cut-settings.sh, which this script sources, and the self-test (--self-test) is in
 # ci/build-9.2-cut-selftest.sh. main is the only function that decides an outcome: which verdict line to print
-# and which status to exit with. The helpers (check_inventory, revert_fix_prepare, stack_probe, ...) gather facts
+# and which status to exit with. The helpers (check_inventory, revert_fix_prepare, stack_check, ...) gather facts
 # and hand them back; they decide nothing.
 #
 # Exit status: 0 success; 1 a check, the build or a test failed; 2 usage error. --source-at: 3 a bad commit
@@ -27,12 +27,10 @@ source "$SETTINGS" || exit 1
 # The git-LFS batch endpoint of this repository; it answers download requests without authentication.
 LFS_BATCH_URL=https://github.com/theorem-labs/rocq-lean-import.git/info/lfs/objects/batch
 
-# CUT_STACK_KIB: the soft stack size, in KiB, for every test run, --import and --check. Only a commit sets
-# it, by adding the line CUT_STACK_KIB=<integer> (at the start of the line) right below the last line of this
-# comment; no such line means "unset", which keeps the default soft stack. The script reads that line from
-# its own file instead of using the shell variable, so that --revert-fix can read the value the copy of this
-# file in the parent of a fix's first commit holds (the parent of the commit that set it holds none). The
-# environment variable of that name is ignored.
+# CUT_STACK_KIB: the head's soft stack size, in KiB, for tests, --import and --check. Only a commit sets it
+# by adding the line below; no line keeps the default soft stack. --revert-fix uses that setting on both
+# sides unless the inventory row states a stack or the control reverts a change to the stack setting itself.
+# Read the line from the file, not the shell variable: the environment variable of that name is ignored.
 # The CUT_STACK_KIB=<integer> line, when a commit adds one, goes right below this line.
 CUT_STACK_KIB=131072
 
@@ -92,9 +90,9 @@ Usage:
   ci/build-9.2-cut.sh --handoff
       The same, and fail while an inventory row is still open.
   ci/build-9.2-cut.sh --revert-fix <test>
-      Build the plugin from the src/ of the parent of the first fix commit of <test>'s inventory row, with
-      the head's tests/ and dumps/, then check that <test> fails at the entry its row names ("R5 negative"),
-      in its log or the .out files of its Redirect commands, or as the test's r5 lines say (r5_lines).
+      Run <test> in two builds with the head's tests/ and dumps/: it must pass on the head side and fail
+      on the parent side at its inventory entry or as its r5 lines say ("R5 negative"). Revert only the
+      source or only the stack. A stack stated in the inventory applies to both sides of a source control.
   ci/build-9.2-cut.sh --import <file.v> [-- <rocq compile flags>]
       Compile one file with the cut, in the file's directory; writes <file.v>.stack.
   ci/build-9.2-cut.sh --check <file.vo>... [-- <rocqchk flags>]
@@ -105,8 +103,8 @@ Usage:
       unknown) and each planted entry its own case accepted. Exit 3: bad commit or test, no rocq on PATH;
       4: plugin build failed; else the test's.
   ci/build-9.2-cut.sh --self-test
-      Check this script's rules (rows S0 to S24c of ci/build-9.2-cut-selftest.sh) with stubs (needs git and
-      bash only).
+      Check this script's rules (rows S0 to S24c and V1 to V16 of ci/build-9.2-cut-selftest.sh) with stubs
+      (needs git and bash only).
 Environment: CUT_ROOT (default /scratch/cs/cut) holds the opam root, the sources and the rocq-commit file
 (not read by --source-at); CUT_JOBS (default: nproc) is the build parallelism.
 EOF
@@ -223,7 +221,7 @@ predeclared_members() {
 # <root>: the inventory facts, one per line, tab-separated:
 #   inventory <missing|unreadable|empty|present>    (empty: no row, only comments or blank lines)
 #   unreadable <line no> <why> <line text, tabs shown as \t>
-#   row <line no> <file> <base_entry> <own_entry> <status> <in tests/_CoqProject: yes|no> <commits>
+#   row <line no> <file> <base_entry> <own_entry> <status> <in tests/_CoqProject: yes|no> <commits> <stack>
 #   commit <line no> <file> <commit> <yes|no|malformed>   (yes: an ancestor of HEAD; fixed rows only)
 #   lean434 <tests/lean434_*.v file> <has a row: yes|no>
 #   predeclared-file <present|missing>
@@ -265,16 +263,16 @@ check_inventory() {
         rest=${rest#*$'\t'}
       done
       fld+=("$rest")
-      if ((${#fld[@]} != 6)); then
-        printf 'unreadable\t%s\t%s fields, not 6\t%s\n' "$n" "${#fld[@]}" "${line//$'\t'/\\t}"
+      if ((${#fld[@]} != 7)); then
+        printf 'unreadable\t%s\t%s fields, not 7\t%s\n' "$n" "${#fld[@]}" "${line//$'\t'/\\t}"
         continue
       fi
       # A field of blanks only is empty too: a commits field of blanks names no commit word at all.
-      for f in 0 1 2 3 4 5; do
+      for f in 0 1 2 3 4 5 6; do
         if [[ -z ${fld[f]//[[:space:]]/} ]]; then break; fi
       done
       if [[ -z ${fld[f]//[[:space:]]/} ]]; then
-        local -a names=(file features base_entry own_entry status commits)
+        local -a names=(file features base_entry own_entry status commits stack)
         printf 'unreadable\t%s\tempty %s field\t%s\n' "$n" "${names[f]}" "${line//$'\t'/\\t}"
         continue
       fi
@@ -286,9 +284,20 @@ check_inventory() {
           continue
           ;;
       esac
+      if [[ ${fld[6]} != - ]]; then
+        if ! stack_is_positive "${fld[6]}"; then
+          printf "unreadable\t%s\tstack '%s' is not a positive whole number of KiB\t%s\n" \
+            "$n" "${fld[6]}" "${line//$'\t'/\\t}"
+          continue
+        fi
+        if [[ $status != fixed ]]; then
+          printf 'unreadable\t%s\ta stack applies only to a fixed row'\''s control\t%s\n' "$n" "${line//$'\t'/\\t}"
+          continue
+        fi
+      fi
       has_row["$file"]=1
-      printf 'row\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$file" "${fld[2]}" "${fld[3]}" "$status" \
-        "$([[ -n ${project[$file]:-} ]] && echo yes || echo no)" "${fld[5]}"
+      printf 'row\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$file" "${fld[2]}" "${fld[3]}" "$status" \
+        "$([[ -n ${project[$file]:-} ]] && echo yes || echo no)" "${fld[5]}" "${fld[6]}"
       if [[ $status == fixed && ${fld[5]} != - ]]; then
         read -r -a cs <<<"${fld[5]}"
         for c in "${cs[@]}"; do
@@ -344,6 +353,8 @@ read_stack_assignment() { # <script file>: facts STACK_SET (0|1) and STACK_RAW, 
   return 0
 }
 
+stack_is_positive() { [[ $1 =~ ^[1-9][0-9]{0,17}$ ]]; } # decimal KiB, within Bash's arithmetic range
+
 stack_read() { # soft|hard <want>: the current soft or hard stack limit
   if stubbed CUT_STUB_ULIMIT; then
     "$CUT_STUB_ULIMIT" "$1" "$2"
@@ -363,21 +374,60 @@ stack_apply() {
   { [ "$(ulimit -Hs)" = unlimited ] && ulimit -H -s "$want" 2>/dev/null; } || true
 }
 
-# <want>: in the subshell of a run, set the soft stack to <want> KiB, "-" keeping the default; non-zero, with a
-# message on stderr, when it cannot be set.
+# <side> <want>: enter a run at <want> KiB, "-" keeping the default, and export the request for the stubs.
 stack_enter() {
-  [[ $1 == - ]] && return 0
-  stack_apply "$1" || {
-    echo "cannot set the soft stack to $1 KiB" >&2
+  export CUT_RUN_SIDE=$1 CUT_RUN_STACK_WANT=$2
+  [[ $2 == - ]] && return 0
+  stack_apply "$2" || {
+    echo "cannot set the soft stack to $2 KiB" >&2
     return 1
   }
 }
 
-stack_probe() { # <want or ->: prints "<soft> <hard>" as read back after setting <want>; non-zero if setting failed
-  (
-    if [[ $1 != - ]]; then stack_apply "$1" || exit 1; fi
-    printf '%s %s\n' "$(stack_read soft "$1")" "$(stack_read hard "$1")"
-  )
+# <side> <set:0|1> <raw> <setting name>: check any stack source, then set and read it back in a subshell.
+# Facts: STACK_WANT (KiB or "-" for the default), STACK_LINE, STACK_ERR (empty on success).
+stack_check() {
+  local side=$1 set=$2 raw=$3 setting=$4 probe soft hard un_out
+  STACK_WANT=- STACK_LINE='' STACK_ERR=''
+  if ((set)); then
+    if ! stack_is_positive "$raw"; then
+      STACK_ERR="$setting='$raw' is not a positive whole number of KiB"
+      return 0
+    fi
+    STACK_WANT=$raw
+    hard=$(stack_read hard -)
+    if [[ $hard != unlimited ]]; then
+      if [[ ! $hard =~ ^[0-9]+$ ]]; then
+        STACK_ERR="cannot read the hard stack limit (read '$hard')"
+        return 0
+      elif ((raw > hard)); then
+        STACK_ERR="$setting=$raw is above the hard stack limit of $hard KiB"
+        return 0
+      fi
+    fi
+    if ((raw > GVISOR_STACK_CAP_KIB)); then
+      if ! un_out=$(uname_r 2>/dev/null) || [[ -z $un_out || ${un_out,,} == *gvisor* ]]; then
+        STACK_ERR="$setting=$raw is above $GVISOR_STACK_CAP_KIB KiB, and gVisor caps the stack at 128 MiB (uname -r: ${un_out:-failed or printed nothing})"
+        return 0
+      fi
+    fi
+  fi
+  if ! probe=$(stack_enter "$side" "$STACK_WANT" &&
+    printf '%s %s\n' "$(stack_read soft "$STACK_WANT")" "$(stack_read hard "$STACK_WANT")"); then
+    STACK_ERR="cannot set the soft stack to $STACK_WANT KiB"
+    return 0
+  fi
+  read -r soft hard <<<"$probe"
+  if ((!set)); then
+    if [[ $soft == unlimited ]]; then
+      STACK_ERR="the default soft stack is unlimited, which gVisor turns into 8 MiB; a commit must set CUT_STACK_KIB"
+    elif [[ ! $soft =~ ^[0-9]+$ ]]; then
+      STACK_ERR="cannot read the soft stack limit (read '$soft')"
+    fi
+  elif [[ $soft != "$STACK_WANT" ]]; then
+    STACK_ERR="the soft stack read back is $soft KiB, not $setting=$STACK_WANT"
+  fi
+  STACK_LINE="STACK soft=$soft hard=${hard:-unknown}"
 }
 
 uname_r() { # `uname -r`, or its stub; the status is theirs
@@ -619,13 +669,13 @@ run_test_real() {
   fi
 }
 
-# <log> <want> <RUN_TEST args...>: run RUN_TEST at the soft stack <want> ("-": the default) in a subshell,
-# its output copied to <log> and to stderr. Fact RUN_RC: RUN_TEST's status.
+# <log> <side> <want> <RUN_TEST args...>: run RUN_TEST in a subshell, output copied to <log> and stderr.
+# Fact RUN_RC: RUN_TEST's status.
 run_logged() {
-  local log=$1 want=$2
-  shift 2
+  local log=$1 side=$2 want=$3
+  shift 3
   (
-    stack_enter "$want" || exit 1
+    stack_enter "$side" "$want" || exit 1
     "$RUN_TEST" "$@"
   ) 2>&1 </dev/null | tee "$log" >&2
   RUN_RC=${PIPESTATUS[0]}
@@ -639,24 +689,22 @@ run_passthrough() {
   {
     (
       if [[ $dir != - ]]; then cd -- "$dir" || exit 1; fi
-      stack_enter "$want" || exit 1
+      stack_enter suite "$want" || exit 1
       exec "$@"
     ) 2>&1 1>&3 3>&- | tee "$errlog" >&2 3>&-
     RUN_RC=${PIPESTATUS[0]}
   } 3>&1
 }
 
-# <root> <tree> <script> <name> <commit...>: the tree of the R5 negative control of a row whose fix commits are
-# <commit...>. The row's first fix commit is the earliest of them in the history of HEAD; <tree> is made as
-# source_at_prepare makes it, from that commit's parent (the head's tests/ and dumps/, the parent's src/, Makefile
-# and _CoqProject), and <script> gets the parent's own copy of this script, for its CUT_STACK_KIB (no file when
-# the parent has none). Facts: RV_STATUS ok|error, RV_FIRST, RV_PARENT, RV_MSG.
+# <root> <work> <test> <row stack> <fix commits...>: RV_STATUS ok|error, RV_MSG, RV_FIRST, RV_PARENT,
+# RV_SRC head|parent, RV_STACK head|parent|row, RV_PARENT_SET and RV_PARENT_RAW (the first fix's parent's setting).
 revert_fix_prepare() {
-  local root=$1 tree=$2 script=$3 name=$4 c history
+  local root=$1 work=$2 test=$3 stack=$4 c history parent paths before after parent_set parent_raw src=0 changed=0
   shift 4
   local -A want=() seen=()
-  local -a missing=()
+  local -a missing=() ids
   RV_STATUS=error RV_FIRST='' RV_PARENT='' RV_MSG=''
+  RV_SRC=head RV_STACK=head RV_PARENT_SET=0 RV_PARENT_RAW=
   for c in "$@"; do want[$c]=1; done
   history=$(git -C "$root" rev-list --topo-order HEAD) || {
     RV_MSG="git rev-list HEAD failed"
@@ -673,22 +721,55 @@ revert_fix_prepare() {
     RV_MSG="a fix commit of its row is not an ancestor of HEAD: ${missing[*]}"
     return 0
   fi
-  RV_PARENT=$(git -C "$root" rev-parse --verify --quiet "$RV_FIRST^1") || {
-    RV_MSG="the first fix commit $RV_FIRST has no parent in this clone"
-    return 0
-  }
-  source_at_prepare "$root" "$tree" "$RV_PARENT" "$name"
-  if [[ $SA_STATUS != ok ]]; then
-    RV_MSG=$SA_CAUSE
-    return 0
-  fi
-  if git -C "$root" cat-file -e "$RV_PARENT:$SCRIPT_REL" 2>/dev/null; then
-    git -C "$root" show "$RV_PARENT:$SCRIPT_REL" >"$script" 2>/dev/null || {
-      RV_MSG="cannot read $SCRIPT_REL at $RV_PARENT"
+  for c in "$@"; do
+    read -r -a ids <<<"$(git -C "$root" rev-list --parents -n 1 "$c")"
+    if ((${#ids[@]} != 2)); then
+      RV_MSG="fix commit $c is a merge or has no parent; a control needs one parent"
+      return 0
+    fi
+    parent=${ids[1]}
+    paths=$(git -C "$root" diff --no-renames --name-only "$c^1" "$c" -- src/) || {
+      RV_MSG="cannot inspect src/ changes at $c"
       return 0
     }
+    if [[ -n $paths ]]; then src=1; fi
+    before=$work/stack-before after=$work/stack-after
+    if ! stack_script_at "$root" "$parent" "$before" || ! stack_script_at "$root" "$c" "$after"; then
+      return 0
+    fi
+    read_stack_assignment "$before"
+    parent_set=$STACK_SET parent_raw=$STACK_RAW
+    read_stack_assignment "$after"
+    if [[ $parent_set != "$STACK_SET" || $parent_raw != "$STACK_RAW" ]]; then changed=1; fi
+    if [[ $c == "$RV_FIRST" ]]; then
+      RV_PARENT=$parent RV_PARENT_SET=$parent_set RV_PARENT_RAW=$parent_raw
+    fi
+  done
+  if ((src)); then RV_SRC=parent; fi
+  if ((changed)); then RV_STACK=parent; elif [[ $stack != - ]]; then RV_STACK=row; fi
+  if [[ $RV_SRC == parent && $RV_STACK == parent ]]; then
+    RV_MSG="the fix commits of $test change src/ and CUT_STACK_KIB; a control reverts one of them; split the fix"
+  elif ((!src && !changed)); then
+    RV_MSG="the fix commits of $test change neither src/ nor CUT_STACK_KIB; there is nothing to revert"
+  elif ((changed)) && [[ $stack != - ]]; then
+    RV_MSG="a row that states a stack cannot revert a stack fix"
+  else
+    RV_STATUS=ok
   fi
-  RV_STATUS=ok
+}
+
+# An absent script has no stack line. Truncate the scratch file for each commit, even when absent.
+stack_script_at() {
+  local root=$1 commit=$2 file=$3 path
+  if path=$(git -C "$root" ls-tree "$commit" -- "$SCRIPT_REL"); then
+    if [[ -n $path ]]; then
+      if git -C "$root" show "$commit:$SCRIPT_REL" >"$file"; then return 0; fi
+    elif : >"$file"; then
+      return 0
+    fi
+  fi
+  RV_MSG="cannot read $SCRIPT_REL at $commit"
+  return 1
 }
 
 # <root> <tree> <commit> <name>: a detached worktree of HEAD at <tree> (the head's tests/ and dumps/) whose
@@ -1067,19 +1148,19 @@ main() {
   # --handoff also fails on an open row. A missing or empty inventory skips the checks while the head has no
   # tests/lean434_*.v. --import and --check run on trees without history (S23), and --source-at measures an
   # old src/ with only its own exit codes (S24): neither checks the inventory.
-  local -a row_line=() row_file=() row_base=() row_own=() row_status=() row_inproj=() row_commits=()
+  local -a row_line=() row_file=() row_base=() row_own=() row_status=() row_inproj=() row_commits=() row_stack=()
   if [[ $mode == suite || $mode == revert ]]; then
-    local facts kind a b c d e g inv_state=missing pred_state=missing where st
+    local facts kind a b c d e g h inv_state=missing pred_state=missing where st
     local -a fails=() lean434=() lean434_norow=() commit_fails=() table_errors=() unmarked=() unreadable=()
     local -A first_line=()
     facts=$(check_inventory "$ROOT") || fail "the inventory checks could not run"
-    while IFS=$'\t' read -r kind a b c d e f g; do
+    while IFS=$'\t' read -r kind a b c d e f g h; do
       case $kind in
         inventory) inv_state=$a ;;
         unreadable) unreadable+=("$INVENTORY line $a cannot be read ($b): $c") ;;
         row)
           row_line+=("$a") row_file+=("$b") row_base+=("$c") row_own+=("$d") row_status+=("$e")
-          row_inproj+=("$f") row_commits+=("$g")
+          row_inproj+=("$f") row_commits+=("$g") row_stack+=("$h")
           ;;
         commit)
           if [[ $d == malformed ]]; then
@@ -1152,7 +1233,7 @@ main() {
   fi
 
   # The scratch tree and the inputs of each mode.
-  local expected='' run_tree=$ROOT stack_file=$SELF stack_out='' idx=-1 r5_facts='' cases=''
+  local expected='' run_tree=$ROOT stack_out='' idx=-1 r5_facts='' cases='' head_src parent_src
   local -a commits=()
   if [[ $mode == revert ]]; then
     name=${test_arg#tests/} name=${name%.v}
@@ -1176,14 +1257,16 @@ main() {
     # our tooling reads some dotted names as host names; the log prints the name unquoted.
     expected=${expected//«/} expected=${expected//»/}
     read -r -a commits <<<"${row_commits[idx]}"
-    revert_fix_prepare "$ROOT" "$WORK/tree" "$WORK/parent-script" "$name" "${commits[@]}"
+    revert_fix_prepare "$ROOT" "$WORK" "tests/$name.v" "${row_stack[idx]}" "${commits[@]}"
     [[ $RV_STATUS == ok ]] || fail "--revert-fix $test_arg: $RV_MSG"
-    # The test runs at the stack the parent's own copy of this script sets: the parent of the commit that set
-    # CUT_STACK_KIB holds no such line, and a later commit's line is not in it (S22, S22b).
-    run_tree=$WORK/tree stack_file=$WORK/parent-script
+    head_src=$(git -C "$ROOT" rev-parse HEAD) || fail "--revert-fix $test_arg: cannot resolve HEAD"
+    parent_src=$head_src
+    if [[ $RV_SRC == parent ]]; then parent_src=$RV_PARENT; fi
+    source_at_prepare "$ROOT" "$WORK/head" "$head_src" "$name"
+    [[ $SA_STATUS == ok ]] || fail "--revert-fix $test_arg: head side: $SA_CAUSE"
     # The r5 lines of the head's test (r5_lines), checked before it runs (S7k): a test that has them is decided by
     # them, with exactly one error or assertion line, and never on an option row.
-    r5_facts=$(r5_lines "$run_tree/tests/$name.v")
+    r5_facts=$(r5_lines "$WORK/head/tests/$name.v")
     if [[ -n $r5_facts ]]; then
       local verdicts=0
       local -a r5_bad=()
@@ -1220,37 +1303,34 @@ main() {
     stack_out=${files[0]}.stack
   fi
 
-  # Stack, decided before any test, --import or --check runs (S17-S21, S20b): CUT_STACK_KIB, when this
-  # script's file sets it, must be a positive whole number of KiB, at most the hard limit and, under gVisor (or
-  # when uname -r cannot tell), at most 128 MiB; the soft stack read back must then equal it. Unset, the default
-  # soft stack is kept, and it must be a number: gVisor turns an unlimited one into 8 MiB.
-  local want=- probe soft hard un_out un_rc
-  read_stack_assignment "$stack_file"
-  if ((STACK_SET)); then
-    [[ $STACK_RAW =~ ^[1-9][0-9]{0,17}$ ]] || fail "CUT_STACK_KIB='$STACK_RAW' is not a positive whole number of KiB"
-    want=$STACK_RAW
-    hard=$(stack_read hard "$want")
-    if [[ $hard != unlimited ]]; then
-      [[ $hard =~ ^[0-9]+$ ]] || fail "cannot read the hard stack limit (read '$hard')"
-      ((want <= hard)) || fail "CUT_STACK_KIB=$want is above the hard stack limit of $hard KiB"
-    fi
-    if ((want > GVISOR_STACK_CAP_KIB)); then
-      un_out=$(uname_r 2>/dev/null)
-      un_rc=$?
-      if ((un_rc != 0)) || [[ -z $un_out || ${un_out,,} == *gvisor* ]]; then
-        fail "CUT_STACK_KIB=$want is above $GVISOR_STACK_CAP_KIB KiB, and gVisor caps the stack at 128 MiB (uname -r: ${un_out:-failed or printed nothing})"
-      fi
+  # Check and read back each side's stack before any test runs.
+  local want stack_line parent_want parent_stack_line stack_side=suite setting=CUT_STACK_KIB
+  read_stack_assignment "$SELF"
+  if [[ $mode == revert ]]; then
+    stack_side=head
+    if [[ $RV_STACK == row ]]; then
+      STACK_SET=1 STACK_RAW=${row_stack[idx]} setting="$INVENTORY line ${row_line[idx]} stack"
     fi
   fi
-  probe=$(stack_probe "$want") || fail "cannot set the soft stack to $want KiB"
-  read -r soft hard <<<"$probe"
-  if [[ $want == - ]]; then
-    [[ $soft != unlimited ]] || fail "the default soft stack is unlimited, which gVisor turns into 8 MiB; a commit must set CUT_STACK_KIB"
-    [[ $soft =~ ^[0-9]+$ ]] || fail "cannot read the soft stack limit (read '$soft')"
+  local head_set=$STACK_SET head_raw=$STACK_RAW
+  stack_check "$stack_side" "$head_set" "$head_raw" "$setting"
+  if [[ $mode == revert ]]; then
+    [[ -z $STACK_ERR ]] || fail "--revert-fix $test_arg: head side: $STACK_ERR"
   else
-    [[ $soft == "$want" ]] || fail "the soft stack read back is $soft KiB, not CUT_STACK_KIB=$want"
+    [[ -z $STACK_ERR ]] || fail "$STACK_ERR"
   fi
-  local stack_line="STACK soft=$soft hard=${hard:-unknown}"
+  want=$STACK_WANT stack_line=$STACK_LINE
+  if [[ $mode == revert ]]; then
+    if [[ $RV_STACK == parent ]]; then
+      stack_check parent "$RV_PARENT_SET" "$RV_PARENT_RAW" CUT_STACK_KIB
+    else
+      stack_check parent "$head_set" "$head_raw" "$setting"
+    fi
+    [[ -z $STACK_ERR ]] || fail "--revert-fix $test_arg: parent side (fix parent $RV_PARENT): $STACK_ERR"
+    parent_want=$STACK_WANT parent_stack_line=$STACK_LINE
+    printf 'R5 CONTROL head: src/ of %s, %s; parent: src/ of %s, %s\n' \
+      "$head_src" "$stack_line" "$parent_src" "$parent_stack_line"
+  fi
 
   # The switch: built when missing, except where a packed root must have been unpacked; --source-at uses none.
   if [[ $mode != source && ! -d $OPAMROOT/cut ]]; then
@@ -1276,25 +1356,17 @@ main() {
     if [[ $mode != import && $mode != check ]]; then printf 'ROCQ COMMIT %s\n' "$RC_SHA" >&2; fi
   fi
 
-  if [[ $mode != import && $mode != check ]]; then
+  if [[ $mode == suite || $mode == source ]]; then
     fetch_lfs "$run_tree" || fail "fetching the git-LFS fixtures failed (see the output above)"
   fi
 
   # Run, and the verdict of each mode.
   local log=$WORK/test.log actual n unmet
   local -a cmd=() logs=()
-  # The logs of one test, read in this order: the run's log, then the .out file of each Redirect of the test, in
-  # the order of its lines (S7c-S7f).
-  if [[ $mode == revert ]]; then
-    logs=("$log")
-    while IFS= read -r n; do
-      if [[ -n $n ]]; then logs+=("$n"); fi
-    done <<<"$(redirect_logs "$run_tree/tests/$name.v" "$run_tree/tests")"
-  fi
   case $mode in
     suite)
       printf '%s\n' "$stack_line" >&2
-      run_logged "$log" "$want" suite "$ROOT"
+      run_logged "$log" suite "$want" suite "$ROOT"
       if ((RUN_RC == 0)); then
         printf 'SUITE PASS\n'
         exit 0
@@ -1303,16 +1375,21 @@ main() {
       fail "the suite failed (status $RUN_RC): $(first_error_line "$log")"
       ;;
     revert)
-      # "R5 negative": built from the src/ of the parent of its row's first fix commit with the head's tests/,
-      # the test fails, and: when the test has r5 lines, the logs meet each of them (r5_unmet; S7h-S7j); for an
-      # option row, its log shows the unknown-option error at the Set line of that option; else the first "Error
-      # at line N (for X)" of its logs names the entry its row names (its own entry, else its base entry). A failed
-      # plugin build does not count. Each verdict line names that parent.
-      local at="src/ of $RV_PARENT, the parent of the first fix commit $RV_FIRST"
-      printf '%s\n' "$stack_line" >&2
-      run_logged "$log" "$want" one "$run_tree" "$name"
+      fetch_lfs "$WORK/head" || fail "--revert-fix $test_arg: head side: fetching the git-LFS fixtures failed"
+      run_logged "$WORK/head.log" head "$want" one "$WORK/head" "$name"
+      if ((RUN_RC != 0)); then
+        fail "--revert-fix $test_arg: R5 negative not met: the head side fails at $expected (src/ of $head_src, $stack_line)"
+      fi
+      run_tree=$WORK/tree
+      source_at_prepare "$ROOT" "$run_tree" "$parent_src" "$name"
+      local at="src/ of $parent_src, $parent_stack_line"
+      [[ $SA_STATUS == ok ]] || fail "--revert-fix $test_arg: parent side ($at): $SA_CAUSE"
+      fetch_lfs "$run_tree" || fail "--revert-fix $test_arg: parent side ($at): fetching the git-LFS fixtures failed"
+      run_logged "$log" parent "$parent_want" one "$run_tree" "$name"
+      # Check the parent side's failure: r5 lines, an option's Set line, or the first entry error of the
+      # run's log followed by Redirect logs in the order of the test's Redirect commands (S7c-S7f).
       if ((RUN_RC == RT_BUILD_FAILED)); then
-        fail "--revert-fix $test_arg: the plugin build failed ($at): $(first_error_line "$log"); a failed build is not \"R5 negative\""
+        fail "--revert-fix $test_arg: the parent side's plugin build failed ($at): $(first_error_line "$log"); a failed build is not \"R5 negative\""
       fi
       if ((RUN_RC == 0)); then
         fail "--revert-fix $test_arg: R5 negative not met: the test passes ($at)"
@@ -1321,29 +1398,33 @@ main() {
         unmet=$(r5_unmet "$run_tree/tests/$name.v" "$expected" "$log" "$run_tree/tests")
         if [[ -z $unmet ]]; then
           while IFS=$'\t' read -r kind a b; do printf 'R5 CASE MET: tests/%s.v, r5 %s %s: %s\n' "$name" "$kind" "$a" "$b" >&2; done <<<"$r5_facts"
-          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
+          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
           exit 0
         fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails, but not as the r5 lines of tests/$name.v say: ${unmet//$'\n'/; }; its row names $expected ($at)"
       fi
+      logs=("$log")
+      while IFS= read -r n; do
+        if [[ -n $n ]]; then logs+=("$n"); fi
+      done <<<"$(redirect_logs "$run_tree/tests/$name.v" "$run_tree/tests")"
       actual=$(first_entry_error "${logs[@]}")
       if [[ -z $actual ]]; then actual='no "Error at line N (for X)" line of its log or its Redirect .out files'; fi
       if [[ $expected == option:* ]]; then
         if option_failure_seen "$log" "${expected#option:}"; then
-          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
+          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
           exit 0
         fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at its Set line for \"${expected#option:}\"; its row names $expected ($at)"
       fi
       if [[ $actual == "$expected" ]]; then
-        printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$RV_PARENT"
+        printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
         exit 0
       fi
       fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, but its row names $expected ($at)"
       ;;
     source)
       printf '%s\n' "$stack_line" >&2
-      run_logged "$log" "$want" one "$run_tree" "$name"
+      run_logged "$log" suite "$want" one "$run_tree" "$name"
       if ((RUN_RC == RT_BUILD_FAILED)); then
         printf 'SOURCE-AT BUILD FAILED: %s\n' "$(first_error_line "$log")" >&2
         exit 4
