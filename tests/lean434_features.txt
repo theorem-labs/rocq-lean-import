@@ -26,3 +26,4 @@ tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90
 tests/uint32_transport_ofnatlt.v	uint32-ofnatlt-transport	BitVec.ofNatLT	UInt32.ofNatLT	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
 tests/uint32_transport_shiftleft.v	uint32-shiftleft-transport	Nat.pow_pos._f	UInt32.toNat_shiftLeft	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
 tests/lean434_stack.v	stack-limit	instInhabitedTrue	_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1	fixed	83737abbc89ca4dae79200bdc4d7d655f131b127	-
+tests/univ_undeclared.v	univ-param-undeclared	RLIU.refl_u	RLIU.refl_u	fixed	4dcb44e98dbb4cde4e79035bbb711977daeb45ed	-
