@@ -696,15 +696,15 @@ raises from an allocation callback of OCaml's memory profiler (`Gc.Memprof`)
 at the next allocation the profiler samples in the thread that declares the
 entry. So an entry can pass the limit by what the heap grows until the next
 collection ends and then until that sample; this is no fixed bound, and
-collections come further apart as the heap grows. Rocq's kernel does not
-look at Rocq's interrupt flag while it reduces a term, so the flag alone
-would not stop such an entry. An entry that passes the limit and ends
-before it is stopped is refused all the same. The profiler runs only while
-an entry is declared under the limit, and the importer never takes over a
-profiler that something else started (a Rocq built with memprof-limits runs
-one). When it cannot start its own (OCaml 5.0 to 5.2 have none), every entry
-under the limit is refused before it is declared, with `Lean Entry Memory
-Limit cannot watch this entry, which is not declared: ...`.
+collections come further apart as the heap grows. In the measured case,
+Rocq's reduction did not poll the interrupt flag, so setting the flag alone
+did not stop the entry. The importer also refuses an entry if it records
+excess growth but the entry ends before the next sampled allocation.
+
+The importer runs its profiler only while declaring an entry under the
+limit. It never takes over an active profiler. If it cannot start its own
+profiler, it refuses the entry before declaring it, with `Lean Entry
+Memory Limit cannot watch this entry, which is not declared: ...`.
 
 After an entry is stopped by this limit or by `Lean Entry Timeout`, and what
 it had declared is undone, the importer compacts the heap (`Gc.compact`)
@@ -713,12 +713,24 @@ and two stopped entries do not add up. On a large heap the compaction takes
 seconds or more.
 
 The value must be a positive number of GiB. `Unset Lean Entry Memory
-Limit.` removes the limit. When both limits are set, an entry that reaches
-both is refused with the text of the limit it reached first. An enclosing
-`Timeout` and an interrupt that the limit did not cause stay what they are
-(see `Lean Entry Timeout` and the note under `Lean Error Mode`). As for
-`Lean Entry Timeout`, a file that sets the option should first run `Set
-Warnings "+unknown-option".`.
+Limit.` removes the limit. A file that sets the option should first run
+`Set Warnings "+unknown-option".`.
+
+When both limits are set, the importer compares the entry timer's deadline
+with the first heap measurement over the limit. If the heap guard interrupts
+the entry, the importer reports a time limit only if it can establish that
+the entry's own timer was active and its deadline had passed at that
+measurement. An observed enclosing `Timeout` or independent interrupt
+keeps its existing `Lean Error Mode` behavior. If asynchronous exceptions
+overlap while an entry stops, the runtime may expose only the exception
+that survives. The importer cannot always tell whether another interrupt
+also occurred.
+
+## Corpus import settings
+
+The final corpus import uses `Set Lean Entry Timeout 2400.` (2400 seconds)
+and `Set Lean Entry Memory Limit 40.` (40 GiB of major heap growth per
+entry). The stack limit is unchanged.
 
 ## Lean Line Timeout
 

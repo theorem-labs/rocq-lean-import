@@ -2312,8 +2312,7 @@ let gib_words n =
 (* What [watching_memory] found while an entry was being declared. *)
 type memory_watch = {
   mutable stopped_at : float option;
-      (** how many seconds after the entry's start the memory limit was found
-          passed *)
+      (** when the heap was first found over the limit, in wall-clock seconds *)
   mutable raised : bool;  (** whether [watching_memory] raised [Sys.Break] *)
 }
 
@@ -2328,9 +2327,9 @@ let no_alarm =
   Gc.delete_alarm alarm;
   alarm
 
-(* [watching_memory ~limit ~start ~t0 w f x] computes [f x], the declaration of
-   an entry that started at time [t0] with a major heap of [start] words, and
-   stops it once the heap has grown by more than [limit] words.
+(* [watching_memory ~limit ~start w f x] computes [f x], the declaration of an
+   entry with a starting major heap of [start] words. It stops the entry
+   once the heap has grown by more than [limit] words.
 
    The watch measures the net growth of the major heap, which the whole
    process shares, at the ends of major collections: a GC alarm, run at the
@@ -2343,23 +2342,25 @@ let no_alarm =
 
    The entry is stopped with [Sys.Break], which [CErrors.noncritical] does not
    cover, so no [with e when CErrors.noncritical e] handler between the kernel
-   and [do_input] swallows it. Setting [Control.interrupt] alone did not stop
-   the reduction of the first proof in dumps/lean434/memory_twice.ndjson on
-   Rocq 07e45e36 and OCaml 4.14.2. In one trial, the flag was set at 1 GiB
-   of heap growth and remained set until the 30 s timeout.
+   and [do_input] swallows it. Rocq's own interrupt flag, [Control.interrupt],
+   was not enough on Rocq 07e45e36 and OCaml 4.14.2. In one trial, an alarm set
+   the flag when RLI434.boundedVal._proof_1 in dumps/lean434/memory_twice.ndjson
+   grew the heap by 1 GiB, 5.0 s into the entry. The reduction in this case
+   did not poll the flag. The entry ran to its 30 s timeout with 8151 MiB of
+   heap growth and the flag still set.
 
-   Instead, an allocation callback of OCaml's memory profiler, [Gc.Memprof],
-   raises [Sys.Break] in the declaring thread. Once the stop is recorded,
-   each allocation that the profiler samples in that thread raises it
-   until [f x] ends. This also stops the entry if a handler wraps the first
-   exception. The watch does not interrupt another allocating thread or
-   set or clear [Control.interrupt]. On the pinned cut, a 1 GiB limit
-   stopped both large proofs in the fixture before their entry timeout.
+   An allocation callback of OCaml's memory profiler, [Gc.Memprof], raises
+   [Sys.Break] instead. After the mark, each sampled allocation of the
+   declaring thread raises it until [f x] ends.
+   Allocations of other threads are never interrupted, and [Control.interrupt]
+   is neither set nor cleared. On the same toolchain, a 1 GiB limit stopped
+   both proofs in the fixture. The first stopped in the same millisecond as
+   the mark (4.968 s into the entry, heap 1344 MiB from 108 MiB). In a trial
+   with a second thread allocating throughout, that thread was not interrupted.
 
-   Rocq built without memprof-limits (as the cut is) starts no memory
-   profiler, but a Rocq built with it does, and OCaml 5.0 to 5.2 have none.
-   The importer never takes over or stops a profiler it did not start: when
-   [Gc.Memprof.start] fails, the entry is refused before it is declared.
+   The importer never takes over or stops a profiler it did not start.
+   If one is already active, or if [Gc.Memprof.start] fails for another
+   reason, the importer refuses the entry before declaring it.
 
    The watch allocates everything it needs before it acquires the alarm and
    then the profiler, and one release covers every exit, an exception during
@@ -2370,14 +2371,14 @@ let no_alarm =
    after each call returns, with no allocation in between, so no asynchronous
    exception can arrive between acquiring either and the release knowing of
    it. *)
-let watching_memory ~limit ~start ~t0 w f x =
+let watching_memory ~limit ~start w f x =
   let owner = Thread.id (Thread.self ()) in
   let active = ref true in
   let alarm = ref no_alarm in
   let profiling = ref false in
   let check_heap () =
     if !active && Option.is_empty w.stopped_at && heap_words () - start > limit then
-      w.stopped_at <- Some (System.time_difference t0 (System.get_time ()))
+      w.stopped_at <- Some (Unix.gettimeofday ())
   in
   let stop _ =
     if !active && Option.has_some w.stopped_at && Thread.id (Thread.self ()) = owner then begin
@@ -2422,10 +2423,10 @@ let in_time ~start_mib n f x =
   | Ok v -> v
   | Error info -> Exninfo.iraise (EntryTimedOut (n, start_mib), info)
 
-(* Declare [entry] under the limits that are set, Lean Entry Timeout and Lean
-   Entry Memory Limit. An entry that reaches both is refused for the one it
-   reached first. An enclosing [Timeout] and an interrupt the importer did not
-   raise reach [do_input] unchanged. *)
+(* Keep an observed outer [Control.Timeout] or [Sys.Break] not raised by
+   the watch. If asynchronous exceptions replace each other during unwinding,
+   only the surviving exception is visible here. A [Sys.Break] from the
+   watch does not show whether an independent interrupt also occurred. *)
 let add_entry_limited entry =
   match (!entry_timeout, !entry_memory_limit) with
   | None, None -> add_entry entry
@@ -2433,12 +2434,30 @@ let add_entry_limited entry =
   | timeout, Some gib ->
     let start = heap_words () in
     let start_mib = start / words_per_mib in
-    let t0 = System.get_time () in
+    let t0 = Unix.gettimeofday () in
     let w = { stopped_at = None; raised = false } in
-    (* The memory watch runs inside the timeout, so that it has stopped before
-       [Control.timeout] restores the timer it replaced. *)
-    let watched = watching_memory ~limit:(gib_words gib) ~start ~t0 w add_entry in
-    let declare () = match timeout with None -> watched entry | Some n -> in_time ~start_mib n watched entry in
+    let watched = watching_memory ~limit:(gib_words gib) ~start w add_entry in
+    let scoped_timer = ref None in
+    let remaining () = (Unix.getitimer Unix.ITIMER_REAL).it_value in
+    let declare () =
+      match timeout with
+      | None -> watched entry
+      | Some n when Sys.os_type = "Unix" || Sys.os_type = "Cygwin" ->
+        let before = Unix.gettimeofday () in
+        let outer = remaining () in
+        (* [Control.unix_timeout] leaves an earlier timer in place. Compare
+           a lower bound on its deadline with an upper bound on the deadline
+           inside the scope. If they overlap, do not infer timer ownership. *)
+        in_time ~start_mib n
+          (fun entry ->
+            let left = remaining () in
+            let deadline = Unix.gettimeofday () +. left in
+            scoped_timer := Some (deadline, outer = 0. || deadline < before +. outer);
+            watched entry)
+          entry
+      | Some n -> in_time ~start_mib n watched entry
+    in
+    (* The watch ends before [Control.timeout] restores a timer it replaced. *)
     let memory_limit_reached info = Exninfo.iraise (EntryMemoryLimit (gib, start_mib), info) in
     (match declare () with
     | () ->
@@ -2446,16 +2465,23 @@ let add_entry_limited entry =
       if Option.has_some w.stopped_at then memory_limit_reached Exninfo.null
     | exception e ->
       let ((e, info) as exn) = Exninfo.capture e in
-      (* Once the memory limit was found passed, the entry is refused for it,
-         unless its own time limit ran out before that (the timer of
-         [Control.timeout] expires [n] s after [t0] or later), or it ended by
-         an enclosing [Timeout] or an interrupt that the importer did not
-         raise. *)
+      let deadline_passed at n =
+        match !scoped_timer with
+        | Some (deadline, _) -> at >= deadline
+        | None -> at >= t0 +. float_of_int n
+      in
       (match (w.stopped_at, e) with
       | None, _ -> Exninfo.iraise exn
-      | Some at, EntryTimedOut (n, _) when at >= float_of_int n -> Exninfo.iraise exn
+      | Some at, EntryTimedOut (n, _) when deadline_passed at n -> Exninfo.iraise exn
       | Some _, Control.Timeout -> Exninfo.iraise exn
       | Some _, Sys.Break when not w.raised -> Exninfo.iraise exn
+      | Some at, Sys.Break ->
+        (* An allocation callback can replace an entry timeout with its break.
+           Infer the earlier time limit only for a known entry timer. *)
+        (match (timeout, !scoped_timer) with
+        | Some n, Some (deadline, true) when at >= deadline ->
+          Exninfo.iraise (EntryTimedOut (n, start_mib), info)
+        | _ -> memory_limit_reached info)
       | Some _, _ -> memory_limit_reached info))
 
 (* Parse the line [l]: for its names, levels and expressions only when
