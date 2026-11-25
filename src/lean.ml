@@ -257,10 +257,24 @@ let sort_max (s1 : Sorts.t) (s2 : Sorts.t) =
   | QSort _, _ | _, QSort _ -> assert false
 
 (** [map] goes from lean names to universes (in practice either SProp or a named
-    level) *)
+    level): the universe parameters of the entry being translated
+    ([start_uconv]). A universe name that is not one of them refuses the entry:
+    the export gave the entry a level its [levelParams] do not declare. *)
 let rec to_universe map = function
   | U.Prop -> Sorts.sprop
-  | UNamed n -> sort_of_level (N.Map.get n map)
+  | UNamed n -> (
+    match N.Map.find_opt n map with
+    | Some l -> sort_of_level l
+    | None ->
+      let params =
+        if N.Map.is_empty map then Pp.str "none"
+        else Pp.prlist_with_sep Pp.pr_comma N.pp (List.map fst (N.Map.bindings map))
+      in
+      CErrors.user_err
+        Pp.(
+          str "the universe " ++ N.pp n
+          ++ str " is not a universe parameter of this entry (its parameters: " ++ params
+          ++ str ")"))
   | Succ u -> Sorts.super (to_universe map u)
   | Max (a, b) -> sort_max (to_universe map a) (to_universe map b)
   | IMax (a, b) ->

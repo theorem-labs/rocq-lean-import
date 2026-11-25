@@ -217,7 +217,11 @@ The full process of translating a universe expression is then:
     (note that the successor of `SProp` is `Set + 1`, not `SProp + 1`
     which is invalid)
   - a Lean universe parameter is translated to `SProp` or a Coq named
-    universe (depending on which instance we are currently producing)
+    universe (depending on which instance we are currently producing).
+    A universe name that is not one of the entry's universe parameters
+    (its `levelParams` in the export) refuses the entry with `the
+    universe <name> is not a universe parameter of this entry (its
+    parameters: <parameters>)`, with `none` for an entry that has none
   - `max(a,b)` is translated to the max of the respective translations
   - `imax(a,b)` is translated to `SProp` if `b` is translated to
     `SProp`, otherwise to the max of the respective translations.
