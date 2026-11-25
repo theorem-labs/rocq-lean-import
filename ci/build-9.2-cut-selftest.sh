@@ -3,10 +3,11 @@
 # runs self_test. It reads the settings and helpers of that script (SELF, SETTINGS, SCRIPT_REL, INVENTORY, ...).
 
 # ---- Self-test ------------------------------------------------------------------------------------------------
-# One row per rule of ci/build-9.2-cut.sh (S0 to S24c and V1 to V16), stated in the comments below. Each case of
-# a row runs on its own copy of a scratch git repository (made with git init and real commits under a mktemp -d
-# of $TMPDIR), through a copy of the script with the stubs its "Self-test stubs" section describes. A row passes
-# only when every one of its cases shows the exit status and the lines or files the row names.
+# One row per rule of ci/build-9.2-cut.sh (S0 to S24c, S7l-A2 to S7l-A8e and V1 to V16), stated in the comments
+# below. Each case of a row runs on its own copy of a scratch git repository (made with git init and real commits
+# under a mktemp -d of $TMPDIR), through a copy of the script with the stubs its "Self-test stubs" section
+# describes. A row passes only when every one of its cases shows the exit status and the lines or files the row
+# names.
 
 ST_MEMBERS=(Eq Nat Nat.le Or And Fin UInt32 BitVec Char ULift UInt32.size Nat.isValidChar Nat.pow)
 ST_ROOT='' ST_CASE='' ST_REPO='' ST_LABEL='' ST_WHY='' ST_RC=0 ST_N=0 ST_PASS=0 ST_FAIL=0
@@ -166,12 +167,19 @@ case $ST_OUTCOME in
     printf 'Done!\nline 9: Planted.cut\n' >"$t/planted_cut.log.out"
     exit "${ST_OUTCOME#source:}" ;;
   play:*)
-    # The case filled ST_FX: run.log is the run's output, and every other file goes to tests/ of the tree as a
-    # Redirect log of the test.
+    # The case filled ST_FX: run.log is the run's output, the file unreadable names (one per line) the copied logs
+    # whose mode is then set to 000, and every other file goes to tests/ of the tree as a Redirect log of the test.
     for f in "$ST_FX"/*; do
       [[ -f $f ]] || continue
-      if [[ ${f##*/} == run.log ]]; then cat -- "$f"; else cp -- "$f" "$2/tests/"; fi
+      case ${f##*/} in
+        run.log) cat -- "$f" ;;
+        unreadable) ;;
+        *) cp -- "$f" "$2/tests/" ;;
+      esac
     done
+    if [[ -f $ST_FX/unreadable ]]; then
+      while IFS= read -r f; do chmod 000 -- "$2/tests/$f"; done <"$ST_FX/unreadable"
+    fi
     exit "${ST_OUTCOME#play:}" ;;
   *) echo "stub: unknown ST_OUTCOME '$ST_OUTCOME'" >&2; exit 99 ;;
 esac
@@ -849,8 +857,9 @@ EOF
   # S7j: a test whose failure before its fix is an assertion of its .expect file after a successful compile says so
   # with an "r5 assertion" line: the run's log must hold that assertion's failure on the named Redirect's log
   # ("unexpected '<text>'"), the log must hold a line starting with the text, and the text must name the row's
-  # entry. Another assertion's failure, the failure on another Redirect's log, the failure with no such line in
-  # the log (or no log), and a failed run with no assertion failure each fail.
+  # entry, or some line of the log starting with the text must come right after a refusal header of exactly that
+  # entry (st_r5_header_rows). Another assertion's failure, the failure on another Redirect's log, the failure with
+  # no such line in the log (or no log), and a failed run with no assertion failure each fail.
   local u_run="EXPECT FAIL: tests/case_u.expect:7: case_u.log.out: unexpected 'Skipping duplicate declaration for UInt32'\nEXPECT FAIL: tests/case_u.expect:8: case_u.log.out: missing 'Skipping scheme'\n"
   local u_log='Fin is predeclared\nSkipping duplicate declaration for UInt32 (already declared earlier in the export).\nline 20: RLIP.x\nDone!\n'
   for v in met other-assertion other-redirect no-log-line no-log no-assertion; do
@@ -917,6 +926,8 @@ EOF
     st_not_ran
   done
   st_row S7k
+
+  st_r5_header_rows
 
   # S8: --revert-fix of a test with no row fails; each mode with no argument or one short prints the usage and
   # exits 2; no test runs.
@@ -1368,6 +1379,202 @@ EOF
   st_lacks 'SOURCE-AT TEST'
   st_lacks 'SOURCE-AT ACCEPTED'
   st_row S24c
+}
+
+st_h_case() { # <label> <test file text> <run's log, printf %b> <case_h.log.out, printf %b, or - for none>: a case whose
+  # tests/case_h.v is the text, fixed for the entry H.planted by fix a (st_r5_test), and whose parent side shows the
+  # two logs (the stub's play:<status> outcome)
+  st_new "$1"
+  st_r5_test case_h H.planted <<<"$2"
+  st_fx run.log "$3"
+  if [[ $4 != - ]]; then st_fx case_h.log.out "$4"; fi
+}
+
+st_h_met() { # the control of tests/case_h.v is met at H.planted
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/case_h.v at H.planted (src/ of $ST_BASE)"
+}
+
+st_h_unmet() { # <messages...>: the control of tests/case_h.v is not met, as its r5 lines say, with each message
+  local m
+  st_rc nonzero
+  st_has 'R5 negative not met: the test fails, but not as the r5 lines of tests/case_h.v say'
+  for m in "$@"; do st_has "$m"; done
+  st_lacks 'R5 NEGATIVE MET'
+}
+
+# S7l-A2 to S7l-A8e: an "r5 assertion" line whose text does not name the row's entry is met when some line of the
+# Redirect's log that starts with the text has, right before it in that log, a refusal header of exactly that entry:
+# "Skipping: Error at line N (for <entry>)" or "Error at line N (for <entry>)", as src/lean.ml's refusal prints a
+# message on the line after its header (after_refusal_header). One row per row A2 to A8e of the rule's decision
+# table (A1 is S7j; A5 is the head side, as V11). In each case the parent side fails with the stub's play:1 outcome,
+# and its run's log holds the failure of the assertion's .expect line unless the row says otherwise.
+st_r5_header_rows() {
+  local t='Anomaly "File "m.ml", line 1, characters 2-3: Assertion failed."' v i u
+  local r='Please report at http://example.invalid/bugs/.'
+  local h='Skipping: Error at line 7 (for H.planted): {"thm": 7}'
+  local o='Skipping: Error at line 5 (for H.other): {"thm": 5}'
+  local import='Redirect "case_h.log" Lean Import "../dumps/small.ndjson".'
+  local test_h="(* r5 assertion: \"case_h.log\" $t *)"$'\n'"$import"
+  local run="EXPECT FAIL: tests/case_h.expect:3: case_h.log.out: unexpected '$t'\n"
+  local iii="'$t' does not name H.planted, and no line right before it in case_h.log.out is a refusal header of H.planted"
+  local no_start="case_h.log.out has no line starting '$t'"
+
+  # A2: the text follows a Skip-mode header of the entry.
+  st_h_case S7l-A2 "$test_h" "$run" "line 7: H.planted\n$h\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_met
+  st_line "R5 CASE MET: tests/case_h.v, r5 assertion case_h.log: $t"
+  st_row S7l-A2
+
+  # A2b: a Stop-mode header, printed after the summary.
+  st_h_case S7l-A2b "$test_h" "$run" "line 7: H.planted\n\nDone!\n- 1 entries\nError at line 7 (for H.planted): {\"thm\": 7}\n$t\n$r\n"
+  st_revert play:1 tests/case_h.v
+  st_h_met
+  st_row S7l-A2b
+
+  # A2c: a Fail-mode header, inside the Redirect of a Fail command.
+  st_h_case S7l-A2c "(* r5 assertion: \"case_h.log\" $t *)"$'\n''Redirect "case_h.log" Fail Lean Import "../dumps/small.ndjson".' \
+    "$run" "The command has indeed failed with message:\nError at line 7 (for H.planted): {\"thm\": 7}\n$t\n$r\n"
+  st_revert play:1 tests/case_h.v
+  st_h_met
+  st_row S7l-A2c
+
+  # A3a: the line before the text is the header of another entry.
+  st_h_case S7l-A3a "$test_h" "$run" "$o\n$t\n$r\nline 7: H.planted\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A3a
+
+  # A3b: the line before the text is no header, although it names the entry.
+  st_h_case S7l-A3b "$test_h" "$run" "line 7: H.planted\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A3b
+
+  # A3c: the header's line names the entry in its json, but its "(for ...)" part names another entry.
+  st_h_case S7l-A3c "$test_h" "$run" "line 5: H.other\nSkipping: Error at line 5 (for H.other): {\"note\": \"H.planted\"}\n$t\n$r\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A3c
+
+  # A3d: no line of the log starts with the text.
+  st_h_case S7l-A3d "$test_h" "$run" "line 7: H.planted\n$h\nnote: $t\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$no_start" "$iii"
+  st_row S7l-A3d
+
+  # A3e: the header names a longer name, or the entry followed by another character.
+  for v in '!' '?' '.x'; do
+    st_h_case "S7l-A3e/$v" "$test_h" "$run" "Skipping: Error at line 7 (for H.planted$v): {\"thm\": 7}\n$t\n$r\n"
+    st_revert play:1 tests/case_h.v
+    st_h_unmet "$iii"
+  done
+  st_row S7l-A3e
+
+  # A4: the text twice, first after another entry's header, then after the entry's.
+  st_h_case S7l-A4 "$test_h" "$run" "$o\n$t\n$r\n$h\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_met
+  st_row S7l-A4
+
+  # A4r: the text twice, first after the entry's header, then after another entry's.
+  st_h_case S7l-A4r "$test_h" "$run" "$h\n$t\n$r\n$o\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_met
+  st_row S7l-A4r
+
+  # A4b: the text twice, after neither the entry's header nor right after it, though the log has that header.
+  st_h_case S7l-A4b "$test_h" "$run" "$h\nline 8: H.mid\n$t\n$r\n$o\n$t\n$r\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A4b
+
+  # A5: the head side shows the header and the text too: it fails, and the control with it.
+  st_h_case S7l-A5 "$test_h" "$run" "line 7: H.planted\n$h\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v ST_OUTCOME_HEAD=play:1
+  st_rc nonzero
+  st_has 'R5 negative not met: the head side fails at H.planted'
+  st_lacks 'R5 NEGATIVE MET'
+  st_row S7l-A5
+
+  # A6: the entry's header ends the log of another Redirect, and the text starts the assertion's log.
+  st_h_case S7l-A6 "(* r5 assertion: \"case_h.log\" $t *)"$'\n''Redirect "case_g.log" Lean Import "../dumps/small.ndjson".'$'\n'"$import" \
+    "$run" "$t\n$r\nDone!\n"
+  st_fx case_g.log.out "line 7: H.planted\n$h\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A6
+
+  # A7a: the entry's header is two lines above the text.
+  st_h_case S7l-A7a "$test_h" "$run" "line 7: H.planted\n$h\nthe first line of the message\n$t\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A7a
+
+  # A7b: the text starts the entry's own header (Stop form, then Skip form) and names no entry; the line before it
+  # is the entry's progress line.
+  i=0
+  for v in 'Error at line 7' 'Skipping: Error at line 7'; do
+    i=$((i + 1))
+    if ((i == 1)); then u='Error at line 7 (for H.planted): {"thm": 7}'; else u=$h; fi
+    st_h_case "S7l-A7b/$i" "(* r5 assertion: \"case_h.log\" $v *)"$'\n'"$import" \
+      "EXPECT FAIL: tests/case_h.expect:3: case_h.log.out: unexpected '$v'\n" "line 7: H.planted\n$u\nmissing something\n"
+    st_revert play:1 tests/case_h.v
+    st_h_unmet "'$v' does not name H.planted, and no line right before it in case_h.log.out is a refusal header of H.planted"
+  done
+  st_row S7l-A7b
+
+  # A7c: the text is the log's first line.
+  st_h_case S7l-A7c "$test_h" "$run" "$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$iii"
+  st_row S7l-A7c
+
+  # A8a: the log does not exist: that alone is reported.
+  st_h_case S7l-A8a "$test_h" "$run" -
+  st_revert play:1 tests/case_h.v
+  st_h_unmet 'case_h.log.out does not exist'
+  st_lacks 'has no line starting'
+  st_lacks 'does not name H.planted'
+  st_row S7l-A8a
+
+  # A8b: the log is empty.
+  st_h_case S7l-A8b "$test_h" "$run" ''
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "$no_start" "$iii"
+  st_lacks 'case_h.log.out does not exist'
+  st_row S7l-A8b
+
+  # A8e: the log, which would meet the rule, cannot be read (mode 000): that alone is reported.
+  st_h_case S7l-A8e "$test_h" "$run" "line 7: H.planted\n$h\n$t\n$r\nDone!\n"
+  st_fx unreadable 'case_h.log.out\n'
+  st_revert play:1 tests/case_h.v
+  st_h_unmet 'case_h.log.out cannot be read'
+  st_lacks 'has no line starting'
+  st_lacks 'does not name H.planted'
+  st_row S7l-A8e
+
+  # A8c: Fail mode with no Fail command: the import's error ends the Redirect, the header and the text are in the
+  # run's log and not in the Redirect's, and no .expect is checked.
+  st_h_case S7l-A8c "$test_h" \
+    "File \"./case_h.v\", line 2, characters 0-60:\nError: Error at line 7 (for H.planted): {\"thm\": 7}\n$t\n$r\n" \
+    "line 7: H.planted\n"
+  st_revert play:1 tests/case_h.v
+  st_h_unmet "the run's log has no line \"EXPECT FAIL: tests/case_h.expect:<n>: case_h.log.out: unexpected '$t'\"" \
+    "$no_start" "$iii"
+  st_row S7l-A8c
+
+  # A8d: the test's only Redirect follows Fail on its line: r5_lines counts no Redirect "case_h.log", the r5 line is
+  # bad, and no test runs.
+  st_h_case S7l-A8d "(* r5 assertion: \"case_h.log\" $t *)"$'\n''Fail Redirect "case_h.log" Lean Import "../dumps/small.ndjson".' \
+    "$run" "line 7: H.planted\n$h\n$t\n$r\nDone!\n"
+  st_revert play:1 tests/case_h.v
+  st_rc nonzero
+  st_has 'tests/case_h.v line 1: no Redirect "case_h.log" in the test'
+  st_lacks 'R5 NEGATIVE MET'
+  st_not_ran
+  st_row S7l-A8d
 }
 
 st_revert_rows() {

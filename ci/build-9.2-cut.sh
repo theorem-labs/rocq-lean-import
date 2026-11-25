@@ -103,8 +103,8 @@ Usage:
       unknown) and each planted entry its own case accepted. Exit 3: bad commit or test, no rocq on PATH;
       4: plugin build failed; else the test's.
   ci/build-9.2-cut.sh --self-test
-      Check this script's rules (rows S0 to S24c and V1 to V16 of ci/build-9.2-cut-selftest.sh) with stubs
-      (needs git and bash only).
+      Check this script's rules (rows S0 to S24c, S7l-A2 to S7l-A8e and V1 to V16 of
+      ci/build-9.2-cut-selftest.sh) with stubs (needs git and bash only).
 Environment: CUT_ROOT (default /scratch/cs/cut) holds the opam root, the sources and the rocq-commit file
 (not read by --source-at); CUT_JOBS (default: nproc) is the build parallelism.
 EOF
@@ -943,6 +943,26 @@ log_has_line() {
   return 1
 }
 
+# <line>: sets ENTRY_NAME (entry_error_name) when the line is a refusal header as src/lean.ml's refusal prints it:
+# it starts "Skipping: Error at line " (Skip mode) or "Error at line " (Stop mode, and Fail mode under Rocq's
+# "The command has indeed failed with message:"); else status 1
+refusal_header_name() {
+  [[ $1 == 'Skipping: Error at line '* || $1 == 'Error at line '* ]] && entry_error_name "$1"
+}
+
+# <file> <text> <entry>: status 0 when some line of the file that starts with <text>, its leading and trailing blanks
+# removed (as log_has_line ... prefix reads it), has right before it (one line above, in the same file) a refusal
+# header (refusal_header_name) of exactly <entry>
+after_refusal_header() {
+  local line t prev=''
+  while IFS= read -r line || [[ -n $line ]]; do
+    t=${line%"${line##*[![:space:]]}"} t=${t#"${t%%[![:space:]]*}"}
+    if [[ $t == "$2"* ]] && refusal_header_name "$prev" && [[ $ENTRY_NAME == "$3" ]]; then return 0; fi
+    prev=$line
+  done <"$1"
+  return 1
+}
+
 # <log> <test name> <line>: fact RE_MSG, the message of the Rocq error the log reports at that line of tests/<name>.v
 # (the line 'File "./<name>.v", line <line>, characters A-B:' right before a line starting "Error:"), its lines up
 # to the next blank line squeezed into one; empty when the log reports no error there.
@@ -985,7 +1005,10 @@ expect_failure_seen() {
 #   (* r5 log lacks: "<redirect>" <text> *)  that log exists and has no line <text>
 #   (* r5 assertion: "<redirect>" <text> *)  the run's log has the failure "unexpected '<text>'" of the test's .expect
 #                                            on that Redirect's log, that log has a line starting with <text>, and
-#                                            <text> names the row's entry
+#                                            <text> names the row's entry, or some line of that log starting with
+#                                            <text> comes right after a refusal header of the entry
+#                                            (after_refusal_header): src/lean.ml's refusal prints the header, a
+#                                            line break, then the message, whose first line can name no entry
 # One fact per r5 line: "error<TAB><line no of the command><TAB><text>", "log|lacks|assertion<TAB><redirect><TAB>
 # <text>", or "bad<TAB><line no><TAB><why>" for a line starting "(* r5 " that is none of these, or that names a
 # Redirect the test does not have.
@@ -1061,12 +1084,20 @@ r5_unmet() {
         if ! expect_failure_seen "$log" "$name" "$a" "$text"; then
           printf "the run's log has no line \"EXPECT FAIL: tests/%s.expect:<n>: %s.out: unexpected '%s'\"\n" "$name" "$a" "$text"
         fi
+        # The text names the entry, or follows its refusal header; a missing or unreadable log is reported alone.
         if [[ ! -f $out ]]; then
           printf '%s.out does not exist\n' "$a"
-        elif ! log_has_line "$out" "$text" prefix; then
-          printf "%s.out has no line starting '%s'\n" "$a" "$text"
+        elif [[ ! -r $out ]]; then
+          printf '%s.out cannot be read\n' "$a"
+        else
+          if ! log_has_line "$out" "$text" prefix; then
+            printf "%s.out has no line starting '%s'\n" "$a" "$text"
+          fi
+          if ! names_token "$text" "$entry" && ! after_refusal_header "$out" "$text" "$entry"; then
+            printf "'%s' does not name %s, and no line right before it in %s.out is a refusal header of %s\n" \
+              "$text" "$entry" "$a" "$entry"
+          fi
         fi
-        if ! names_token "$text" "$entry"; then printf "'%s' does not name %s\n" "$text" "$entry"; fi
         ;;
     esac
   done <<<"$(r5_lines "$file")"
