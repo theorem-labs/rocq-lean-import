@@ -1,0 +1,13 @@
+# Log file, polarity, literal substring (tab-separated).
+parse_text_recovery_first.log.out	+	Error at line 11 (for line-11)
+parse_text_recovery_first.log.out	+	unknown expression 99
+parse_text_recovery_first.log.out	+	Skipped 1
+# The second range skips the prefix but still sees the refused expression.
+parse_text_recovery_prefix.log.out	-	Error at line 11 (
+parse_text_recovery_prefix.log.out	-	line 9: Nat
+parse_text_recovery_prefix.log.out	-	Error at line 12 (
+parse_text_recovery_prefix.log.out	+	Error at line 13 (
+parse_text_recovery_prefix.log.out	+	uses expression 3 of a refused line
+parse_text_recovery_prefix.log.out	-	Error at line 15 (
+parse_text_recovery_prefix.log.out	+	Done!
+parse_text_recovery_prefix.log.out	+	Skipped 1

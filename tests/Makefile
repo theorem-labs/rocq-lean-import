@@ -9,9 +9,10 @@ DUMPS := ../dumps
 # A test whose Redirect logs nothing checks (path_deferred_saved.v, the library tests/path_deferred_reload.v
 # loads, and the tests of the base) has no .expect.
 EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse lean434_bigint_decide lean434_string_length \
-  lean434_strings nat_transport nat_transport_budget negative_controls parse_unclear_id parse_untagged \
-  parse_untagged_prefix path_choice path_deferred_legacy path_deferred_reload path_deferred_string predeclared \
-  string_literal_mk uint32_legacy_only
+  lean434_strings nat_transport nat_transport_budget negative_controls parse_text_numbering parse_text_recovery \
+  parse_text_recovery_prefix parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload \
+  parse_wrong_payload_prefix path_choice path_deferred_legacy path_deferred_reload path_deferred_string \
+  predeclared string_literal_mk uint32_legacy_only
 EXPECTS = $(addsuffix .expect,$(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all)),\
   $(EXPECT_TESTS),\
   $(filter $(patsubst %.vo,%,$(filter %.vo,$(MAKECMDGOALS))),$(EXPECT_TESTS))))

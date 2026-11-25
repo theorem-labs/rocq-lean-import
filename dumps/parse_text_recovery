@@ -1,0 +1,15 @@
+1 #NS 0 Nat
+1 #US 0
+0 #ES 1
+2 #NS 1 zero
+1 #EC 1
+3 #NS 1 succ
+4 #NS 0 n
+2 #EP #BD 4 1 1
+#IND 0 1 0 2 2 1 3 2
+5 #NS 0 RLITextRefused
+3 #EA 1 99
+4 #EC 2
+#DEF 5 1 3
+6 #NS 0 RLITextAfter
+#DEF 6 1 4

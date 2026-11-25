@@ -43,6 +43,11 @@ entry_timeout_parse.v
 parse_untagged.v
 parse_untagged_prefix.v
 parse_unclear_id.v
+parse_text_numbering.v
+parse_text_recovery.v
+parse_text_recovery_prefix.v
+parse_wrong_payload.v
+parse_wrong_payload_prefix.v
 entry_memory.v
 path_choice.v
 path_deferred_legacy.v

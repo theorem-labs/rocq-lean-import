@@ -1,0 +1,23 @@
+# Log file, polarity, literal substring (tab-separated).
+parse_wrong_payload_prefix.log.out	-	line 131: RLI434T.fast
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 132: bad expression record
+parse_wrong_payload_prefix.log.out	-	Error at line 133 (
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 134: uses expression id 90 of a refused line
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 136: bad name record
+parse_wrong_payload_prefix.log.out	-	Error at line 137 (
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 138: uses name id 33 of a refused line
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 139: bad level record
+parse_wrong_payload_prefix.log.out	-	Error at line 140 (
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 141: uses level id 5 of a refused line
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 143: more than one id field: ie, ie
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 144: more than one id field: in, il
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 145: field il must be an integer
+parse_wrong_payload_prefix.log.out	+	NDJSON parse error at line 146: name id 99 is not the next expected id 36
+parse_wrong_payload_prefix.log.out	-	Error at line 147 (
+parse_wrong_payload_prefix.log.out	-	Error at line 148 (
+parse_wrong_payload_prefix.log.out	-	Error at line 149 (
+parse_wrong_payload_prefix.log.out	-	Error at line 150 (
+parse_wrong_payload_prefix.log.out	-	Error at line 151 (
+parse_wrong_payload_prefix.log.out	-	Error at line 152 (
+parse_wrong_payload_prefix.log.out	+	Done!
+parse_wrong_payload_prefix.log.out	+	Skipped 10

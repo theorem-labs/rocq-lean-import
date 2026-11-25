@@ -1,0 +1,22 @@
+# Log file, polarity, literal substring (tab-separated).
+# Each probe has valid fields but the wrong number. None advances the sequence.
+parse_text_numbering.log.out	+	Error at line 10 (for line-10): 99 #ELN 7
+parse_text_numbering.log.out	+	Error at line 11 (for line-11): 99 #EJ 1 0 1
+parse_text_numbering.log.out	+	Error at line 12 (for line-12): 99 #ELS 61
+parse_text_numbering.log.out	+	expression 99 is not the next expected id 3
+parse_text_numbering.log.out	+	Unknown start of line bad
+parse_text_numbering.log.out	+	cannot understand 3 #EUNKNOWN
+# Refused numbers 5 and 2 stay unavailable, but valid names and levels follow them.
+parse_text_numbering.log.out	+	Error at line 15 (for line-15)
+parse_text_numbering.log.out	+	unknown name 99
+parse_text_numbering.log.out	+	Error at line 16 (for line-16)
+parse_text_numbering.log.out	+	uses name 5 of a refused line
+parse_text_numbering.log.out	-	Error at line 17 (
+parse_text_numbering.log.out	+	Error at line 18 (for line-18)
+parse_text_numbering.log.out	+	Error at line 19 (for line-19)
+parse_text_numbering.log.out	+	uses level 2 of a refused line
+parse_text_numbering.log.out	-	Error at line 20 (
+parse_text_numbering.log.out	-	Error at line 21 (
+parse_text_numbering.log.out	-	Error at line 22 (
+parse_text_numbering.log.out	+	Done!
+parse_text_numbering.log.out	+	Skipped 9
