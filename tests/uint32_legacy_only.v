@@ -18,6 +18,9 @@ Record UInt32_legacy@{} : Set := UInt32_legacy_mk { val0 : Fin }.
 Register UInt32_legacy as lean.UInt32.legacy.
 
 Set Lean Error Mode "Skip".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), the second UInt32 entry is skipped as a duplicate, which
+   tests/uint32_legacy_only.expect refuses after the compile: *)
+(* r5 assertion: "uint32_legacy_only.log" Skipping duplicate declaration for UInt32 *)
 Redirect "uint32_legacy_only.log" Lean Import "../dumps/lean434/uint32_legacy_only.ndjson".
 
 Check RLIP_x : UInt32_legacy.

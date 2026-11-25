@@ -59,8 +59,9 @@ Unset Lean Entry Memory Limit.
 Set Lean Entry Timeout 10.
 Redirect "entry_memory_unset.log" Lean Import "../dumps/lean434/memory_twice.ndjson" 1 2494.
 
-(* M9: an outer Timeout shorter than both limits fires first: the command ends in Timeout!, and the entry is not
-   refused for the memory limit. *)
+(* M9: an outer Timeout shorter than both entry limits fires first. The memory limit is 8 GiB (about 30 s of the
+   proof's growth) and the entry timer 120 s, both set; the outer Timeout of 8 s ends the command in Timeout!, and
+   the entry is refused for neither limit. *)
 Set Lean Entry Memory Limit 8.
-Unset Lean Entry Timeout.
+Set Lean Entry Timeout 120.
 Redirect "entry_memory_outer.log" Fail Timeout 8 Lean Import "../dumps/lean434/memory_twice.ndjson" 1 2492.

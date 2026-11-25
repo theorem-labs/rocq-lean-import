@@ -11,6 +11,10 @@ From LeanImport Require Import Lean.
    payload tag keep the refusal "unsupported NDJSON record". tests/parse_unclear_id.expect checks the log. *)
 Set Lean Error Mode "Skip".
 Redirect "parse_unclear_id.log" Lean Import "../dumps/lean434/parse_unclear_id.ndjson".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), the repeated id of line 132 takes name id 32, the name of
+   line 133 is refused as out of sequence, and RLIUnclear is not declared: *)
+(* r5 log: "parse_unclear_id.log" NDJSON parse error at line 133: name id 32 is not the next expected id 33 *)
 
+(* r5 error: The reference RLIUnclear was not found *)
 Check RLIUnclear.
 Check RLIUnclearNext.

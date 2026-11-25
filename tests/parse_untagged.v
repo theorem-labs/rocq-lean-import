@@ -10,7 +10,12 @@ From LeanImport Require Import Lean.
    follows one case. tests/parse_untagged.expect checks the log. *)
 Set Lean Error Mode "Skip".
 Redirect "parse_untagged.log" Lean Import "../dumps/lean434/parse_untagged.ndjson".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), this full import refuses the name of line 133 as out of
+   sequence, so the axiom of line 144 is refused and RLIUntaggedName is not declared: *)
+(* r5 log: "parse_untagged.log" line 131: RLI434T.fast *)
+(* r5 log: "parse_untagged.log" NDJSON parse error at line 133: name id 33 is not the next expected id 32 *)
 
+(* r5 error: The reference RLIUntaggedName was not found *)
 Check RLIUntaggedName.
 Check RLIUntaggedLevel.
 Check RLIUntaggedExpr.

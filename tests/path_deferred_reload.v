@@ -7,6 +7,10 @@ From Test Require path_deferred_saved.
    declared with String.mk, and RLI426.pair's own literal with String.ofList, as in
    tests/path_deferred_string.v. tests/path_deferred_reload.expect checks the logs. *)
 Set Lean Error Mode "Fail".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), the instance of RLI425.plit that this import asks for gets
+   the 4.26.0 constructor, and the kernel refuses RLI426.pair_eq, whose statement holds the String_mk of the
+   loaded library, qualified by its name: *)
+(* r5 error: RLI426_pair = path_deferred_saved.List_cons_inst1 path_deferred_saved.String (path_deferred_saved.String_mk *)
 Redirect "path_deferred_reload.log" Lean Import "../dumps/lean434/string_deferred_4260.ndjson".
 
 Check RLI426_pair_eq.

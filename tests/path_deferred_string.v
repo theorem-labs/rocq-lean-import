@@ -12,6 +12,10 @@ From LeanImport Require Import Lean.
    printed terms. *)
 Set Lean Error Mode "Fail".
 Redirect "path_deferred_string_4250.log" Lean Import "../dumps/lean434/string_deferred_4250.ndjson".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), the instance of RLI425.plit that this second import asks
+   for gets the 4.26.0 constructor, and the kernel refuses RLI426.pair_eq, whose statement holds the unqualified
+   String_mk of this file's first import: *)
+(* r5 error: RLI426_pair = List_cons_inst1 String (String_mk *)
 Redirect "path_deferred_string_4260.log" Lean Import "../dumps/lean434/string_deferred_4260.ndjson".
 
 Check RLI426_pair_eq.

@@ -16,7 +16,10 @@ nat_transport_char.log.out	-	Char.ofNat:
 nat_transport_char.log.out	-	Char.ofNat._proof_1: 
 nat_transport_char.log.out	-	Error at line
 nat_transport_char.log.out	+	Done!
-nat_transport_assumptions_lemma.log.out	-	 :
+# The generated lemma relies on the definitional UIP of Lean's eq and on nothing else: Print Assumptions gives
+# exactly that line under its "Axioms:" header (an axiom would add "name : type", an unchecked elimination
+# "X relies on unchecked sort eliminations."), and an empty log is no result.
+nat_transport_assumptions_lemma.log.out	=	Axioms:\neq relies on definitional UIP.\n
 nat_transport_assumptions_toN.log.out	+	Closed under the global context
 nat_transport_assumptions_eq.log.out	+	relies on definitional UIP.
 nat_transport_assumptions_eq.log.out	-	 :

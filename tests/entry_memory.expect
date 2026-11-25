@@ -32,6 +32,9 @@ entry_memory_unset.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal
 entry_memory_unset.log.out	+	Skipping: Error at line 2493 (for RLI434.boundedVal._proof_2)
 entry_memory_unset.log.out	<=768	Timed out after 10 s (Lean Entry Timeout); major heap at the entry's start:
 entry_memory_unset.log.out	-	Memory limit
+# M9: the outer Timeout, with both entry limits set: neither limit's refusal.
 entry_memory_outer.log.out	+	Timeout!
 entry_memory_outer.log.out	-	Memory limit
+entry_memory_outer.log.out	-	(Lean Entry Memory Limit)
+entry_memory_outer.log.out	-	Timed out
 entry_memory_outer.log.out	-	(Lean Entry Timeout)

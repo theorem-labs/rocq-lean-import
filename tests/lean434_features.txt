@@ -14,7 +14,7 @@ tests/entry_memory.v	entry-memory-limit	option:Lean Entry Memory Limit	-	fixed	8
 tests/path_deferred_legacy.v	deferred-legacy-path	RLIV.mix_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
 tests/path_deferred_string.v	deferred-string-version	RLI426.pair_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
 tests/path_deferred_reload.v	deferred-path-reload	RLI426.pair_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
-tests/parse_untagged.v	numbered-record-recovery	line-133	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
-tests/parse_untagged_prefix.v	prefix-numbered-record-recovery	line-133	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
-tests/parse_unclear_id.v	ambiguous-numbered-record	line-133	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
+tests/parse_untagged.v	numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
+tests/parse_untagged_prefix.v	prefix-numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
+tests/parse_unclear_id.v	ambiguous-numbered-record	RLIUnclear	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
 tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881

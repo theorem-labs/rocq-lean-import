@@ -4,12 +4,14 @@ From LeanImport Require Import Lean.
 Set Lean Error Mode "Fail".
 
 (* Each fixture plants one change in an export; the import must refuse the
-   entry the "planted" line names. Fail drops each import's changes. The log
-   checks name the refused entry. *)
+   entry the "planted" line names. A planted line's case is the first Redirect
+   after it (ci/build-9.2-cut.sh --source-at reads the entry in that log only).
+   Fail drops each import's changes. The log checks name the refused entry. *)
 (* planted: Nat.pow_succ *)
 (* N1: Nat.pow_succ with a false statement (its right-hand side made n^m) and
    its original proof is refused. *)
 Redirect "negative_controls_n1.log" Fail Lean Import "../dumps/lean434/negative_pow_statement.ndjson".
+(* planted: Nat.pow_succ *)
 (* N2: Nat.pow_succ with the proof of another theorem (Nat.pow_zero) is
    refused. *)
 Redirect "negative_controls_n2.log" Fail Lean Import "../dumps/lean434/negative_pow_proof.ndjson".
@@ -21,6 +23,7 @@ Redirect "negative_controls_n3_new.log" Fail Lean Import "../dumps/lean434/negat
 (* N3_LEGACY: on the legacy path, a Fin whose constructor has a field of
    another type than the predeclared Fin's is refused. *)
 Redirect "negative_controls_n3_legacy.log" Fail Lean Import "../dumps/lean434/negative_fin_field.ndjson".
+(* planted: Fin *)
 (* A Fin in Type 1, one universe above Lean's Type, is refused: the
    predeclared Fin is in Set, which stands only for Lean's Type. *)
 Redirect "negative_controls_fin_sort.log" Fail Lean Import "../dumps/lean434/negative_fin_sort.ndjson".
@@ -28,6 +31,7 @@ Redirect "negative_controls_fin_sort.log" Fail Lean Import "../dumps/lean434/neg
 (* N4_LEGACY: on the legacy path, a UInt32.size whose declared type is Type,
    not Nat, is refused. *)
 Redirect "negative_controls_n4_legacy.log" Fail Lean Import "../dumps/lean434/pred_uint32_size.ndjson".
+(* planted: Nat.le *)
 (* N4_NEW: on the new path, a Nat.le in Type, where the predeclared Nat_le is
    in SProp, is refused. *)
 Redirect "negative_controls_n4_new.log" Fail Lean Import "../dumps/lean434/negative_le_type.ndjson".
