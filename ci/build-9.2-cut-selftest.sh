@@ -173,10 +173,11 @@ esac
 EOF
   cat >"$s/ulimit" <<'EOF'
 #!/usr/bin/env bash
-# Self-test stand-in for the stack read-back. $1: soft|hard, $2: the KiB the setter was asked for, or "-".
+# Self-test stand-in for the stack read-back. $1: soft|hard, $2: the KiB the setter was asked for, or "-". As the real
+# setter (stack_apply) does, a value asked for lowers a hard limit of "unlimited" to it.
 case $1 in
   soft) if [[ -n $ST_SOFT ]]; then echo "$ST_SOFT"; elif [[ $2 == - ]]; then echo "$ST_DEFAULT_SOFT"; else echo "$2"; fi ;;
-  hard) echo "$ST_HARD" ;;
+  hard) if [[ $ST_HARD == unlimited && $2 != - ]]; then echo "$2"; else echo "$ST_HARD"; fi ;;
 esac
 EOF
   cat >"$s/uname" <<'EOF'
@@ -379,9 +380,11 @@ st_rows() {
   local stack1='STACK soft=8192 hard=unlimited'
 
   # S0: a clean tree passes every check and goes on to build and run the suite (SUITE PASS), plain and with
-  # --handoff.
+  # --handoff. Its script has no CUT_STACK_KIB line, so the STACK line reads the default soft stack.
   for v in plain --handoff; do
     st_new "S0/$v"
+    st_set_stack "$ST_REPO/$SCRIPT_REL" none
+    if ! git -C "$ST_REPO" diff --quiet -- "$SCRIPT_REL"; then st_commit "unset CUT_STACK_KIB"; fi
     if [[ $v == plain ]]; then st_run --; else st_run -- --handoff; fi
     st_rc zero
     st_line 'SUITE PASS'
@@ -994,10 +997,11 @@ EOF
   st_not_ran
   st_row S16
 
-  # S17: CUT_STACK_KIB unset: the default soft stack is read back into one STACK line, on stderr before the
-  # test, or in <input>.stack (with the Rocq commit, nothing else printed) for --import and --check; an
-  # unlimited default soft stack fails.
+  # S17: CUT_STACK_KIB unset (each case first removes the line from its copy of the script): the default soft stack
+  # is read back into one STACK line, on stderr before the test, or in <input>.stack (with the Rocq commit, nothing
+  # else printed) for --import and --check; an unlimited default soft stack fails.
   st_new S17/suite
+  st_set_stack "$ST_REPO/$SCRIPT_REL" none
   st_run --
   st_rc zero
   st_count "$stack1" 1
@@ -1006,6 +1010,7 @@ EOF
     st_bad "the STACK line does not come before the test run"
   work=$ST_CASE/work
   st_new S17/import
+  st_set_stack "$ST_REPO/$SCRIPT_REL" none
   work=$ST_CASE/work
   mkdir -p -- "$work" && printf 'Check nat.\n' >"$work/Import.v"
   st_run -- --import "$work/Import.v"
@@ -1014,6 +1019,7 @@ EOF
   st_file_is "$ST_CASE/out" 'stub compile stdout'
   st_file_is "$ST_CASE/err" 'stub compile stderr'
   st_new S17/check
+  st_set_stack "$ST_REPO/$SCRIPT_REL" none
   work=$ST_CASE/work
   mkdir -p -- "$work" && : >"$work/Import.vo" && : >"$work/Other.vo"
   st_run -- --check "$work/Import.vo" "$work/Other.vo"
@@ -1023,11 +1029,13 @@ EOF
   st_file_is "$ST_CASE/out" 'stub check stdout'
   st_file_is "$ST_CASE/err" 'stub check stderr'
   st_new S17/unlimited
+  st_set_stack "$ST_REPO/$SCRIPT_REL" none
   st_run ST_DEFAULT_SOFT=unlimited --
   st_rc nonzero
   st_has 'the default soft stack is unlimited'
   st_not_ran
   st_new S17/unlimited-import
+  st_set_stack "$ST_REPO/$SCRIPT_REL" none
   work=$ST_CASE/work
   mkdir -p -- "$work" && printf 'Check nat.\n' >"$work/Import.v"
   st_run ST_DEFAULT_SOFT=unlimited -- --import "$work/Import.v"
@@ -1038,12 +1046,12 @@ EOF
   st_row S17
 
   # S18: CUT_STACK_KIB at or below the hard limit (the hard limit itself included) is set, read back and
-  # reported, for the suite, --import and --check.
+  # reported, for the suite, --import and --check; the setter lowers an unlimited hard limit to it.
   st_new S18/suite
   st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
   st_run --
   st_rc zero
-  st_count 'STACK soft=65536 hard=unlimited' 1
+  st_count 'STACK soft=65536 hard=65536' 1
   st_ran suite
   st_new S18/at-hard-limit
   st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
@@ -1057,15 +1065,26 @@ EOF
   st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
   st_run -- --import "$work/Import.v"
   st_rc zero
-  st_file_is "$work/Import.v.stack" "STACK soft=65536 hard=unlimited"$'\n'"ROCQ COMMIT $CUT_ROCQ_COMMIT"
+  st_file_is "$work/Import.v.stack" "STACK soft=65536 hard=65536"$'\n'"ROCQ COMMIT $CUT_ROCQ_COMMIT"
   st_new S18/check
   work=$ST_CASE/work
   mkdir -p -- "$work" && : >"$work/Import.vo"
   st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
   st_run -- --check "$work/Import.vo"
   st_rc zero
-  st_file_is "$work/Import.vo.stack" "STACK soft=65536 hard=unlimited"$'\n'"ROCQ COMMIT $CUT_ROCQ_COMMIT"
+  st_file_is "$work/Import.vo.stack" "STACK soft=65536 hard=65536"$'\n'"ROCQ COMMIT $CUT_ROCQ_COMMIT"
   st_row S18
+
+  # S18b: the script as committed, its copy unedited, sets its own CUT_STACK_KIB of 131072 KiB: with the hard limit
+  # unlimited, the soft and hard stacks read back as 131072, under gVisor and elsewhere, and the suite runs.
+  for v in generic gvisor; do
+    st_new "S18b/$v"
+    st_run "ST_UNAME=$v" --
+    st_rc zero
+    st_count 'STACK soft=131072 hard=131072' 1
+    st_ran suite
+  done
+  st_row S18b
 
   # S19: CUT_STACK_KIB empty, 0, negative, unlimited or not an integer fails; no test runs.
   for v in '' 0 -5 unlimited abc 12x; do
@@ -1102,14 +1121,14 @@ EOF
     st_set_stack "$ST_REPO/$SCRIPT_REL" "$v"
     st_run ST_UNAME=gvisor --
     st_rc zero
-    st_line "STACK soft=$v hard=unlimited"
+    st_line "STACK soft=$v hard=$v"
     st_ran suite
   done
   st_new S20b/131073-generic
   st_set_stack "$ST_REPO/$SCRIPT_REL" 131073
   st_run ST_UNAME=generic --
   st_rc zero
-  st_line 'STACK soft=131073 hard=unlimited'
+  st_line 'STACK soft=131073 hard=131073'
   st_row S20b
 
   # S21: a soft stack read back that differs from CUT_STACK_KIB fails; no test runs.
@@ -1121,11 +1140,12 @@ EOF
   st_not_ran
   st_row S21
 
-  # S22: the fix commit of the row also set CUT_STACK_KIB; the parent of that commit holds no such line, so the
-  # test runs at the default stack, and it still has to fail at its entry. The plain run of the same head (stack
-  # 65536) is the control.
+  # S22: the fix commit of the row also set CUT_STACK_KIB; the parent of that commit holds no such line (the case
+  # removes the committed one in it), so the test runs at the default stack, and it still has to fail at its entry.
+  # The plain run of the same head (stack 65536) is the control.
   for v in revert control; do
     st_new "S22/$v"
+    st_set_stack "$ST_REPO/$SCRIPT_REL" none
     printf '(* stand-in *)\n' >"$ST_REPO/tests/lean434_s.v"
     printf 'lean434_s.v\n' >>"$ST_REPO/tests/_CoqProject"
     st_commit "test s"
@@ -1145,7 +1165,7 @@ EOF
     else
       st_run --
       st_rc zero
-      st_line 'STACK soft=65536 hard=unlimited'
+      st_line 'STACK soft=65536 hard=65536'
     fi
   done
   st_row S22
@@ -1167,15 +1187,17 @@ EOF
   st_run ST_OUTCOME=fail:Sigma.one -- --revert-fix tests/lean434_s.v
   st_rc zero
   st_line "R5 NEGATIVE MET: tests/lean434_s.v at Sigma.one (src/ of $parent)"
-  st_line 'STACK soft=65536 hard=unlimited'
+  st_line 'STACK soft=65536 hard=65536'
   st_lacks 'soft=32768'
   st_row S22b
 
   # S23: --import and --check on a tree without history and with a broken inventory: a missing file, a
-  # failing run, a normal run, the stack rules; no inventory check.
+  # failing run, a normal run, the stack rules (its script holds no CUT_STACK_KIB line, then a bad one); no
+  # inventory check.
   st_new S23/setup
   plain=$ST_CASE/plain work=$ST_CASE/work
   cp -a -- "$ST_REPO" "$plain" && rm -rf -- "$plain/.git"
+  st_set_stack "$plain/$SCRIPT_REL" none
   printf 'not a row\n' >>"$plain/$inv"
   mkdir -p -- "$work" && printf 'Check nat.\n' >"$work/Import.v" && : >"$work/Import.vo" && : >"$work/Other.vo"
   ST_REPO=$plain

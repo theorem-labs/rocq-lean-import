@@ -754,7 +754,15 @@ also occurred.
 
 The final corpus import uses `Set Lean Entry Timeout 2400.` (2400 seconds)
 and `Set Lean Entry Memory Limit 40.` (40 GiB of major heap growth per
-entry). The stack limit is unchanged.
+entry). `ci/build-9.2-cut.sh` sets the soft stack limit to 131072 KiB
+(128 MiB) for tests, `--import` and `--check` via `CUT_STACK_KIB`.
+`--revert-fix` uses the setting from the fix's parent instead.
+
+Lean 4.34.0's entry `_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1`
+(as printed by the importer) fails with `Stack overflow.` at 8, 16, 32
+and 64 MiB, and imports at 128 MiB, the gVisor stack ceiling.
+Run a corpus reading on a machine with a hard stack limit of at least
+131072 KiB; the script refuses to run with a lower limit.
 
 ## Lean Line Timeout
 

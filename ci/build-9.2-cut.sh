@@ -34,6 +34,7 @@ LFS_BATCH_URL=https://github.com/theorem-labs/rocq-lean-import.git/info/lfs/obje
 # file in the parent of a fix's first commit holds (the parent of the commit that set it holds none). The
 # environment variable of that name is ignored.
 # The CUT_STACK_KIB=<integer> line, when a commit adds one, goes right below this line.
+CUT_STACK_KIB=131072
 
 CUT_ROOT=${CUT_ROOT:-/scratch/cs/cut} # opam root $CUT_ROOT/opam (switch "cut"), sources $CUT_ROOT/src
 JOBS=${CUT_JOBS:-$(nproc 2>/dev/null || echo 2)}
