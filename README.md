@@ -333,6 +333,16 @@ NDJSON export whose metadata has no `lean` object or no
 names the field and its value. The path is chosen before the first
 entry, from the metadata only.
 
+Each entry is saved with the path, and the Lean version, of the export
+that gave it. An instance that is declared only when an entry first
+asks for it (an instance at `Prop`, see "Prop instantiations" above, or
+any instance under `Lean Lazy Instantiation`) may be asked for by an
+entry of a later export: it is declared on the saved path and version,
+after which the entry that asked goes on on its own export's path and
+version. A compiled Rocq library keeps the saved paths and versions, so
+a later import in another Rocq process that loads the library declares
+such an instance the same way.
+
 On the new path `BitVec`, `UInt32`, `Char`, `UInt32.size`,
 `Nat.isValidChar` and `Nat.pow` are imported from their own entries, as
 Lean defines them, and a string literal is translated as the term
@@ -340,8 +350,10 @@ Lean's kernel unfolds it to (its `string_lit_to_constructor`): the
 string constructor applied to a list of `Char.ofNat <code point>`.
 The constructor is `String.mk` for an export of Lean 4.17.0 to 4.25.x
 and `String.ofList` from Lean 4.26.0 on, as the metadata's
-`lean.version` says; an export that does not declare that constructor
-is refused at its first literal (`missing String.ofList`). On either
+`lean.version` says (for an instance declared later, the version saved
+with its entry); an export that does not declare that constructor is
+refused at its first literal (`missing String.mk` or `missing
+String.ofList`). On either
 path a literal must be well-formed UTF-8, as Lean's strings are. A
 repeated `UInt32` or `Char` entry is skipped as a duplicate, like any
 other entry. On the legacy path a second `UInt32` or `Char` entry may
@@ -461,8 +473,10 @@ place gets no lemma, the pass stops, or Lean's original value is used.
 The pass memoizes values per entry, by constant or by shared term.
 It caps the scans, natural number evaluation and certificate construction
 at a total of 1 000 000 steps; a reused certificate counts again at
-its full size because the kernel checks the proof tree. The finder
-also caps nesting at 10 000. When a limit is reached, the importer
+its full size because the kernel checks the proof tree. The pass also
+caps its depth at 10 000, counted from the entry's value or type down
+through the terms its scans and walks visit and the `Nat` terms the
+finder computes, together. When a limit is reached, the importer
 logs `line N: NAME: the transport pass stops: ...` and submits the
 original value for the usual kernel check. An error in the pass takes
 the same path and logs `the transport pass fails; ...`.
