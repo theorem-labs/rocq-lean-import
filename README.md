@@ -644,14 +644,24 @@ line and the error. NAME is the entry's name. For a line that cannot be
 parsed, it is the name the NDJSON parser read before the error, else
 `line-N`.
 
+The text parser requires the next id in the name, level or expression
+sequence for every recognized numbered line. An unreadable number, an
+unknown tag or an out-of-sequence number does not advance a sequence.
+After the metadata, the NDJSON parser uses the single next integer id
+field (`in`, `il` or `ie`) to choose the sequence. This applies even when
+the payload tag belongs to a different kind of record. In either format,
+if the parser refuses the payload of a recognized record with the next
+id, it keeps that id in the sequence but does not make its value available.
+
 - `Fail`: the import stops there and `Lean Import` fails with the refusal.
 - `Stop`: the import stops there and `Lean Import` succeeds, keeping what it
   declared before the refused line.
 - `Skip`: the refusal is printed after `Skipping: `, what the refused entry
   had declared is undone, and the import goes on with the next line. An
-  entry that uses a refused entry is refused in turn, and so is an NDJSON
-  line that uses the id of a refused name, level or expression line. The
-  final summary counts the refused lines (`Skipped N`).
+  entry that uses a refused entry is refused in turn. In either format,
+  the parser refuses a line that uses a refused name, level or expression
+  id and names that id in the error. The final summary counts the refused
+  lines (`Skipped N`).
 
 `Skip` is useful to tell how much the current system can handle.
 

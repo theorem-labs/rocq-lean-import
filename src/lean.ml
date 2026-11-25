@@ -2597,6 +2597,9 @@ let rec do_input state ~from ~until ch =
         let name = match entry with Some n -> N.pp n | None -> line_name () in
         refuse { state with pstate = NdjsonParser pstate } ~from ~until ch
           (fst error) (refusal ~name l error)
+      | exception LeanParse.Refused { state = pstate; error } ->
+        refuse { state with pstate = OldParser pstate } ~from ~until ch
+          (fst error) (refusal ~name:(line_name ()) l error)
       | exception e when refuses_line e ->
         let e = Exninfo.capture e in
         refuse state ~from ~until ch (fst e) (refusal ~name:(line_name ()) l e)

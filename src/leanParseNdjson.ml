@@ -125,22 +125,20 @@ let id_fields = function
   | `Assoc fields -> List.filter (fun (k, _) -> List.mem k id_keys) fields
   | _ -> []
 
-(* The id of a name, level or expression record, in its field [key]. A record
-   with more than one id field (another one, or [key] twice) has no id: it is
-   refused with no id reserved. *)
-let record_id ~lcnt key json =
-  match id_fields json with
-  | [ (k, `Int i) ] when k = key -> i
-  | [ (k, _) ] when k = key -> err ~lcnt ("field " ^ key ^ " must be an integer")
-  | [] | [ _ ] -> err ~lcnt ("no field " ^ key)
-  | ids -> err ~lcnt ("more than one id field: " ^ String.concat ", " (List.map fst ids))
+let record_id ~lcnt key = function
+  | `Int i -> i
+  | _ -> err ~lcnt ("field " ^ key ^ " must be an integer")
 
-let expect_next ~lcnt kind expected actual =
-  if expected <> actual then
-    err
-      ~lcnt
-      (kind ^ " id " ^ string_of_int actual ^ " is not the next expected id "
-     ^ string_of_int expected)
+let bad_next ~lcnt kind expected actual =
+  err ~lcnt
+    (kind ^ " id " ^ string_of_int actual ^ " is not the next expected id "
+   ^ string_of_int expected)
+
+let name_tags = [ "str"; "num" ]
+let level_tags = [ "succ"; "max"; "imax"; "param" ]
+let expr_tags =
+  [ "bvar"; "sort"; "const"; "app"; "lam"; "forallE"; "letE"; "proj";
+    "natVal"; "strVal"; "mdata" ]
 
 (* [next_id ~placeholder f] parses with [f] the rest of a name, level or
    expression line whose id is the next one.  When [f] fails, the refusal
@@ -155,9 +153,7 @@ let binders ~lcnt = function
   | "instImplicit" -> Typeclass
   | b -> err ~lcnt ("unknown Lean binderInfo " ^ b)
 
-let parse_name ~lcnt state json =
-  let next = record_id ~lcnt "in" json in
-  expect_next ~lcnt "name" (RRange.length state.names) next;
+let parse_name ~lcnt state next json =
   let placeholder () =
     { state with
       names = RRange.append state.names N.anon;
@@ -166,16 +162,14 @@ let parse_name ~lcnt state json =
   let base p = get_name ~lcnt state (require_int ~lcnt "pre" p) in
   let name =
     next_id ~placeholder (fun () ->
-      match tagged ~lcnt ~what:"name" [ "str"; "num" ] json with
+      match tagged ~lcnt ~what:"name" name_tags json with
       | "str", p -> N.append (base p) (require_string ~lcnt "str" p)
       | "num", p -> N.raw_append (base p) (string_of_int (require_int ~lcnt "i" p))
       | _ -> err ~lcnt "bad name record")
   in
   ({ state with names = RRange.append state.names name }, None)
 
-let parse_level ~lcnt state json =
-  let next = record_id ~lcnt "il" json in
-  expect_next ~lcnt "level" (RRange.length state.univs) next;
+let parse_level ~lcnt state next json =
   let placeholder () =
     { state with
       univs = RRange.append state.univs U.Prop;
@@ -184,7 +178,7 @@ let parse_level ~lcnt state json =
   let univ j = get_univ ~lcnt state (as_int ~lcnt j) in
   let level =
     next_id ~placeholder (fun () ->
-      match tagged ~lcnt ~what:"level" [ "succ"; "max"; "imax"; "param" ] json with
+      match tagged ~lcnt ~what:"level" level_tags json with
       | "succ", `Int base -> U.Succ (get_univ ~lcnt state base)
       | "max", `List [ a; b ] -> U.Max (univ a, univ b)
       | "imax", `List [ a; b ] -> U.IMax (univ a, univ b)
@@ -207,9 +201,7 @@ let parse_nat_lit ~lcnt = function
     n
   | _ -> err ~lcnt "bad natural literal"
 
-let parse_expr ~lcnt state json =
-  let next = record_id ~lcnt "ie" json in
-  expect_next ~lcnt "expression" (RRange.length state.exprs) next;
+let parse_expr ~lcnt state next json =
   let placeholder () =
     { state with
       exprs = RRange.append state.exprs (Bound 0);
@@ -226,12 +218,7 @@ let parse_expr ~lcnt state json =
   in
   let expr =
     next_id ~placeholder (fun () ->
-      match
-        tagged ~lcnt ~what:"expression"
-          [ "bvar"; "sort"; "const"; "app"; "lam"; "forallE"; "letE"; "proj";
-            "natVal"; "strVal"; "mdata" ]
-          json
-      with
+      match tagged ~lcnt ~what:"expression" expr_tags json with
       | "bvar", `Int n -> Bound n
       | "sort", `Int u -> Sort (get_univ ~lcnt state u)
       | "const", p ->
@@ -415,6 +402,32 @@ let parse_meta ~lcnt state json =
   else
     ({ state with seen_meta = true; path = export_path ~lcnt meta }, None)
 
+let declarations =
+  [ ("axiom", parse_axiom);
+    ("def", parse_def);
+    ("thm", parse_thm);
+    ("opaque", parse_opaque);
+    ("quot", parse_quot);
+    ("inductive", parse_inductive) ]
+
+let has_tag tags json = List.exists (fun k -> member k json <> None) tags
+
+let has_payload json =
+  has_tag name_tags json || has_tag level_tags json || has_tag expr_tags json
+  || member "meta" json <> None
+  || List.exists (fun (k, _) -> member k json <> None) declarations
+
+let unsupported ~prefix ~lcnt state =
+  if prefix then (state, None) else err ~lcnt "unsupported NDJSON record"
+
+let bad_id ~prefix ~lcnt state json key kind expected id =
+  (* As before, an untagged name or level record with no clear next id is
+     unsupported. A tagged record must report what is wrong with its id. *)
+  if has_payload json then
+    let actual = record_id ~lcnt key id in
+    bad_next ~lcnt kind expected actual
+  else unsupported ~prefix ~lcnt state
+
 let parse_line ~prefix ~lcnt state l =
   let l = String.trim l in
   if l = "" then (state, None)
@@ -423,42 +436,39 @@ let parse_line ~prefix ~lcnt state l =
       try Json.from_string l
       with Yojson.Json_error msg -> err ~lcnt msg
     in
-    let has k = member k json <> None in
-    if has "meta" then parse_meta ~lcnt state json
-    else if not state.seen_meta then
+    match id_fields json with
+    | [] when member "meta" json <> None -> parse_meta ~lcnt state json
+    | _ when not state.seen_meta ->
       err ~lcnt "expected metadata object before export records"
-    else if has "str" || has "num" then parse_name ~lcnt state json
-    else if has "succ" || has "max" || has "imax" || has "param" then
-      parse_level ~lcnt state json
-    else if has "ie" then parse_expr ~lcnt state json
-    else
-      (* Declaration records; skipped (without parsing) while scanning a prefix
-         for the name/level/expr context that precedes the entry of interest. *)
+    (* A clear next id chooses the sequence before the payload is read.
+       A wrong or missing tag therefore refuses that id in its own sequence. *)
+    | [ ("in", `Int i) ] when i = RRange.length state.names -> parse_name ~lcnt state i json
+    | [ ("il", `Int i) ] when i = RRange.length state.univs -> parse_level ~lcnt state i json
+    | [ ("ie", id) ] ->
+      let i = record_id ~lcnt "ie" id in
+      let expected = RRange.length state.exprs in
+      if i <> expected then bad_next ~lcnt "expression" expected i;
+      parse_expr ~lcnt state i json
+    | [ ("in", id) ] ->
+      bad_id ~prefix ~lcnt state json "in" "name" (RRange.length state.names) id
+    | [ ("il", id) ] ->
+      bad_id ~prefix ~lcnt state json "il" "level" (RRange.length state.univs) id
+    | [] when has_tag name_tags json -> err ~lcnt "no field in"
+    | [] when has_tag level_tags json -> err ~lcnt "no field il"
+    | [] ->
+      (* A prefix scan reads only the context, not the declarations. *)
       let declaration (k, parse) =
         match member k json with
         | Some payload ->
           Some (if prefix then (state, None) else parse ~lcnt state payload)
         | None -> None
       in
-      match
-        List.find_map declaration
-          [ ("axiom", parse_axiom);
-            ("def", parse_def);
-            ("thm", parse_thm);
-            ("opaque", parse_opaque);
-            ("quot", parse_quot);
-            ("inductive", parse_inductive) ]
-      with
+      (match List.find_map declaration declarations with
       | Some result -> result
-      | None -> (
-        (* A record with no payload tag whose one id field, [in] or [il],
-           holds the next id of its kind is a name or level record without
-           its payload: that parser refuses it and reserves the id. Any other
-           record is unsupported, and reserves nothing. *)
-        match id_fields json with
-        | [ ("in", `Int i) ] when i = RRange.length state.names -> parse_name ~lcnt state json
-        | [ ("il", `Int i) ] when i = RRange.length state.univs -> parse_level ~lcnt state json
-        | _ -> if prefix then (state, None) else err ~lcnt "unsupported NDJSON record")
+      | None -> unsupported ~prefix ~lcnt state)
+    | ids when has_payload json || List.mem_assoc "ie" ids ->
+      err ~lcnt ("more than one id field: " ^ String.concat ", " (List.map fst ids))
+    | _ -> unsupported ~prefix ~lcnt state
 
 (* A line is refused with the state it was read with, except for a name, level
    or expression line, which leaves a placeholder for its id (see [next_id]). *)
