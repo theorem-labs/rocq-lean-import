@@ -17,4 +17,9 @@ tests/path_deferred_reload.v	deferred-path-reload	RLI426.pair_eq	-	fixed	353be90
 tests/parse_untagged.v	numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
 tests/parse_untagged_prefix.v	prefix-numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
 tests/parse_unclear_id.v	ambiguous-numbered-record	RLIUnclear	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
+tests/parse_text_recovery.v	text-numbered-record-recovery	RLITextAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
+tests/parse_text_recovery_prefix.v	text-saved-numbered-record-recovery	RLITextAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
+tests/parse_text_numbering.v	text-numbered-sequence-check	RLITextAfterGaps	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
+tests/parse_wrong_payload.v	ndjson-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
+tests/parse_wrong_payload_prefix.v	ndjson-prefix-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84
 tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881
