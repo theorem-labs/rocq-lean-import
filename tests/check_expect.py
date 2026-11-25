@@ -1,8 +1,30 @@
 #!/usr/bin/env python3
 """Check literal substrings in Rocq Redirect output (relative to each .expect)."""
 
+import re
 import sys
 from pathlib import Path
+
+# A polarity "<=N" compares two heap readings instead of finding a substring:
+# its text is the words before a reading, the log must hold that text exactly
+# twice, each time followed by " <integer> MiB", and the second integer may
+# exceed the first by at most N.
+MARGIN = re.compile(r"<=(\d+)")
+READING = re.compile(r" (\d+) MiB")
+
+
+def heap_readings(name, log, text, margin):
+    """Why the "<=margin" line for text fails on log, or None when it holds."""
+    ends = [found.end() for found in re.finditer(re.escape(text), log)]
+    if len(ends) != 2:
+        return f"{name}: {len(ends)} readings after {text!r}, expected 2"
+    readings = [READING.match(log, end) for end in ends]
+    if not all(readings):
+        return f"{name}: unreadable reading after {text!r}"
+    first, second = (int(reading.group(1)) for reading in readings)
+    if second - first <= margin:
+        return None
+    return f"{name}: second reading {second} MiB exceeds the first, {first} MiB, by more than {margin} MiB"
 
 
 def check(spec):
@@ -12,8 +34,9 @@ def check(spec):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         fields = line.split("\t", 2)
-        if len(fields) != 3 or not fields[0] or fields[1] not in ("+", "-") or not fields[2]:
-            reason = "expected log<TAB>+ or -<TAB>text"
+        margin = MARGIN.fullmatch(fields[1]) if len(fields) == 3 else None
+        if len(fields) != 3 or not fields[0] or not (fields[1] in ("+", "-") or margin) or not fields[2]:
+            reason = "expected log<TAB>+, - or <=N<TAB>text"
         else:
             name, polarity, text = fields
             if name not in logs:
@@ -24,6 +47,10 @@ def check(spec):
             log = logs[name]
             if isinstance(log, Exception):
                 reason = f"cannot read {name}: {log}"
+            elif margin:
+                reason = heap_readings(name, log, text, int(margin.group(1)))
+                if reason is None:
+                    continue
             elif (text in log) == (polarity == "+"):
                 continue
             else:

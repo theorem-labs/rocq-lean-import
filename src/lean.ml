@@ -2257,21 +2257,206 @@ let () =
           entry_timeout := x);
     }
 
-exception EntryTimedOut of int
+(* Lean Entry Memory Limit: by how many GiB declaring one entry may grow the
+   major heap above its size at the entry's start, unset by default. An entry
+   that grows it more is stopped and refused with [EntryMemoryLimit] (see
+   [watching_memory]). *)
+let entry_memory_limit = ref None
 
 let () =
+  Goptions.declare_int_option
+    {
+      optdepr = None;
+      optstage = Interp;
+      optkey = [ "Lean"; "Entry"; "Memory"; "Limit" ];
+      optread = (fun () -> !entry_memory_limit);
+      optwrite =
+        (fun x ->
+          (match x with
+          | Some n when n <= 0 ->
+            CErrors.user_err
+              Pp.(
+                str "Lean Entry Memory Limit must be a positive number of GiB, not "
+                ++ int n ++ str ".")
+          | None | Some _ -> ());
+          entry_memory_limit := x);
+    }
+
+(* The refusals of an entry stopped by a limit: the limit, and the size of the
+   major heap at the entry's start, in MiB. *)
+exception EntryTimedOut of int * int
+exception EntryMemoryLimit of int * int
+
+let () =
+  let heap_at_start mib = Pp.(str "; major heap at the entry's start: " ++ int mib ++ str " MiB") in
   CErrors.register_handler (function
-    | EntryTimedOut n ->
-      Some Pp.(str "Timed out after " ++ int n ++ str " s (Lean Entry Timeout)")
+    | EntryTimedOut (n, mib) ->
+      Some Pp.(str "Timed out after " ++ int n ++ str " s (Lean Entry Timeout)" ++ heap_at_start mib)
+    | EntryMemoryLimit (n, mib) ->
+      Some
+        Pp.(
+          str "Memory limit of " ++ int n ++ str " GiB reached (Lean Entry Memory Limit)"
+          ++ heap_at_start mib)
     | _ -> None)
 
-let add_entry_in_time entry =
-  match !entry_timeout with
-  | None -> add_entry entry
-  | Some n ->
-    (match Control.timeout (float_of_int n) add_entry entry with
-    | Ok () -> ()
-    | Error info -> Exninfo.iraise (EntryTimedOut n, info))
+(* The size of the major heap, in words. *)
+let heap_words () = (Gc.quick_stat ()).Gc.heap_words
+
+let words_per_mib = (1 lsl 20) / (Sys.word_size / 8)
+
+(* [n] GiB in words, or [max_int] when that does not fit an [int]. *)
+let gib_words n =
+  let per_gib = 1024 * words_per_mib in
+  if n > max_int / per_gib then max_int else n * per_gib
+
+(* What [watching_memory] found while an entry was being declared. *)
+type memory_watch = {
+  mutable stopped_at : float option;
+      (** how many seconds after the entry's start the memory limit was found
+          passed *)
+  mutable raised : bool;  (** whether [watching_memory] raised [Sys.Break] *)
+}
+
+(* How often OCaml's memory profiler samples the allocations of an entry under
+   a memory limit: once per about 800 KB allocated. *)
+let memory_sampling_rate = 1e-5
+
+(* A removed alarm: the value of a watch's alarm until the watch creates its
+   own, so that storing that alarm allocates nothing (see [watching_memory]). *)
+let no_alarm =
+  let alarm = Gc.create_alarm ignore in
+  Gc.delete_alarm alarm;
+  alarm
+
+(* [watching_memory ~limit ~start ~t0 w f x] computes [f x], the declaration of
+   an entry that started at time [t0] with a major heap of [start] words, and
+   stops it once the heap has grown by more than [limit] words.
+
+   The watch measures the net growth of the major heap, which the whole
+   process shares, at the ends of major collections: a GC alarm, run at the
+   end of each one, reads the heap's size. Once that has grown past the limit,
+   the alarm records the time in [w.stopped_at] and does nothing else: it
+   allocates nothing after that record and raises nothing. The entry stops at
+   the next sampled allocation of its own thread (below), so it can pass its
+   limit by what the heap grows until the next collection ends and then until
+   that sample; no fixed bound holds.
+
+   The entry is stopped with [Sys.Break], which [CErrors.noncritical] does not
+   cover, so no [with e when CErrors.noncritical e] handler between the kernel
+   and [do_input] swallows it. Setting [Control.interrupt] alone did not stop
+   the reduction of the first proof in dumps/lean434/memory_twice.ndjson on
+   Rocq 07e45e36 and OCaml 4.14.2. In one trial, the flag was set at 1 GiB
+   of heap growth and remained set until the 30 s timeout.
+
+   Instead, an allocation callback of OCaml's memory profiler, [Gc.Memprof],
+   raises [Sys.Break] in the declaring thread. Once the stop is recorded,
+   each allocation that the profiler samples in that thread raises it
+   until [f x] ends. This also stops the entry if a handler wraps the first
+   exception. The watch does not interrupt another allocating thread or
+   set or clear [Control.interrupt]. On the pinned cut, a 1 GiB limit
+   stopped both large proofs in the fixture before their entry timeout.
+
+   Rocq built without memprof-limits (as the cut is) starts no memory
+   profiler, but a Rocq built with it does, and OCaml 5.0 to 5.2 have none.
+   The importer never takes over or stops a profiler it did not start: when
+   [Gc.Memprof.start] fails, the entry is refused before it is declared.
+
+   The watch allocates everything it needs before it acquires the alarm and
+   then the profiler, and one release covers every exit, an exception during
+   that startup included. The release first disables both callbacks, then
+   removes the alarm, then stops the profiler if this watch started it, so the
+   alarm is gone even if stopping the profiler raises. The
+   alarm is stored over [no_alarm] and the profiler marked as started right
+   after each call returns, with no allocation in between, so no asynchronous
+   exception can arrive between acquiring either and the release knowing of
+   it. *)
+let watching_memory ~limit ~start ~t0 w f x =
+  let owner = Thread.id (Thread.self ()) in
+  let active = ref true in
+  let alarm = ref no_alarm in
+  let profiling = ref false in
+  let check_heap () =
+    if !active && Option.is_empty w.stopped_at && heap_words () - start > limit then
+      w.stopped_at <- Some (System.time_difference t0 (System.get_time ()))
+  in
+  let stop _ =
+    if !active && Option.has_some w.stopped_at && Thread.id (Thread.self ()) = owner then begin
+      w.raised <- true;
+      raise Sys.Break
+    end
+    else None
+  in
+  let tracker = { Gc.Memprof.null_tracker with Gc.Memprof.alloc_minor = stop; alloc_major = stop } in
+  let release () =
+    active := false;
+    Gc.delete_alarm !alarm;
+    if !profiling then begin
+      profiling := false;
+      Gc.Memprof.stop ()
+    end
+  in
+  let watch () =
+    alarm := Gc.create_alarm check_heap;
+    (match ignore (Gc.Memprof.start ~sampling_rate:memory_sampling_rate ~callstack_size:0 tracker) with
+    | () -> profiling := true
+    | exception Failure msg ->
+      CErrors.user_err
+        Pp.(
+          str "Lean Entry Memory Limit cannot watch this entry, which is not declared: OCaml's memory profiler (Gc.Memprof) did not start ("
+          ++ str msg ++ str ")."));
+    f x
+  in
+  match watch () with
+  | v ->
+    release ();
+    v
+  | exception e ->
+    release ();
+    Exninfo.iraise (Exninfo.capture e)
+
+(* [in_time ~start_mib n f x] computes [f x] under the Lean Entry Timeout of
+   [n] s; [start_mib] is the size of the major heap at the entry's start, in
+   MiB, for the refusal. *)
+let in_time ~start_mib n f x =
+  match Control.timeout (float_of_int n) f x with
+  | Ok v -> v
+  | Error info -> Exninfo.iraise (EntryTimedOut (n, start_mib), info)
+
+(* Declare [entry] under the limits that are set, Lean Entry Timeout and Lean
+   Entry Memory Limit. An entry that reaches both is refused for the one it
+   reached first. An enclosing [Timeout] and an interrupt the importer did not
+   raise reach [do_input] unchanged. *)
+let add_entry_limited entry =
+  match (!entry_timeout, !entry_memory_limit) with
+  | None, None -> add_entry entry
+  | Some n, None -> in_time ~start_mib:(heap_words () / words_per_mib) n add_entry entry
+  | timeout, Some gib ->
+    let start = heap_words () in
+    let start_mib = start / words_per_mib in
+    let t0 = System.get_time () in
+    let w = { stopped_at = None; raised = false } in
+    (* The memory watch runs inside the timeout, so that it has stopped before
+       [Control.timeout] restores the timer it replaced. *)
+    let watched = watching_memory ~limit:(gib_words gib) ~start ~t0 w add_entry in
+    let declare () = match timeout with None -> watched entry | Some n -> in_time ~start_mib n watched entry in
+    let memory_limit_reached info = Exninfo.iraise (EntryMemoryLimit (gib, start_mib), info) in
+    (match declare () with
+    | () ->
+      (* The limit was passed, but the entry ended before a sample stopped it. *)
+      if Option.has_some w.stopped_at then memory_limit_reached Exninfo.null
+    | exception e ->
+      let ((e, info) as exn) = Exninfo.capture e in
+      (* Once the memory limit was found passed, the entry is refused for it,
+         unless its own time limit ran out before that (the timer of
+         [Control.timeout] expires [n] s after [t0] or later), or it ended by
+         an enclosing [Timeout] or an interrupt that the importer did not
+         raise. *)
+      (match (w.stopped_at, e) with
+      | None, _ -> Exninfo.iraise exn
+      | Some at, EntryTimedOut (n, _) when at >= float_of_int n -> Exninfo.iraise exn
+      | Some _, Control.Timeout -> Exninfo.iraise exn
+      | Some _, Sys.Break when not w.raised -> Exninfo.iraise exn
+      | Some _, _ -> memory_limit_reached info))
 
 (* Parse the line [l]: for its names, levels and expressions only when
    [prefix], a line before the first line to import (see [import]); the old
@@ -2375,13 +2560,14 @@ let rec do_input state ~from ~until ch =
             | NdjsonParser pstate -> LeanParseNdjson.path pstate);
           (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
           let st = freeze () in
-          (match add_entry_in_time entry with
+          (match add_entry_limited entry with
           | () ->
             incr lcnt;
             do_input state ~from ~until ch
           | exception e ->
             (* Every exception refuses the entry, an asynchronous one too: the
-               Lean Entry Timeout reaches here as [EntryTimedOut], and an outer
+               Lean Entry Timeout reaches here as [EntryTimedOut], the Lean
+               Entry Memory Limit as [EntryMemoryLimit], and an outer
                [Timeout] or an interrupt that fires while the entry is being
                declared refuses it like any other error (see Lean Error Mode
                in README.md). *)
@@ -2390,6 +2576,10 @@ let rec do_input state ~from ~until ch =
             unfreeze st;
             (* without this unfreeze, the global state.declared and the
                global env are out of sync *)
+            (* An entry stopped by a limit can leave a large heap: compact it
+               now that the entry's state is undone, so that the space it held
+               is given back before the next entry. *)
+            (match fst e with EntryTimedOut _ | EntryMemoryLimit _ -> Gc.compact () | _ -> ());
             refuse state ~from ~until ch (fst e) msg)))
 
 (* The Error Mode's answer to the refusal [msg] of the current line, refused
@@ -2454,10 +2644,18 @@ let import ~from ~until f =
       close_in_noerr ch;
       raise e
   in
-  (* silence the definition messages from Coq *)
+  (* silence the definition messages from Coq. [do_input] closes [ch] where it
+     ends; when it raises instead, [ch] is closed here. *)
+  let ch = open_in f in
   let { pstate = pstatev } =
-    Flags.silently (fun () ->
-        do_input { pstate = initial_pstate; skips = 0 } ~from ~until (open_in f)) ()
+    match
+      Flags.silently (fun () -> do_input { pstate = initial_pstate; skips = 0 } ~from ~until ch) ()
+    with
+    | state -> state
+    | exception e ->
+      let e = Exninfo.capture e in
+      close_in_noerr ch;
+      Exninfo.iraise e
   in
   let old_pstatev =
     match pstatev with OldParser pstatev -> pstatev | NdjsonParser _ -> !pstate

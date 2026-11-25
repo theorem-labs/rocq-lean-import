@@ -651,9 +651,12 @@ stop, you will need to kill the Coq process.
 An integer option, unset by default. Use `Set Lean Entry Timeout 10.` to
 bound the time spent declaring each entry (translating and checking it) to
 10 seconds. An entry still being declared after that is refused with
-`Timed out after 10 s (Lean Entry Timeout)`, and `Lean Error Mode` handles it
-like any other refused entry. With `Skip`, this allows processing all the
-entries which do not depend on something that takes more than 10s.
+`Timed out after 10 s (Lean Entry Timeout); major heap at the entry's start:
+N MiB` (N is the size of the importer's major heap when the entry started),
+and `Lean Error Mode` handles it like any other refused entry. The heap is
+then compacted (see `Lean Entry Memory Limit`). With `Skip`, this allows
+processing all the entries which do not depend on something that takes more
+than 10s.
 
 The value must be a positive number of seconds. `Unset Lean Entry Timeout.`
 removes the limit. The limit does not bound parsing the entry's line (see
@@ -673,6 +676,49 @@ Set Lean Entry Timeout 10.
 Set Lean Error Mode "Skip".
 Lean Import "/path/to/export.ndjson".
 ~~~
+
+## Lean Entry Memory Limit
+
+An integer option, unset by default. Use `Set Lean Entry Memory Limit 40.` to
+bound how much the importer's major heap may grow while each entry is
+declared (translated and checked): by 40 GiB above its size when the entry
+started. The limit bounds the growth during the entry, not the size of the
+heap, so the heap the import holds before the entry does not count. An entry
+during which the heap grows by more is stopped and refused with
+`Memory limit of 40 GiB reached (Lean Entry Memory Limit); major heap at the
+entry's start: N MiB`, and `Lean Error Mode` handles it like any other
+refused entry.
+
+The importer measures the net growth of the major heap, which the whole
+process shares, at the end of each major collection of the OCaml heap. It
+then stops the entry with Rocq's interrupt exception, `Sys.Break`, which it
+raises from an allocation callback of OCaml's memory profiler (`Gc.Memprof`)
+at the next allocation the profiler samples in the thread that declares the
+entry. So an entry can pass the limit by what the heap grows until the next
+collection ends and then until that sample; this is no fixed bound, and
+collections come further apart as the heap grows. Rocq's kernel does not
+look at Rocq's interrupt flag while it reduces a term, so the flag alone
+would not stop such an entry. An entry that passes the limit and ends
+before it is stopped is refused all the same. The profiler runs only while
+an entry is declared under the limit, and the importer never takes over a
+profiler that something else started (a Rocq built with memprof-limits runs
+one). When it cannot start its own (OCaml 5.0 to 5.2 have none), every entry
+under the limit is refused before it is declared, with `Lean Entry Memory
+Limit cannot watch this entry, which is not declared: ...`.
+
+After an entry is stopped by this limit or by `Lean Entry Timeout`, and what
+it had declared is undone, the importer compacts the heap (`Gc.compact`)
+before the next entry, so that the space of the stopped entry is given back
+and two stopped entries do not add up. On a large heap the compaction takes
+seconds or more.
+
+The value must be a positive number of GiB. `Unset Lean Entry Memory
+Limit.` removes the limit. When both limits are set, an entry that reaches
+both is refused with the text of the limit it reached first. An enclosing
+`Timeout` and an interrupt that the limit did not cause stay what they are
+(see `Lean Entry Timeout` and the note under `Lean Error Mode`). As for
+`Lean Entry Timeout`, a file that sets the option should first run `Set
+Warnings "+unknown-option".`.
 
 ## Lean Line Timeout
 

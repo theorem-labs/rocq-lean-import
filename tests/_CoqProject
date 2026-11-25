@@ -39,6 +39,7 @@ nat_transport.v
 nat_transport_budget.v
 entry_timeout.v
 entry_timeout_parse.v
+entry_memory.v
 path_choice.v
 predeclared.v
 negative_controls.v
