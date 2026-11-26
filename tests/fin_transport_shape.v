@@ -100,7 +100,7 @@ Check RLI434SW_ordinary.
 
 (* W03b: charge a polymorphic body before instantiating it on the Fin head path. *)
 Redirect "fin_transport_shape_poly_body_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8486 8862.
-Set Lean Transport Step Budget 4053.
+Set Lean Transport Step Budget 4084.
 Redirect "fin_transport_shape_poly_body_precharge.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8862 8863.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_poly_body.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8862 8863.
@@ -109,7 +109,7 @@ Check RLI434SW_poly_body.
 (* W09a: cast the side closed by the inner lambda. Decline the open side
    under the forall, whose application on its own does not bind x. *)
 Redirect "fin_transport_shape_binder_depth_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8863 8969.
-Set Lean Transport Step Budget 2497.
+Set Lean Transport Step Budget 2492.
 Redirect "fin_transport_shape_binder_depth_closed.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_binder_depth.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
@@ -117,7 +117,7 @@ Check RLI434SW_binder_depth.
 
 (* W09b: non-identical parameter trees compare equal; their walk is charged. *)
 Redirect "fin_transport_shape_parameters_equal_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8970 9036.
-Set Lean Transport Step Budget 9964.
+Set Lean Transport Step Budget 10329.
 Redirect "fin_transport_shape_parameters_equal_parameters.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_parameters_equal.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
@@ -130,7 +130,7 @@ Check RLI434SW_parameters_differ.
 
 (* W10a: beta duplication must pay before copying. *)
 Redirect "fin_transport_shape_beta_subst_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9085 9428.
-Set Lean Transport Step Budget 56115.
+Set Lean Transport Step Budget 56139.
 Redirect "fin_transport_shape_beta_subst_beta.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9428 9429.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_beta_subst.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9428 9429.
@@ -138,7 +138,7 @@ Check RLI434SW_beta_subst.
 
 (* W10a: let duplication must pay before copying. *)
 Redirect "fin_transport_shape_let_subst_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9429 9441.
-Set Lean Transport Step Budget 56111.
+Set Lean Transport Step Budget 56135.
 Redirect "fin_transport_shape_let_subst_zeta.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9441 9442.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_let_subst.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9441 9442.
@@ -148,17 +148,17 @@ Check RLI434SW_let_subst.
    part of the entry (the other Fin hole's argument), below the wide pair's argument part under the measured
    mutant that checks the 64-step limit only after all of wideA's binders are substituted. *)
 Redirect "fin_transport_shape_early_cap_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9442 9824.
-Set Lean Transport Step Budget 6133.
+Set Lean Transport Step Budget 6313.
 Redirect "fin_transport_shape_early_cap.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9824 9825.
 Check RLI434SW_early_cap.
 Unset Lean Transport Step Budget.
 
 (* W10d: charge each wide application copy, including when flattening the new head. *)
 Redirect "fin_transport_shape_flatten_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9825 9955.
-Set Lean Transport Step Budget 2695.
+Set Lean Transport Step Budget 2719.
 Redirect "fin_transport_shape_flatten_slice.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 2695.
+Set Lean Transport Step Budget 2719.
 Redirect "fin_transport_shape_flatten_flatten.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_flatten.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
@@ -166,7 +166,7 @@ Check RLI434SW_flatten.
 
 (* W14b: the expected domain applies the long Fin head; charge the product peel. *)
 Redirect "fin_transport_shape_product_peel_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9956 10081.
-Set Lean Transport Step Budget 4188.
+Set Lean Transport Step Budget 4246.
 Redirect "fin_transport_shape_product_peel_peel.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10081 10082.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_product_peel.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10081 10082.

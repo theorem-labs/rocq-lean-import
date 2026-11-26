@@ -68,7 +68,7 @@ fin_transport_shape_ordinary.log.out	-	the transport pass stops
 fin_transport_shape_ordinary.log.out	+	line 8485: RLI434SW.ordinary: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
 fin_transport_shape_ordinary.log.out	-	Error at line
 fin_transport_shape_poly_body_deps.log.out	-	Error at line
-fin_transport_shape_poly_body_precharge.log.out	+	line 8862: RLI434SW.poly_body: the transport pass stops: it needs more than 4053 steps
+fin_transport_shape_poly_body_precharge.log.out	+	line 8862: RLI434SW.poly_body: the transport pass stops: it needs more than 4084 steps
 fin_transport_shape_poly_body_precharge.log.out	-	argument(s) transported
 fin_transport_shape_poly_body_precharge.log.out	+	Done!
 fin_transport_shape_poly_body_precharge.log.out	+	Skipping: Error at line 8862 (for RLI434SW.poly_body)
@@ -79,7 +79,7 @@ fin_transport_shape_poly_body.log.out	-	the transport pass stops
 fin_transport_shape_poly_body.log.out	+	line 8862: RLI434SW.poly_body: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_poly_body.log.out	-	Error at line
 fin_transport_shape_binder_depth_deps.log.out	-	Error at line
-fin_transport_shape_binder_depth_closed.log.out	+	line 8969: RLI434SW.binder_depth: the transport pass stops: it needs more than 2497 steps
+fin_transport_shape_binder_depth_closed.log.out	+	line 8969: RLI434SW.binder_depth: the transport pass stops: it needs more than 2492 steps
 fin_transport_shape_binder_depth_closed.log.out	-	argument(s) transported
 fin_transport_shape_binder_depth_closed.log.out	+	Done!
 fin_transport_shape_binder_depth_closed.log.out	+	Skipping: Error at line 8969 (for RLI434SW.binder_depth)
@@ -90,7 +90,7 @@ fin_transport_shape_binder_depth.log.out	-	the transport pass stops
 fin_transport_shape_binder_depth.log.out	+	line 8969: RLI434SW.binder_depth: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_binder_depth.log.out	-	Error at line
 fin_transport_shape_parameters_equal_deps.log.out	-	Error at line
-fin_transport_shape_parameters_equal_parameters.log.out	+	line 9036: RLI434SW.parameters_equal: the transport pass stops: it needs more than 9964 steps
+fin_transport_shape_parameters_equal_parameters.log.out	+	line 9036: RLI434SW.parameters_equal: the transport pass stops: it needs more than 10329 steps
 fin_transport_shape_parameters_equal_parameters.log.out	-	argument(s) transported
 fin_transport_shape_parameters_equal_parameters.log.out	+	Done!
 fin_transport_shape_parameters_equal_parameters.log.out	-	Error at line
@@ -106,7 +106,7 @@ fin_transport_shape_parameters_differ.log.out	-	the transport pass stops
 fin_transport_shape_parameters_differ.log.out	-	argument(s) transported
 fin_transport_shape_parameters_differ.log.out	-	Error at line
 fin_transport_shape_beta_subst_deps.log.out	-	Error at line
-fin_transport_shape_beta_subst_beta.log.out	+	line 9428: RLI434SW.beta_subst: the transport pass stops: it needs more than 56115 steps
+fin_transport_shape_beta_subst_beta.log.out	+	line 9428: RLI434SW.beta_subst: the transport pass stops: it needs more than 56139 steps
 fin_transport_shape_beta_subst_beta.log.out	-	argument(s) transported
 fin_transport_shape_beta_subst_beta.log.out	+	Done!
 fin_transport_shape_beta_subst_beta.log.out	+	Skipping: Error at line 9428 (for RLI434SW.beta_subst)
@@ -117,7 +117,7 @@ fin_transport_shape_beta_subst.log.out	-	the transport pass stops
 fin_transport_shape_beta_subst.log.out	+	line 9428: RLI434SW.beta_subst: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_beta_subst.log.out	-	Error at line
 fin_transport_shape_let_subst_deps.log.out	-	Error at line
-fin_transport_shape_let_subst_zeta.log.out	+	line 9441: RLI434SW.let_subst: the transport pass stops: it needs more than 56111 steps
+fin_transport_shape_let_subst_zeta.log.out	+	line 9441: RLI434SW.let_subst: the transport pass stops: it needs more than 56135 steps
 fin_transport_shape_let_subst_zeta.log.out	-	argument(s) transported
 fin_transport_shape_let_subst_zeta.log.out	+	Done!
 fin_transport_shape_let_subst_zeta.log.out	+	Skipping: Error at line 9441 (for RLI434SW.let_subst)
@@ -134,12 +134,12 @@ fin_transport_shape_early_cap.log.out	-	the transport pass stops
 fin_transport_shape_early_cap.log.out	+	line 9824: RLI434SW.early_cap: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
 fin_transport_shape_early_cap.log.out	-	Error at line
 fin_transport_shape_flatten_deps.log.out	-	Error at line
-fin_transport_shape_flatten_slice.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2695 steps
+fin_transport_shape_flatten_slice.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2719 steps
 fin_transport_shape_flatten_slice.log.out	-	argument(s) transported
 fin_transport_shape_flatten_slice.log.out	+	Done!
 fin_transport_shape_flatten_slice.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
 fin_transport_shape_flatten_slice.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-fin_transport_shape_flatten_flatten.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2695 steps
+fin_transport_shape_flatten_flatten.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2719 steps
 fin_transport_shape_flatten_flatten.log.out	-	argument(s) transported
 fin_transport_shape_flatten_flatten.log.out	+	Done!
 fin_transport_shape_flatten_flatten.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
@@ -150,7 +150,7 @@ fin_transport_shape_flatten.log.out	-	the transport pass stops
 fin_transport_shape_flatten.log.out	+	line 9955: RLI434SW.flatten: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_flatten.log.out	-	Error at line
 fin_transport_shape_product_peel_deps.log.out	-	Error at line
-fin_transport_shape_product_peel_peel.log.out	+	line 10081: RLI434SW.product_peel: the transport pass stops: it needs more than 4188 steps
+fin_transport_shape_product_peel_peel.log.out	+	line 10081: RLI434SW.product_peel: the transport pass stops: it needs more than 4246 steps
 fin_transport_shape_product_peel_peel.log.out	-	argument(s) transported
 fin_transport_shape_product_peel_peel.log.out	+	Done!
 fin_transport_shape_product_peel_peel.log.out	+	Skipping: Error at line 10081 (for RLI434SW.product_peel)

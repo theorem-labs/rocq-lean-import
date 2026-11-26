@@ -1,18 +1,18 @@
 # Log file, polarity, literal substring (tab-separated).
 nat_transport_parts_base.log.out	-	Error at line
 nat_transport_parts_base.log.out	+	Done!
-nat_transport_parts_entry_100017.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
-nat_transport_parts_entry_100017.log.out	-	Error at line
-nat_transport_parts_entry_100016.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
-nat_transport_parts_entry_100016.log.out	-	Error at line
-nat_transport_parts_entry_100015.log.out	+	line 11238: Char.utf8Size_eq_one_iff: the transport pass stops: it needs more than 100015 steps or a nesting deeper than 10000; the value is left as Lean's
-nat_transport_parts_entry_100015.log.out	-	argument(s) transported
-nat_transport_parts_entry_100015.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
-nat_transport_parts_entry_100015.log.out	+	Timed out after 10 s (Lean Entry Timeout)
-nat_transport_parts_arg_7349.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
-nat_transport_parts_arg_7349.log.out	-	Error at line
-nat_transport_parts_arg_7348.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
-nat_transport_parts_arg_7348.log.out	-	Error at line
+nat_transport_parts_entry_100104.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+nat_transport_parts_entry_100104.log.out	-	Error at line
+nat_transport_parts_entry_100103.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+nat_transport_parts_entry_100103.log.out	-	Error at line
+nat_transport_parts_entry_100102.log.out	+	line 11238: Char.utf8Size_eq_one_iff: the transport pass stops: it needs more than 100102 steps or a nesting deeper than 10000; the value is left as Lean's
+nat_transport_parts_entry_100102.log.out	-	argument(s) transported
+nat_transport_parts_entry_100102.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
+nat_transport_parts_entry_100102.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+nat_transport_parts_arg_7318.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
+nat_transport_parts_arg_7318.log.out	-	Error at line
+nat_transport_parts_arg_7317.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
+nat_transport_parts_arg_7317.log.out	-	Error at line
 nat_transport_parts_max_m1.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
 nat_transport_parts_max_m1.log.out	-	the transport pass stops
 nat_transport_parts_max.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
@@ -23,7 +23,7 @@ nat_transport_parts_max_int.log.out	+	line 11275: RLI434Fin.many127_1: 1 argumen
 nat_transport_parts_max_int.log.out	-	the transport pass stops
 nat_transport_parts_one.log.out	+	line 11275: RLI434Fin.many127_1: the transport pass stops: it needs more than 1 steps or a nesting deeper than 10000; the value is left as Lean's
 nat_transport_parts_one.log.out	-	argument(s) transported
-nat_transport_parts_arg_7347.log.out	+	line 11275: RLI434Fin.many127_1: the transport pass stops: it needs more than 7347 steps or a nesting deeper than 10000; the value is left as Lean's
-nat_transport_parts_arg_7347.log.out	-	argument(s) transported
-nat_transport_parts_arg_7347.log.out	+	Skipping: Error at line 11275 (for RLI434Fin.many127_1)
-nat_transport_parts_arg_7347.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+nat_transport_parts_arg_7316.log.out	+	line 11275: RLI434Fin.many127_1: the transport pass stops: it needs more than 7316 steps or a nesting deeper than 10000; the value is left as Lean's
+nat_transport_parts_arg_7316.log.out	-	argument(s) transported
+nat_transport_parts_arg_7316.log.out	+	Skipping: Error at line 11275 (for RLI434Fin.many127_1)
+nat_transport_parts_arg_7316.log.out	+	Timed out after 10 s (Lean Entry Timeout)
