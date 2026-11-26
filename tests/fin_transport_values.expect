@@ -3,7 +3,3 @@ fin_transport_values.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_
 fin_transport_values.log.out	-	line 11238: Char.utf8Size_eq_one_iff: 
 fin_transport_values.log.out	+	Skipped 1
 fin_transport_values.log.out	+	Done!
-fin_transport_values_differ.log.out	+	line 8086: RLI434V.values_differ: 1 argument(s) transported (RLI434V_values_differ__nat_eq_1)
-fin_transport_values_differ.log.out	-	the transport pass
-fin_transport_values_differ.log.out	-	Error at line
-fin_transport_values_differ.log.out	+	Done!

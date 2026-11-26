@@ -29,3 +29,4 @@ tests/lean434_stack.v	stack-limit	instInhabitedTrue	_private.Init.Data.String.De
 tests/univ_undeclared.v	univ-param-undeclared	RLIU.refl_u	RLIU.refl_u	fixed	4dcb44e98dbb4cde4e79035bbb711977daeb45ed	-
 tests/utf8size_transport_one.v	char-utf8size-fin-transport	option:Lean Entry Timeout	Char.utf8Size_eq_one_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
 tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	option:Lean Entry Timeout	Char.utf8Size_eq_two_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
+tests/fin_transport_values_differ.v	fin-transport-values-differ	option:Lean Entry Timeout	RLI434V.values_differ	fixed	bc0d4888eadebdac4a9b8198aeb85d13c58d6649	-

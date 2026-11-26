@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_values_differ.log.out	+	line 8086: RLI434V.values_differ: 1 argument(s) transported (RLI434V_values_differ__nat_eq_1)
+fin_transport_values_differ.log.out	-	the transport pass
+fin_transport_values_differ.log.out	-	Error at line
+fin_transport_values_differ.log.out	+	Done!
