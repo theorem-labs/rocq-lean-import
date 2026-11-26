@@ -1,0 +1,6 @@
+# Log file, polarity, literal substring (tab-separated).
+utf8size_transport_one.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+utf8size_transport_one.log.out	-	Error at line
+utf8size_transport_one.log.out	+	Done!
+utf8size_transport_one_lemma.log.out	+	relies on definitional UIP.
+utf8size_transport_one_lemma.log.out	-	 :

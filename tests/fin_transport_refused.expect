@@ -1,0 +1,10 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_refused.log.out	+	line 11828: RLI434Fin.c6_127: the transported value is refused
+fin_transport_refused.log.out	-	the transported value is refused (
+fin_transport_refused.log.out	+	Lean's value goes to the kernel instead
+fin_transport_refused.log.out	+	Skipping: Error at line 11828 (for RLI434Fin.c6_127)
+fin_transport_refused.log.out	-	transported (RLI434Fin_c6_127__nat_eq_1)
+fin_transport_refused.log.out	+	line 11831: RLI434Fin.after_refusal
+fin_transport_refused.log.out	-	Error at line 11831
+fin_transport_refused.log.out	+	Skipped 1
+fin_transport_refused.log.out	+	Done!

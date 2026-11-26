@@ -8,12 +8,15 @@ DUMPS := ../dumps
 # .expect is checked, and a missing or empty one fails. Every .expect file must belong to a test named here.
 # A test whose Redirect logs nothing checks (path_deferred_saved.v, the library tests/path_deferred_reload.v
 # loads, and the tests of the base) has no .expect.
-EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse lean434_bigint_decide lean434_string_length \
-  lean434_strings nat_transport nat_transport_budget negative_controls parse_text_numbering parse_text_recovery \
-  parse_text_recovery_prefix parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload \
-  parse_wrong_payload_prefix path_choice path_deferred_legacy path_deferred_reload path_deferred_string \
-  predeclared string_literal_mk uint32_legacy_only uint32_transport_ofnatlt uint32_transport_shiftleft \
-  univ_undeclared
+EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_ceiling fin_transport_charge \
+  fin_transport_lemma_refused fin_transport_nest fin_transport_refused fin_transport_shape fin_transport_share \
+  fin_transport_values lean434_bigint_decide lean434_string_length lean434_strings nat_transport \
+  nat_transport_budget nat_transport_parts nat_transport_step_budget \
+  nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \
+  parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload parse_wrong_payload_prefix path_choice \
+  path_deferred_legacy path_deferred_reload path_deferred_string predeclared string_literal_mk uint32_legacy_only \
+  transport_work uint32_transport_ofnatlt uint32_transport_shiftleft univ_undeclared \
+  utf8size_transport_one utf8size_transport_two
 EXPECTS = $(addsuffix .expect,$(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all)),\
   $(EXPECT_TESTS),\
   $(filter $(patsubst %.vo,%,$(filter %.vo,$(MAKECMDGOALS))),$(EXPECT_TESTS))))

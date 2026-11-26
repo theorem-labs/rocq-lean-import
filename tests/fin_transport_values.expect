@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_values.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
+fin_transport_values.log.out	-	line 11238: Char.utf8Size_eq_one_iff: 
+fin_transport_values.log.out	+	Skipped 1
+fin_transport_values.log.out	+	Done!

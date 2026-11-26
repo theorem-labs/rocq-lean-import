@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+utf8size_transport_two.log.out	+	line 11778: Char.utf8Size_eq_two_iff: 7 argument(s) transported (Char_utf8Size_eq_two_iff__nat_eq_1, Char_utf8Size_eq_two_iff__nat_eq_2, Char_utf8Size_eq_two_iff__nat_eq_3)
+utf8size_transport_two.log.out	-	the transport pass stops
+utf8size_transport_two.log.out	-	Error at line
+utf8size_transport_two.log.out	+	Done!

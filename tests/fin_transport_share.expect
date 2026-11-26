@@ -1,0 +1,5 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_share.log.out	+	line 8770: RLI434Sh.share_60: 1 argument(s) transported (RLI434Sh_share_60__nat_eq_1)
+fin_transport_share.log.out	-	Error at line
+fin_transport_share.log.out	-	the transport pass stops
+fin_transport_share.log.out	+	Done!
