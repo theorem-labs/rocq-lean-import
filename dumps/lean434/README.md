@@ -50,6 +50,7 @@ select the legacy path.
 | `fin_share.ndjson` | `lean4export RLI434Share -- RLI434Sh.share_60 RLI434Sh.modchain_20 RLI434Sh.modchain_200`. The first uses a shared multiplication chain. The others read a new dividend at every remainder. | `7ea0132d8070360d501cba5871453770b7698932a8c061e22c843e0b1f95dccf` |
 | `fin_shape_work.ndjson` | `lean4export RLI434ShapeWork -- RLI434SW.ordinary RLI434SW.poly_body RLI434SW.binder_depth RLI434SW.parameters_equal RLI434SW.parameters_differ RLI434SW.beta_subst RLI434SW.let_subst RLI434SW.early_cap RLI434SW.flatten RLI434SW.product_peel RLI434SW.head_fits RLI434SW.head_overflow`. `binder_depth` uses `Nat.add x 0` inside and outside a lambda. `product_peel` applies the wide head on the expected side. | `b7e79700cde5c1d05278be33a4904bd38da1345e4aba6c4b99bf0172defbd107` |
 | `transport_work.ndjson` | `lean4export RLI434Work -- RLI434W.instances RLI434W.poly_nat RLI434W.names RLI434W.endpoints RLI434W.cache_hit RLI434W.cache_miss RLI434W.equal_nodes RLI434W.motives RLI434W.dependent RLI434W.alias_product RLI434W.computed_head RLI434W.computed_arg RLI434W.computed_arg_product RLI434W.beta_normalize RLI434W.result_binders RLI434W.global_type RLI434W.computed_sort RLI434W.collision_aba RLI434W.collision_fresh RLI434W.collision_chain RLI434W.nested_cast RLI434W.normalize_fits RLI434W.normalize_overflow RLI434W.shared_some RLI434W.shared_none`. | `bb0b040128de3367b08e8a69d14fd4ede716a8560089dbb2b01df9a5b86e3aec` |
+| `fin_values.ndjson` | `lean4export RLI434Values -- RLI434V.values_differ`. Two UInt8 values that differ under a function that ignores its argument, beside a Nat pair at 5000 in the same proof. | `5f663187cb54b9bb8fdd35792d539fcb07cabff7434221c96438760c678996a5` |
 | `src/RLI434AutoParam.lean` | Lean source for `autoparam.ndjson`. | `89c539317c51db6115c38ff997cc826a68989dfec1a15e4de4e3e5c62f62b927` |
 | `src/RLI434BigInt.lean` | Lean source for `bigint.ndjson`. | `c5e679bfcfb6bd2bd37eed68d1535d885b53d0ec7724a05c4c1d6212093985c8` |
 | `src/RLI434Strings.lean` | Lean source for the ZIP member `strings.ndjson`. | `1ede0487aaf9edc69d6c7b1214adb1505fc7d51a108bbe8f5997f0107c4f053d` |
@@ -60,6 +61,7 @@ select the legacy path.
 | `src/RLI434Share.lean` | Lean source for `fin_share.ndjson`. | `8f3f9367b16d438a49f7409bae91c686a09d417f73e39166d79a82e96cbca728` |
 | `src/RLI434ShapeWork.lean` | Lean source for `fin_shape_work.ndjson`. | `00f3fe6abdc05e655101796a69cff844fc71bc621da516d318a453a4d0502481` |
 | `src/RLI434Work.lean` | Lean source for `transport_work.ndjson`. | `e95c4c49a760d6de2c9a57ae6712080db6415c766b5ef3fe4d96dd5aedabf181` |
+| `src/RLI434Values.lean` | Lean source for `fin_values.ndjson`. | `5a2ab579d5f5b407da6f818a0dc8d58ad0d4b2f7bf8227f3f29a26ccb5841991` |
 
 ## Derived fixtures
 
