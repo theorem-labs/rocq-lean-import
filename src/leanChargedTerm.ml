@@ -15,17 +15,13 @@ let check_depth depth = if depth > max_depth then raise Out_of_budget
    be represented, which is never [max_int] itself). Both operands are nonnegative. *)
 let add_size a b = match (a, b) with Some a, Some b when a <= max_int - b -> Some (a + b) | _ -> None
 
-(* A hash that reads no module path and no universe, so that the same export costs the same steps in whatever
-   file imports it. Before it, a memo slot was [Hashtbl.hash_param 10 100 term], which reads the hash of each
-   constant's kernel name (its module path is the importing file's library, Test.<file> for a test) and the
-   names and numbers of universe levels (the importer's fresh levels carry the library and a process counter):
-   the slots, so the memos' collisions and so the step counts, depended on the file's name. The tests of
-   tests/fin_transport_bitwise.v and of revision 8 passed every budget pin compiled as diag_<test>.v (run
-   fpport-e1nopatch-20261126t153619) and failed nine of them compiled under their own names (runs
-   fpport-plain-20261126t151258 and fpport-e2plain-20261126t153625, the same failures twice, and run
-   fpport-same-20261126t154718, the same tests with counters under their own names). The tables' hashes
-   below read the label alone for the same reason. *)
-let hash_mix h x = ((h * 65599) + x) land max_int
+(* The hashes of the memos and tables read no module path and no universe, so that the same export costs the same
+   steps in whatever file imports it (tests/fin_transport_budget_name.v runs a pinned budget of
+   tests/fin_transport_bitwise.v under another file's name): a constant's kernel name holds the importing
+   file's library as its module path, and the importer's fresh universe levels hold the library and a process
+   counter, so a hash that read them would move the memos' collisions and the tables' buckets, and with them the
+   step counts, with the file's name. *)
+let hash_mix = Hashset.Combine.combine
 
 (* By the label of the kernel name, which is the Lean name, never its module path. A key equal by [UserOrd]
    (or [CanOrd]) has the same user (or canonical) name, so the same label. *)
@@ -135,7 +131,9 @@ let term_hash c =
    structural comparison, so a read or a write costs at most one comparison, whatever the terms that share a
    slot (a unary literal puts every suffix of its successor chain in the same slot); a term whose result was
    replaced is computed again, at its full charge. *)
-let memo_slots = 512
+(* [memo_slots] is [2 ^ memo_bits]: [memo_slot] folds the hash [memo_bits] bits at a time. *)
+let memo_bits = 9
+let memo_slots = 1 lsl memo_bits
 
 type 'a memo = { mutable slots : (Constr.t * 'a) option array }
 
@@ -143,7 +141,7 @@ let memo () = { slots = [||] }
 
 let memo_slot c =
   let h = term_hash c in
-  (h lxor (h lsr 9) lxor (h lsr 18)) land (memo_slots - 1)
+  (h lxor (h lsr memo_bits) lxor (h lsr (2 * memo_bits))) land (memo_slots - 1)
 
 (* A table of keys with their hash (one of the label hashes above, which read no module path): an array of
    buckets, each a list of keys with their values. It never evicts: a key added stays until the entry ends. *)
@@ -155,6 +153,13 @@ type ('k, 'a) table = {
 }
 
 let table hash eq = { hash; eq; buckets = Array.make 16 []; entries = 0 }
+
+(* The tables of the pass, each with a hash of [label_hash] (never a module path). *)
+let constant_table () = table user_constant_hash Constant.UserOrd.equal
+let canonical_constant_table () = table canonical_constant_hash Constant.CanOrd.equal
+let ind_table () = table user_ind_hash Ind.UserOrd.equal
+let globref_table () = table user_globref_hash GlobRef.UserOrd.equal
+let id_table () = table Id.hash Id.equal
 
 type t = {
   genv : Environ.env;

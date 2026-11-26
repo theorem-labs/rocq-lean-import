@@ -447,7 +447,7 @@ What it changes:
   `Logic.eq_refl` on open terms, a step per bit of each literal, and
   each binary computation checked on literals. In the Fin case (below)
   the proof goes through the unary literal `l` of the value:
-  `sprop_transport (fun z => x = z) l y (eq_refl l) (eq_refl x)`, so
+  `sprop_transport (fun n => x = n) l y (eq_refl l) (eq_refl x)`, so
   that the kernel converts each of the two values with `l` on its own.
   A later argument with the same two terms reuses the lemma, within the
   Rocq file that runs the imports: the cache is not kept in a compiled
@@ -493,8 +493,8 @@ What it changes:
   `|||`, `^^^`, `<<<`, `>>>`, `-`, `/`), every operand of each read the
   same way (so `(255 &&& 127) + 0` has a value); a term it reads none of
   is reduced at its head (as above, at most 64 steps of its own) until
-  one it reads heads it: `BitVec.toNat 8 (UInt8.toBitVec 224)` reads
-  `224 % 2 ^ 8`. A head reduction that stops anywhere else (a `match`,
+  the term is one of those forms: `BitVec.toNat 8 (UInt8.toBitVec 224)`
+  reads `224 % 2 ^ 8`. A head reduction that stops anywhere else (a `match`,
   a fixpoint, an axiom) gives no value. The value and every operand of
   it, but the divisor of a `%`, are below 65536; otherwise there is no
   lemma. Two such terms whose `Fin` values differ give no lemma either:

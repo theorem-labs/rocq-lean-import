@@ -24,24 +24,32 @@ val add_size : int option -> int option -> int option
 type 'a memo
 (** A fixed-slot physical memo: 512 slots, each empty or holding one term with its result, the array allocated
     by the first write. A term goes to a slot chosen by a bounded hash of the term (at most 10 nodes that carry
-    a value among at most 100 visited, a constant cost per node), which reads no module path and no universe,
-    so that the same export costs the same steps in whatever file imports it; a read compares the term held
-    there with [==] only, a write replaces what the slot holds (no probing, resizing or structural
-    comparison). A term whose result was replaced is computed again, at its full charge. *)
+    a value among at most 100 visited, a constant cost per node but for a name's label, hashed whole), which
+    reads no module path and no universe, so that the same export costs the same steps in whatever file imports
+    it; a read compares the term held there with [==] only, a write replaces what the slot holds (no probing,
+    resizing or structural comparison). A term whose result was replaced is computed again, at its full
+    charge. *)
 
 val memo : unit -> 'a memo
 
 type ('k, 'a) table
-(** A chained hash table of keys with their hash. It never evicts. *)
+(** A chained hash table of keys with their hash. It never evicts. Its hash reads the label of a name, which is
+    the Lean name, never its module path (the importing file's library), so that the same export costs the
+    same steps in whatever file imports it. *)
 
-val table : ('k -> int) -> ('k -> 'k -> bool) -> ('k, 'a) table
+val constant_table : unit -> (Names.Constant.t, 'a) table
+(** Keyed by [Constant.UserOrd]. *)
 
-val user_constant_hash : Names.Constant.t -> int
-val canonical_constant_hash : Names.Constant.t -> int
-val user_ind_hash : Names.inductive -> int
-val user_globref_hash : Names.GlobRef.t -> int
-(** The hashes for a table keyed by [UserOrd] (or [CanOrd] for [canonical_constant_hash]): by the label of the
-    name, which is the Lean name, never its module path (the importing file's library). *)
+val canonical_constant_table : unit -> (Names.Constant.t, 'a) table
+(** Keyed by [Constant.CanOrd]. *)
+
+val ind_table : unit -> (Names.inductive, 'a) table
+(** Keyed by [Ind.UserOrd]. *)
+
+val globref_table : unit -> (Names.GlobRef.t, 'a) table
+(** Keyed by [GlobRef.UserOrd]. *)
+
+val id_table : unit -> (Names.Id.t, 'a) table
 
 type t = {
   genv : Environ.env;  (** the environment the pass reads declarations from *)
