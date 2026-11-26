@@ -443,7 +443,10 @@ Register reflective_Char_legacy_mk_prim as lean.Char.legacy.mk.reflective_prim.
    [rewrite], [destruct] and [lia]: the [toN] lemmas rely on no axiom, [Nat_eq_of_toN] and
    [sprop_transport] only on the definitional UIP of [eq]. The importer instantiates them with the
    export's [Nat.add], [Nat.mul] and [Nat.pow], whose defining equations it closes by [Logic.eq_refl], and
-   with steps that compute the value of a literal from its form. *)
+   with steps that compute the value of a literal from its form. The lemmas of the Fin case (the two
+   values of a [Fin] that two closed terms reduce to) do not go through [N]: each is [Logic.eq_refl] on
+   the values, which the kernel computes on the unary [Nat], so the importer generates one only when the
+   value and every operand of it but a divisor are below 65536. *)
 Section nat_transport.
   Import ZArith NArith Lia.
   Local Unset Universe Polymorphism.

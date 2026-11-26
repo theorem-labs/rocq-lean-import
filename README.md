@@ -440,21 +440,47 @@ What it changes:
   converts them without arithmetic.
 - The lemma `<entry>__nat_eq_<k>` (`Char_ofNatAux__nat_eq_1 :
   UInt32.size = 2 ^ 32`, say) is declared before the entry, as a
-  constant the kernel checks like any other. Its proof goes through
-  Rocq's binary `N` (`toN` and the lemmas after it in `src/Lean.v`):
-  the export's own `Nat.add`, `Nat.mul` and `Nat.pow`, whose defining
-  equations the kernel checks by `Logic.eq_refl` on open terms, a step
-  per bit of each literal, and each binary computation checked on
-  literals. A later argument with the same two terms reuses the
-  lemma, within the Rocq file that runs the imports: the cache is not
-  kept in a compiled file, so a file that Requires one with an earlier
-  import generates the lemmas it needs again, under new names. The
-  values the importer computes only find the places: a wrong one gives
-  a lemma the kernel refuses, which is logged (`line N: NAME: the
-  generated lemma ... is refused by the kernel: ...`) and not used.
+  constant the kernel checks like any other. For two `Nat` terms its
+  proof goes through Rocq's binary `N` (`toN` and the lemmas after it
+  in `src/Lean.v`): the export's own `Nat.add`, `Nat.mul` and
+  `Nat.pow`, whose defining equations the kernel checks by
+  `Logic.eq_refl` on open terms, a step per bit of each literal, and
+  each binary computation checked on literals. In the Fin case (below)
+  the proof is `Logic.eq_refl` on the two values. A later argument with
+  the same two terms reuses the lemma, within the Rocq file that runs
+  the imports: the cache is not kept in a compiled file, so a file that
+  Requires one with an earlier import generates the lemmas it needs
+  again, under new names. The values the importer computes only find
+  the places: a wrong one gives a lemma the kernel refuses, which is
+  logged and not used: `line N: NAME: the generated lemma ID : X = Y
+  is refused by the kernel` when `X` and `Y` have at most 256 nodes
+  together (then followed by the kernel's error when the proof has at
+  most 256 nodes too), else `line N: NAME: the generated lemma ID is
+  refused by the kernel (its statement has more than 256 nodes and is
+  not printed)`.
 - The import's output has one line per entry whose value changes,
   printed once the kernel has accepted that value:
   `line N: NAME: <k> argument(s) transported (<lemmas>)`.
+- The Fin case. Two closed terms whose head constants differ, which
+  both reduce (at most 64 steps each side in all, counting every step
+  of its head reductions: of the term, of the subject of a projection,
+  and of the field of each record; a step is the unfolding of a
+  constant, the substitution of one bound argument, so that a constant
+  applied to three arguments it binds takes four steps, a zeta step, or
+  a projection, which is counted before its subject is reduced) through
+  zero to four records of one field (a fifth gives no lemma), the same
+  records on both sides with the same parameters, to a `Fin` of the
+  same bound, and whose two `Fin` values are closed `Nat` terms of the
+  same value:
+  Lean v4.34.0's `Char.utf8Size_eq_one_iff` passes a proof of
+  `v ≤ UInt32.ofNatLT 127 _` where `v ≤ (127 : UInt32)` is expected,
+  and `(127 : UInt32)` stores `127 % 2 ^ 32`. The lemma is
+  `<entry>__nat_eq_<k> : 127 = 127 % 2 ^ 32`, by `Logic.eq_refl`: the
+  kernel computes both values on the unary `Nat`, in time that grows
+  with each number it computes but a divisor. So the value and every
+  operand of it, but the divisor of a `Nat.mod` or of an `HMod.hMod` at
+  Lean's `Nat` instance, are below 65536; otherwise, and for two
+  different values, there is no lemma.
 
 What it does not change: an entry's declared type (its statement),
 the non-`SProp` arguments (the data, which stay Lean's terms, so that
@@ -469,28 +495,69 @@ operations and large literals in the entry and the types of the
 constants it names decides which entries are looked at. Two closed
 `Nat` terms of different values give no lemma: the kernel refuses the
 entry as before. If the kernel refuses a transported value, the import
-declares Lean's value instead, then logs `line N: NAME: the transported
-value is refused (...); Lean's value is declared`. If the entry is
-accepted, any lemmas the pass already declared remain, even if another
-place gets no lemma, the pass stops, or Lean's original value is used.
+logs `line N: NAME: the transported value is refused (...); Lean's
+value goes to the kernel instead` (the kernel's error in the
+parentheses only when the transported value has at most 256 nodes;
+else `the transported value is refused by the kernel (it has more than
+256 nodes: the kernel's error is not printed); Lean's value goes to
+the kernel instead`) and submits Lean's value; if the kernel refuses
+that too, the entry fails with Lean's error, as without the pass. If
+the entry is accepted, the lemmas the pass declared stay declared, even
+if another place gets no lemma, the pass stops, or Lean's original
+value is used; if the entry is refused, they go with it.
 
-The pass memoizes values per entry, by constant or by shared term.
-It caps the scans, natural number evaluation and certificate construction
-at a total of 1 000 000 steps; a reused certificate counts again at
-its full size because the kernel checks the proof tree. The pass also
-caps its depth at 10 000, counted from the entry's value or type down
-through the terms its scans and walks visit and the `Nat` terms the
-finder computes, together. When a limit is reached, the importer
-logs `line N: NAME: the transport pass stops: ...` and submits the
-original value for the usual kernel check. An error in the pass takes
-the same path and logs `the transport pass fails; ...`.
+The pass is optional work, and all of it is charged before it runs
+(`tick` and `pay` in `src/leanNatTransport.ml`): each term it visits,
+copies or builds, each substitution, comparison and lookup, natural
+number evaluation (each value and each Fin value it does not find in
+its memo) and certificate construction, against the
+`Lean Transport Step Budget` of each part of an entry (the entry's own
+scans and walks are one part, and each argument it looks at is
+another), 1 000 000 steps by default, and all the parts of one entry
+together against ten times that budget (at most OCaml's `max_int`,
+2^62 - 1 on 64-bit systems). A reused certificate counts again at its
+full size because the kernel checks the proof tree. A substitution pays,
+before it is made, for each node it visits and, at each place it
+substitutes, for the size of the replacement counted as a tree (with
+its lift under binders), so one that would build a term of more than
+`max_int` nodes stops the pass before it is made. The pass keeps, per
+entry, the values of constants in maps and the results it computes for
+other terms (values, Fin values, certificates, sizes, free variables,
+beta normal forms) in memos of 512 slots each, one slot per term found
+by a bounded hash: a lookup or a write costs one step and compares at
+most one term, by physical identity, and a result replaced by another
+term of the same slot is computed again at its full charge. The pass
+also caps its depth at 10 000, counted from the entry's value or type
+down through the terms its scans and walks visit and the `Nat` terms
+the finder computes, together. When a limit is reached, the importer
+logs `line N: NAME: the transport pass stops: it needs more than N
+steps or a nesting deeper than 10000; ...` (for the total, `... more
+than T steps in total; ...`) and submits the original value for the
+usual kernel check. An error in the pass takes the same path and logs
+`the transport pass fails; ...`.
+
+The pass reads the types it needs itself, without Rocq's retyping or
+reduction: a variable's declared type, a global's declared type at its
+universe instance, and the types of applications, lambdas, lets, casts
+and projections of records built from those. Where a type must be a
+product or a sort it reduces the head as the Fin case does (unfolding a
+transparent constant, beta, zeta, a cast, a local definition, the
+projection of a constructor; at most 64 steps, every step charged), and
+no further: a type behind a `match` or a fixpoint, or any other term,
+gives no type, and an argument whose type the pass cannot read gets no
+cast; the kernel then checks it as without the pass. It reads no type
+for an application of `Nat_succ` or `Nat_double` to one argument, whose
+declarations it reads once per entry (one relevant `Nat` argument), and
+still walks the argument.
 
 Limits: only on the new path; only proof (`SProp`) positions. A
 mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size
 := x.toBitVec.toFin` (`Init/Data/UInt/BasicAux.lean:141`), is left to
 the kernel. The places are found in the types the arguments and the
-function have as written, not after unfolding a constant, and the
-operations are the six above: `Nat.sub`, `Nat.div`, `Nat.mod`,
+function have as written: a `Nat` place is never found by unfolding a
+constant, and a Fin place only by the head reduction of the Fin case
+(at most 64 steps of each side in all), and the operations are the six
+above, with `Nat.mod` in the Fin case only: `Nat.sub`, `Nat.div`,
 `Nat.ble` and `Nat.beq` (`decide` on large numbers) are not covered.
 Values are computed up to 1024 bits. `USize.size` (`2 ^
 System.Platform.numBits`) has no closed value.
@@ -753,6 +820,22 @@ keeps its existing `Lean Error Mode` behavior. If asynchronous exceptions
 overlap while an entry stops, the runtime may expose only the exception
 that survives. The importer cannot always tell whether another interrupt
 also occurred.
+
+## Lean Transport Step Budget
+
+A positive integer option, unset by default (1 000 000 steps). `Set
+Lean Transport Step Budget N.` gives each part of an entry N steps of
+the transport pass and all the parts of one entry together 10 N, or
+OCaml's `max_int` (2^62 - 1 on 64-bit systems) when 10 N is larger (see
+"Transport of proof arguments across Nat literals"); 0 and negative
+values are refused, and `Unset` restores the default. A step pays for
+one unit of the pass's work before it is done; a size the pass would
+have to pay that is larger than `max_int` stops it as a part over its
+budget does. Over a limit, the pass stops and the entry's original
+value goes to the kernel. The budget bounds the optional pass only:
+the kernel's checks of the generated lemmas and of the entry's value
+are not charged, and they run under `Lean Entry Timeout` and
+`Lean Entry Memory Limit` as for any entry.
 
 ## Corpus import settings
 

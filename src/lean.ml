@@ -1536,9 +1536,10 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
                      ty);
           Exninfo.iraise e
       in
-      (* The transported value, when the pass changes it, is declared first: a value the kernel refuses
-         is logged, and Lean's own value is declared instead. The log line is printed once a value is
-         declared. *)
+      (* The transported value, when the pass changes it, is declared first. A value the kernel refuses
+         is logged at once, and Lean's own value goes to the kernel instead: when that is refused too, the
+         entry fails with Lean's error, as without the pass. The kernel's error about the transported value
+         is printed only when that value has at most [LeanNatTransport.print_bound] nodes. *)
       let ref =
         match transported with
         | None -> declare body
@@ -1553,13 +1554,18 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
                   ++ str ")");
             ref
           | exception e when CErrors.noncritical e ->
-            let ref = declare body in
             line_msg n
               ~msg:
-                Pp.(
-                  str "the transported value is refused (" ++ CErrors.print e
-                  ++ str "); Lean's value is declared");
-            ref)
+                (if LeanNatTransport.printable [ value ] then
+                   Pp.(
+                     str "the transported value is refused (" ++ CErrors.print e
+                     ++ str "); Lean's value goes to the kernel instead")
+                 else
+                   Pp.(
+                     str "the transported value is refused by the kernel (it has more than "
+                     ++ int LeanNatTransport.print_bound
+                     ++ str " nodes: the kernel's error is not printed); Lean's value goes to the kernel instead"));
+            declare body)
       in
       (ref, algs)
   in
