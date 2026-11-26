@@ -7,6 +7,8 @@ src/ULiftCumulativeRegistration.v
 src/g_lean.mlg
 src/lean.ml
 src/lean.mli
+src/leanChargedTerm.ml
+src/leanChargedTerm.mli
 src/leanExpr.mli
 src/leanName.ml
 src/leanName.mli

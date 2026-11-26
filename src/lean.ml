@@ -1539,7 +1539,7 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
       (* The transported value, when the pass changes it, is declared first. A value the kernel refuses
          is logged at once, and Lean's own value goes to the kernel instead: when that is refused too, the
          entry fails with Lean's error, as without the pass. The kernel's error about the transported value
-         is printed only when that value has at most [LeanNatTransport.print_bound] nodes. *)
+         is printed only when that value has at most [LeanChargedTerm.print_bound] nodes. *)
       let ref =
         match transported with
         | None -> declare body
@@ -1556,14 +1556,14 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
           | exception e when CErrors.noncritical e ->
             line_msg n
               ~msg:
-                (if LeanNatTransport.printable [ value ] then
+                (if LeanChargedTerm.printable [ value ] then
                    Pp.(
                      str "the transported value is refused (" ++ CErrors.print e
                      ++ str "); Lean's value goes to the kernel instead")
                  else
                    Pp.(
                      str "the transported value is refused by the kernel (it has more than "
-                     ++ int LeanNatTransport.print_bound
+                     ++ int LeanChargedTerm.print_bound
                      ++ str " nodes: the kernel's error is not printed); Lean's value goes to the kernel instead"));
             declare body)
       in

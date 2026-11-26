@@ -28,16 +28,11 @@ val transport : context -> Environ.env -> entry:Names.Id.t -> Constr.types -> Co
     that reduce to the same [Fin] of equal values (the Fin case, under the conditions of README, "Transport of
     proof arguments across Nat literals"), cast along the lemmas [<entry>__nat_eq_<k>]; [None] when it changes
     nothing. The non-SProp arguments stay as they are. Every step of the pass, its type reads, substitutions,
-    comparisons and memo lookups included, is charged before it runs to the step budget of a part of the
-    entry, and to ten times that budget (at most [max_int]) for all its parts; it calls no unbounded reduction
-    or retyping of Rocq, and an argument whose type it cannot read by its own bounded head reduction gets no
-    cast. It logs a generated lemma the kernel refuses (its terms only up to [print_bound] nodes), and the
-    reason when it stops (a budget) or fails; the value is then left as it is. The lemmas it declares stay
-    declared whatever becomes of the value. *)
-
-val print_bound : int
-(** The most nodes the optional diagnostics of the pass and of its caller print of their terms. *)
-
-val printable : Constr.t list -> bool
-(** Whether the terms have at most [print_bound] nodes in all, counted by a walk that stops after that many
-    (each shared subterm counted at each occurrence). *)
+    comparisons and memo lookups included, is charged before it runs (LeanChargedTerm) to the step budget of a
+    part of the entry, and to ten times that budget (at most [max_int]) for all its parts, but for the lists of
+    [consts]: their length is known only once [consts] returns, and each is charged by its length then
+    ([consts] is asked for 19 fixed names, once per entry). It calls no unbounded reduction or retyping of Rocq,
+    and an argument whose type it cannot read by its own bounded head reduction gets no cast. It logs a
+    generated lemma the kernel refuses (its terms only up to [LeanChargedTerm.print_bound] nodes), and the
+    reason when it stops (a budget) or fails (a fixed text); the value is then left as it is. The lemmas it
+    declares stay declared whatever becomes of the value. *)

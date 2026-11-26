@@ -479,8 +479,10 @@ What it changes:
   kernel computes both values on the unary `Nat`, in time that grows
   with each number it computes but a divisor. So the value and every
   operand of it, but the divisor of a `Nat.mod` or of an `HMod.hMod` at
-  Lean's `Nat` instance, are below 65536; otherwise, and for two
-  different values, there is no lemma.
+  Lean's `Nat` instance, are below 65536; otherwise there is no lemma.
+  Two such terms whose `Fin` values differ give no lemma either: they
+  are left to the kernel as without the pass, and the other places of
+  the same argument are still cast.
 
 What it does not change: an entry's declared type (its statement),
 the non-`SProp` arguments (the data, which stay Lean's terms, so that
@@ -493,9 +495,10 @@ axiom (`Print Assumptions`). An entry where the pass casts nothing is
 declared with Lean's own value; a cheap scan for the export's `Nat`
 operations and large literals in the entry and the types of the
 constants it names decides which entries are looked at. Two closed
-`Nat` terms of different values give no lemma: the kernel refuses the
-entry as before. If the kernel refuses a transported value, the import
-logs `line N: NAME: the transported value is refused (...); Lean's
+`Nat` terms of different values give no lemma, and the argument that
+holds them no cast: the kernel refuses the entry as before. If the
+kernel refuses a transported value, the import logs `line N: NAME:
+the transported value is refused (...); Lean's
 value goes to the kernel instead` (the kernel's error in the
 parentheses only when the transported value has at most 256 nodes;
 else `the transported value is refused by the kernel (it has more than
@@ -507,34 +510,41 @@ if another place gets no lemma, the pass stops, or Lean's original
 value is used; if the entry is refused, they go with it.
 
 The pass is optional work, and all of it is charged before it runs
-(`tick` and `pay` in `src/leanNatTransport.ml`): each term it visits,
-copies or builds, each substitution, comparison and lookup, natural
-number evaluation (each value and each Fin value it does not find in
-its memo) and certificate construction, against the
+(`tick` and `pay` of its charged term layer, `src/leanChargedTerm.ml`):
+each term it visits, copies or builds, each substitution, comparison
+and lookup, natural number evaluation (each value and each Fin value
+it does not find in its memo) and certificate construction, against the
 `Lean Transport Step Budget` of each part of an entry (the entry's own
 scans and walks are one part, and each argument it looks at is
 another), 1 000 000 steps by default, and all the parts of one entry
 together against ten times that budget (at most OCaml's `max_int`,
-2^62 - 1 on 64-bit systems). A reused certificate counts again at its
-full size because the kernel checks the proof tree. A substitution pays,
-before it is made, for each node it visits and, at each place it
-substitutes, for the size of the replacement counted as a tree (with
-its lift under binders), so one that would build a term of more than
-`max_int` nodes stops the pass before it is made. The pass keeps, per
-entry, the values of constants in maps and the results it computes for
-other terms (values, Fin values, certificates, sizes, free variables,
-beta normal forms) in memos of 512 slots each, one slot per term found
-by a bounded hash: a lookup or a write costs one step and compares at
-most one term, by physical identity, and a result replaced by another
-term of the same slot is computed again at its full charge. The pass
-also caps its depth at 10 000, counted from the entry's value or type
-down through the terms its scans and walks visit and the `Nat` terms
-the finder computes, together. When a limit is reached, the importer
-logs `line N: NAME: the transport pass stops: it needs more than N
-steps or a nesting deeper than 10000; ...` (for the total, `... more
-than T steps in total; ...`) and submits the original value for the
-usual kernel check. An error in the pass takes the same path and logs
-`the transport pass fails; ...`.
+2^62 - 1 on 64-bit systems). One charge comes after its work: the
+importer's list of the export's constants of a Lean name, whose length
+is known only once the list is returned, is charged by that length
+then; the pass asks for 19 fixed names, once per entry. A reused
+certificate counts again at its full size because the kernel checks
+the proof tree. A substitution pays, before it is made, for each node
+it visits and, at each place it substitutes, for the size of the
+replacement counted as a tree (with its lift under binders), so one
+that would build a term of more than `max_int` nodes stops the pass
+before it is made; a term instantiated at a universe instance pays its
+size with the universe data of each node. The pass keeps, per entry,
+the values of constants in tables, which never evict, and the results
+it computes for other terms (values, Fin values, certificates, sizes,
+free variables, beta normal forms) in memos of 512 slots each, one slot
+per term found by a bounded hash: a lookup or a write costs one step
+and compares at most one term, by physical identity, and a result
+replaced by another term of the same slot is computed again at its full
+charge. The pass also caps its depth at 10 000, counted from the
+entry's value or type down through the terms its scans and walks visit
+and the `Nat` terms the finder computes, together, a result found in a
+memo included. When a limit is reached, the importer logs `line N:
+NAME: the transport pass stops: it needs more than N steps or a nesting
+deeper than 10000; ...` (for the total, `... more than T steps in
+total; ...`) and submits the original value for the usual kernel check.
+An error in the pass takes the same path and logs `the transport pass
+fails (E); the value is left as Lean's`, `E` the name of the error's
+exception only.
 
 The pass reads the types it needs itself, without Rocq's retyping or
 reduction: a variable's declared type, a global's declared type at its
