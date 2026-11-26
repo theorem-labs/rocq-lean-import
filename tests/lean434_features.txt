@@ -30,3 +30,5 @@ tests/univ_undeclared.v	univ-param-undeclared	RLIU.refl_u	RLIU.refl_u	fixed	4dcb
 tests/utf8size_transport_one.v	char-utf8size-fin-transport	option:Lean Entry Timeout	Char.utf8Size_eq_one_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
 tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	option:Lean Entry Timeout	Char.utf8Size_eq_two_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
 tests/fin_transport_values_differ.v	fin-transport-values-differ	option:Lean Entry Timeout	RLI434V.values_differ	fixed	bc0d4888eadebdac4a9b8198aeb85d13c58d6649	-
+tests/fin_transport_bitwise.v	fin-transport-bitwise	option:Lean Entry Timeout	RLI434B.u32_and	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
+tests/fin_transport_bitwise_absent.v	fin-transport-bitwise-absent	option:Lean Entry Timeout	RLI434B.u32_lor	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
