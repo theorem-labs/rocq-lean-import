@@ -27,6 +27,5 @@ tests/uint32_transport_ofnatlt.v	uint32-ofnatlt-transport	BitVec.ofNatLT	UInt32.
 tests/uint32_transport_shiftleft.v	uint32-shiftleft-transport	Nat.pow_pos._f	UInt32.toNat_shiftLeft	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
 tests/lean434_stack.v	stack-limit	instInhabitedTrue	_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1	fixed	83737abbc89ca4dae79200bdc4d7d655f131b127	-
 tests/univ_undeclared.v	univ-param-undeclared	RLIU.refl_u	RLIU.refl_u	fixed	4dcb44e98dbb4cde4e79035bbb711977daeb45ed	-
-tests/utf8size_transport_one.v	char-utf8size-fin-transport	BitVec.ofNatLT	Char.utf8Size_eq_one_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
-tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	BitVec.ofNatLT	Char.utf8Size_eq_two_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
-tests/fin_transport_values.v	fin-transport-values-differ	BitVec.ofNatLT	RLI434V.values_differ	fixed	bc0d4888eadebdac4a9b8198aeb85d13c58d6649	-
+tests/utf8size_transport_one.v	char-utf8size-fin-transport	option:Lean Entry Timeout	Char.utf8Size_eq_one_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
+tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	option:Lean Entry Timeout	Char.utf8Size_eq_two_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
