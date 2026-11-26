@@ -117,4 +117,10 @@ def plain8 (n : Nat) (h : n < UInt8.size) : UInt8 := UInt8.ofNatLT n h
 theorem head_overflow (v : UInt32) (w : UInt8) (h : v ≤ huge_head (Nat.add 0 0))
     (h' : w ≤ plain8 127 lt127b) : v ≤ wideB 0 ∧ w ≤ 127 := And.intro h h'
 
+-- W14b: the long head of product_peel in the expected type of an argument, not of the result. The result walk's
+-- gate (the entry's own part) reads no such type here, so the argument's gate is the first to peel the head's
+-- product chain, in the argument's own part, which is the entry's largest part.
+def consumeLong (v : UInt32) (_ : v ≤ natArgs 47 (long_head (Nat.add 0 0))) : Nat := v.toNat
+def product_peel_arg (v : UInt32) (h : v ≤ (7 : UInt32)) : Nat := consumeLong v h
+
 end RLI434SW

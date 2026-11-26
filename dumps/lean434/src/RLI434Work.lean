@@ -191,4 +191,44 @@ def observeNone (v : UInt32) (x : Nat)
 def shared_none (v : UInt32) (h : v ≤ UInt32.ofNatLT 127 lt127) : Nat :=
   observeNone v (Nat.sub (adds 96 0 3) 3) rfl h
 
+-- Rows whose mutant drops a charge of the entry's own part (W02's instance collection, W14a, W16, W18/W19a,
+-- W20a). The cases above pin their stop on the larger argument part, which such a mutant leaves as it is; in
+-- each entry below the entry's own part is the largest part, so a stop one step below it is decided by the
+-- entry's own charges. The hypothesis _b holds a ballast term that only the entry's own scan and walk read: it
+-- is in the statement and in a binder type of the value, and in no argument the pass casts. The Fin hole
+-- compares UInt8 values, so a cast is cheap and, after a budget stop, the kernel converts Lean's value at once
+-- (row F7h); Nat.add 0 0 or 4 + 3 is a trigger of the entry's first scan.
+macro "ballast" : term =>
+  `(fan (succs 500 0) (succs 500 0) (succs 500 0) (succs 500 0) (succs 500 0) (succs 500 0) (succs 500 0)
+      (succs 500 0))
+
+private theorem lt7c : 4 + 3 < UInt8.size := by decide
+
+-- W02: the Fin value 4 + 3 reads HAdd.hAdd at Nat's instance, which the entry's view of the export collects
+-- with the instance of the second universe (the local ULift instance above).
+theorem instances_own (v : UInt8) (u : ULift.{1,0} Nat) (_b : ignoreNat ballast = 0)
+    (h : v ≤ UInt8.ofNatLT (4 + 3) lt7c ∧ u = u + ULift.up 0) : v ≤ 7 ∧ u = u + ULift.up 0 := h
+
+-- W14a: the first scan reads the long declared type of the constructor Wide.mk once.
+theorem global_type_own (v : UInt8) (k : binders 80 Wide) (_b : ignoreNat ballast = 0)
+    (h : k = Wide.mk ∧ v ≤ w7 (Nat.add 0 0)) : k = Wide.mk ∧ v ≤ 7 := h
+
+def Dep8 (v : UInt8) := (h : v ≤ (7 : UInt8)) → Nat
+
+-- W16: a dependent domain (substituted for hw), a non-product codomain Dep8 v (exposed after the
+-- substitution of the arguments before it), and the first copy of the argument array at hw's cast.
+def depOwn (v w : UInt8) (_ : w ≤ (7 : UInt8)) : Dep8 v := smallProofArg v
+
+def dependent_own (v w : UInt8) (_b : ignoreNat ballast = 0) (hw : w ≤ w7 (Nat.add 0 0))
+    (hv : v ≤ w7 (Nat.add 0 0)) : Nat := depOwn v w hw hv
+
+-- W18/W19a: the head's type is read, and its product exposed through the transparent alias Dep8.
+def viaAlias8 (v : UInt8) : Dep8 v := smallProofArg v
+
+def alias_own (v : UInt8) (_b : ignoreNat ballast = 0) (hv : v ≤ w7 (Nat.add 0 0)) : Nat := viaAlias8 v hv
+
+-- W20a: the result's proof is under 80 leading binders, which the result walk descends.
+theorem result_own (v : UInt8) (_b : ignoreNat ballast = 0) (h : v ≤ w7 (Nat.add 0 0)) :
+    binders 80 (v ≤ 7) := lambdas 80 h
+
 end RLI434W

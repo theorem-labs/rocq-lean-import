@@ -150,11 +150,6 @@ fin_transport_shape_flatten.log.out	-	the transport pass stops
 fin_transport_shape_flatten.log.out	+	line 9955: RLI434SW.flatten: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_flatten.log.out	-	Error at line
 fin_transport_shape_product_peel_deps.log.out	-	Error at line
-fin_transport_shape_product_peel_peel.log.out	+	line 10081: RLI434SW.product_peel: the transport pass stops: it needs more than 4246 steps
-fin_transport_shape_product_peel_peel.log.out	-	argument(s) transported
-fin_transport_shape_product_peel_peel.log.out	+	Done!
-fin_transport_shape_product_peel_peel.log.out	+	Skipping: Error at line 10081 (for RLI434SW.product_peel)
-fin_transport_shape_product_peel_peel.log.out	+	Timed out after 20 s (Lean Entry Timeout)
 fin_transport_shape_product_peel.log.out	+	line 10081: RLI434SW.product_peel
 fin_transport_shape_product_peel.log.out	+	Done!
 fin_transport_shape_product_peel.log.out	-	the transport pass stops
@@ -172,3 +167,14 @@ fin_transport_shape_head_overflow.log.out	+	Done!
 fin_transport_shape_head_overflow.log.out	+	line 10299: RLI434SW.head_overflow: the transport pass stops: it needs more than 4611686018427387903 steps
 fin_transport_shape_head_overflow.log.out	-	argument(s) transported
 fin_transport_shape_head_overflow.log.out	-	Error at line
+fin_transport_shape_product_peel_arg_deps.log.out	-	Error at line
+fin_transport_shape_product_peel_arg_peel.log.out	+	line 10327: RLI434SW.product_peel_arg: the transport pass stops: it needs more than 3164 steps
+fin_transport_shape_product_peel_arg_peel.log.out	-	argument(s) transported
+fin_transport_shape_product_peel_arg_peel.log.out	+	Done!
+fin_transport_shape_product_peel_arg_peel.log.out	+	Skipping: Error at line 10327 (for RLI434SW.product_peel_arg)
+fin_transport_shape_product_peel_arg_peel.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_product_peel_arg.log.out	+	line 10327: RLI434SW.product_peel_arg
+fin_transport_shape_product_peel_arg.log.out	+	Done!
+fin_transport_shape_product_peel_arg.log.out	-	the transport pass stops
+fin_transport_shape_product_peel_arg.log.out	+	line 10327: RLI434SW.product_peel_arg: 1 argument(s) transported (RLI434SW_product_peel__nat_eq_1)
+fin_transport_shape_product_peel_arg.log.out	-	Error at line

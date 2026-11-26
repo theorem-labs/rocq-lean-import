@@ -164,11 +164,9 @@ Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_flatten.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Check RLI434SW_flatten.
 
-(* W14b: the expected domain applies the long Fin head; charge the product peel. *)
+(* W14b: the expected type of the result applies the long Fin head, and the transport casts. Its peel runs in
+   the result walk's gate, in the entry's own part, so W14b's stop case is on product_peel_arg below. *)
 Redirect "fin_transport_shape_product_peel_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9956 10081.
-Set Lean Transport Step Budget 4246.
-Redirect "fin_transport_shape_product_peel_peel.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10081 10082.
-Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_product_peel.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10081 10082.
 Check RLI434SW_product_peel.
 
@@ -183,3 +181,14 @@ Set Lean Transport Step Budget 4611686018427387903.
 Redirect "fin_transport_shape_head_overflow.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10299 10300.
 Check RLI434SW_head_overflow.
 Unset Lean Transport Step Budget.
+
+(* W14b: the long Fin head in the expected type of an argument: that argument's gate is the first to read the
+   head, and peels its product chain in the argument's own part, the entry's largest part (3,165 steps; the own
+   part 558; counters of this file, run r8mut-cnt2-20261126t094103). The stop case is one step below that part;
+   Lean's value then goes to the kernel, whose conversion of the UInt32 values outlasts the 20 s limit. *)
+Redirect "fin_transport_shape_product_peel_arg_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10300 10327.
+Set Lean Transport Step Budget 3164.
+Redirect "fin_transport_shape_product_peel_arg_peel.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10327 10328.
+Unset Lean Transport Step Budget.
+Redirect "fin_transport_shape_product_peel_arg.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10327 10328.
+Check RLI434SW_product_peel_arg.
