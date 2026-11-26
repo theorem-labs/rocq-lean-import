@@ -8,8 +8,10 @@ DUMPS := ../dumps
 # .expect is checked, and a missing or empty one fails. Every .expect file must belong to a test named here.
 # A test whose Redirect logs nothing checks (path_deferred_saved.v, the library tests/path_deferred_reload.v
 # loads, and the tests of the base) has no .expect.
-EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_ceiling fin_transport_charge \
-  fin_transport_lemma_refused fin_transport_nest fin_transport_refused fin_transport_shape fin_transport_share \
+EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bitwise fin_transport_bitwise_absent \
+  fin_transport_budget_name \
+  fin_transport_ceiling fin_transport_charge fin_transport_lemma_refused fin_transport_nest fin_transport_refused \
+  fin_transport_shape fin_transport_share \
   fin_transport_values fin_transport_values_differ lean434_bigint_decide lean434_string_length lean434_strings \
   nat_transport nat_transport_budget nat_transport_parts nat_transport_step_budget \
   nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \

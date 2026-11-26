@@ -1,0 +1,193 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_bitwise_before.log.out	+	line 15279: RLI434B.and_224: 1 argument(s) transported (RLI434B_and_224__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 15648: RLI434B.u32_and: 1 argument(s) transported (RLI434B_u32_and__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 15810: RLI434B.u32_lor: 1 argument(s) transported (RLI434B_u32_lor__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 15875: RLI434B.land_fun: 1 argument(s) transported (RLI434B_land_fun__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 15881: RLI434B.land_class: 1 argument(s) transported (RLI434B_land_class__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 15904: RLI434B.lor_class: 1 argument(s) transported (RLI434B_lor_class__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16158: RLI434B.xor_both: 1 argument(s) transported (RLI434B_xor_both__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16160: RLI434B.and_224_again: 1 argument(s) transported (RLI434B_and_224__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16201: RLI434B.width_8: 1 argument(s) transported (RLI434B_width_8__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16216: RLI434B.width_8b: 1 argument(s) transported (RLI434B_width_8b__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16229: RLI434B.land_myinst: 1 argument(s) transported (RLI434B_land_myinst__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16271: RLI434B.sub_127: 1 argument(s) transported (RLI434B_sub_127__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16299: RLI434B.sub_trunc: 1 argument(s) transported (RLI434B_sub_trunc__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16311: RLI434B.div_127: 1 argument(s) transported (RLI434B_div_127__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16319: RLI434B.div_zero: 1 argument(s) transported (RLI434B_div_zero__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16511: RLI434B.shl_6: 1 argument(s) transported (RLI434B_shl_6__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16519: RLI434B.shl_15: 1 argument(s) transported (RLI434B_shl_15__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	Done!
+fin_transport_bitwise.log.out	+	line 16538: RLI434B.shl_zero: 1 argument(s) transported (RLI434B_shl_zero__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 16598: RLI434B.natrow_add: 1 argument(s) transported (RLI434B_natrow_add__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 16611: RLI434B.natrow_succ: 1 argument(s) transported (RLI434B_natrow_succ__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 16624: RLI434B.succ_head: 1 argument(s) transported (RLI434B_succ_head__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 16991: RLI434B.fb_63: 1 argument(s) transported (RLI434B_fb_63__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 17002: RLI434B.fb_64: 1 argument(s) transported (RLI434B_fb_64__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 17438: RLI434B.w_1023: 1 argument(s) transported (RLI434B_w_1023__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 17464: RLI434B.w_1024: 1 argument(s) transported (RLI434B_w_1023__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 17540: RLI434B.w_mod_1023: 1 argument(s) transported (RLI434B_w_1023__nat_eq_1)
+fin_transport_bitwise.log.out	+	line 17552: RLI434B.w_mod_1024: 1 argument(s) transported (RLI434B_w_1023__nat_eq_1)
+fin_transport_bitwise_before.log.out	+	line 16255: RLI434B.land_matchinst
+fin_transport_bitwise_before.log.out	-	RLI434B.land_matchinst: 
+fin_transport_bitwise_before.log.out	-	(for RLI434B.land_matchinst)
+fin_transport_bitwise_shl17.log.out	+	line 16530: RLI434B.shl_17
+fin_transport_bitwise_shl17.log.out	-	RLI434B.shl_17: 
+fin_transport_bitwise_shl17.log.out	-	(for RLI434B.shl_17)
+fin_transport_bitwise_shl17.log.out	+	Done!
+fin_transport_bitwise.log.out	+	line 16590: RLI434B.land_axiom
+fin_transport_bitwise.log.out	-	RLI434B.land_axiom: 
+fin_transport_bitwise.log.out	-	(for RLI434B.land_axiom)
+fin_transport_bitwise.log.out	+	line 16637: RLI434B.stop_ite
+fin_transport_bitwise.log.out	-	RLI434B.stop_ite: 
+fin_transport_bitwise.log.out	-	(for RLI434B.stop_ite)
+fin_transport_bitwise.log.out	+	line 16707: RLI434B.stop_gcd
+fin_transport_bitwise.log.out	-	RLI434B.stop_gcd: 
+fin_transport_bitwise.log.out	-	(for RLI434B.stop_gcd)
+fin_transport_bitwise.log.out	+	line 16825: RLI434B.stop_projv
+fin_transport_bitwise.log.out	-	RLI434B.stop_projv: 
+fin_transport_bitwise.log.out	-	(for RLI434B.stop_projv)
+fin_transport_bitwise.log.out	+	line 17010: RLI434B.fb_65
+fin_transport_bitwise.log.out	-	RLI434B.fb_65: 
+fin_transport_bitwise.log.out	-	(for RLI434B.fb_65)
+fin_transport_bitwise.log.out	+	line 17486: RLI434B.w_1025
+fin_transport_bitwise.log.out	-	RLI434B.w_1025: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_1025)
+fin_transport_bitwise.log.out	+	line 17498: RLI434B.w_bsub
+fin_transport_bitwise.log.out	-	RLI434B.w_bsub: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_bsub)
+fin_transport_bitwise.log.out	+	line 17510: RLI434B.w_bxor
+fin_transport_bitwise.log.out	-	RLI434B.w_bxor: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_bxor)
+fin_transport_bitwise.log.out	+	line 17522: RLI434B.w_mod_0
+fin_transport_bitwise.log.out	-	RLI434B.w_mod_0: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_mod_0)
+fin_transport_bitwise.log.out	+	line 17563: RLI434B.w_mod_1025
+fin_transport_bitwise.log.out	-	RLI434B.w_mod_1025: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_mod_1025)
+fin_transport_bitwise.log.out	+	line 17634: RLI434B.w_match
+fin_transport_bitwise.log.out	-	RLI434B.w_match: 
+fin_transport_bitwise.log.out	-	(for RLI434B.w_match)
+fin_transport_bitwise.log.out	+	line 17744: RLI434B.box_param
+fin_transport_bitwise.log.out	-	RLI434B.box_param: 
+fin_transport_bitwise.log.out	-	(for RLI434B.box_param)
+fin_transport_bitwise.log.out	+	line 17916: RLI434B.badmod_match
+fin_transport_bitwise.log.out	-	RLI434B.badmod_match: 
+fin_transport_bitwise.log.out	-	(for RLI434B.badmod_match)
+fin_transport_bitwise.log.out	+	line 17785: RLI434B.gate_box
+fin_transport_bitwise.log.out	-	RLI434B.gate_box: 
+fin_transport_bitwise.log.out	-	(for RLI434B.gate_box)
+fin_transport_bitwise.log.out	+	line 17824: RLI434B.field_pt
+fin_transport_bitwise.log.out	-	RLI434B.field_pt: 
+fin_transport_bitwise.log.out	-	(for RLI434B.field_pt)
+fin_transport_bitwise.log.out	+	line 17862: RLI434B.field_p2
+fin_transport_bitwise.log.out	-	RLI434B.field_p2: 
+fin_transport_bitwise.log.out	-	(for RLI434B.field_p2)
+fin_transport_bitwise.log.out	+	line 17894: RLI434B.gate_glob
+fin_transport_bitwise.log.out	-	RLI434B.gate_glob: 
+fin_transport_bitwise.log.out	-	(for RLI434B.gate_glob)
+fin_transport_bitwise.log.out	+	Skipping: Error at line 16745 (for RLI434B.gcd_value)
+fin_transport_bitwise.log.out	-	RLI434B.gcd_value: 
+fin_transport_bitwise.log.out	-	the transport pass fails
+fin_transport_bitwise.log.out	+	Done!
+fin_transport_bitwise_ceiling.log.out	+	line 19229: RLI434B.land_65535: 1 argument(s) transported (RLI434B_land_65535__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19277: RLI434B.lor_65535: 1 argument(s) transported (RLI434B_lor_65535__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19293: RLI434B.xor_65535: 1 argument(s) transported (RLI434B_xor_65535__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19512: RLI434B.shr_15: 1 argument(s) transported (RLI434B_shr_15__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19519: RLI434B.shr_16: 1 argument(s) transported (RLI434B_shr_16__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19526: RLI434B.shr_17: 1 argument(s) transported (RLI434B_shr_17__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19537: RLI434B.shr_18: 1 argument(s) transported (RLI434B_shr_18__nat_eq_1)
+fin_transport_bitwise_ceiling.log.out	+	line 19241: RLI434B.land_65536
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.land_65536: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.land_65536)
+fin_transport_bitwise_ceiling.log.out	+	line 19269: RLI434B.land_65537
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.land_65537: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.land_65537)
+fin_transport_bitwise_ceiling.log.out	+	line 19285: RLI434B.lor_65536
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.lor_65536: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.lor_65536)
+fin_transport_bitwise_ceiling.log.out	+	line 19301: RLI434B.xor_65536
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.xor_65536: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.xor_65536)
+fin_transport_bitwise_ceiling.log.out	+	line 19354: RLI434B.shl_16
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.shl_16: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.shl_16)
+fin_transport_bitwise_ceiling.log.out	+	line 19561: RLI434B.w_sub
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.w_sub: 
+fin_transport_bitwise_ceiling.log.out	-	(for RLI434B.w_sub)
+fin_transport_bitwise_ceiling.log.out	+	Skipping: Error at line 19313 (for RLI434B.sub_65536)
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.sub_65536: 
+fin_transport_bitwise_ceiling.log.out	+	Skipping: Error at line 19343 (for RLI434B.div_65536)
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.div_65536: 
+fin_transport_bitwise_ceiling.log.out	+	Skipping: Error at line 19545 (for RLI434B.shr_big)
+fin_transport_bitwise_ceiling.log.out	-	RLI434B.shr_big: 
+fin_transport_bitwise_ceiling.log.out	-	the transport pass fails
+fin_transport_bitwise_ceiling.log.out	+	Done!
+fin_transport_bitwise_deep.log.out	+	line 49561: RLI434B.deep_lo: 1 argument(s) transported (RLI434B_deep_lo__nat_eq_1)
+fin_transport_bitwise_deep.log.out	+	line 49568: RLI434B.deep_at: 1 argument(s) transported (RLI434B_deep_at__nat_eq_1)
+fin_transport_bitwise_deep.log.out	+	line 49575: RLI434B.deep_hi: the transport pass stops: it needs more than 1000000 steps
+fin_transport_bitwise_deep.log.out	-	RLI434B.deep_hi: 1 argument(s) transported
+fin_transport_bitwise_deep.log.out	-	(for RLI434B.deep_hi)
+fin_transport_bitwise_deep.log.out	+	line 29559: RLI434B.deepC_lo
+fin_transport_bitwise_deep.log.out	+	line 39556: RLI434B.deepC_at
+fin_transport_bitwise_deep.log.out	+	line 49554: RLI434B.deepC_hi
+fin_transport_bitwise_deep.log.out	-	RLI434B.deepC_lo: 
+fin_transport_bitwise_deep.log.out	-	RLI434B.deepC_at: 
+fin_transport_bitwise_deep.log.out	-	RLI434B.deepC_hi: 
+fin_transport_bitwise_deep.log.out	-	the transport pass fails
+fin_transport_bitwise_deep.log.out	+	Done!
+fin_transport_bitwise_bud_and.log.out	+	line 17928: RLI434B.bud_and: 1 argument(s) transported (RLI434B_bud_and__nat_eq_1)
+fin_transport_bitwise_bud_and.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_and.log.out	+	Done!
+fin_transport_bitwise_bud_and_part.log.out	+	line 17928: RLI434B.bud_and: 1 argument(s) transported (RLI434B_bud_and__nat_eq_1)
+fin_transport_bitwise_bud_and_part.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_and_part.log.out	+	Done!
+fin_transport_bitwise_bud_and_over.log.out	+	line 17928: RLI434B.bud_and: 1 argument(s) transported (RLI434B_bud_and__nat_eq_1)
+fin_transport_bitwise_bud_and_over.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_and_over.log.out	+	Done!
+fin_transport_bitwise_bud_and_stop.log.out	+	line 17928: RLI434B.bud_and: the transport pass stops: it needs more than 20769 steps
+fin_transport_bitwise_bud_and_stop.log.out	-	argument(s) transported
+fin_transport_bitwise_bud_and_stop.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_and_stop.log.out	+	Done!
+fin_transport_bitwise_bud_w.log.out	+	line 17966: RLI434B.bud_w: 1 argument(s) transported (RLI434B_bud_w__nat_eq_1)
+fin_transport_bitwise_bud_w.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_w.log.out	+	Done!
+fin_transport_bitwise_bud_w_part.log.out	+	line 17966: RLI434B.bud_w: 1 argument(s) transported (RLI434B_bud_w__nat_eq_1)
+fin_transport_bitwise_bud_w_part.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_w_part.log.out	+	Done!
+fin_transport_bitwise_bud_w_over.log.out	+	line 17966: RLI434B.bud_w: 1 argument(s) transported (RLI434B_bud_w__nat_eq_1)
+fin_transport_bitwise_bud_w_over.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_w_over.log.out	+	Done!
+fin_transport_bitwise_bud_w_stop.log.out	+	line 17966: RLI434B.bud_w: the transport pass stops: it needs more than 74767 steps
+fin_transport_bitwise_bud_w_stop.log.out	-	argument(s) transported
+fin_transport_bitwise_bud_w_stop.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_w_stop.log.out	+	Done!
+fin_transport_bitwise_bud_fb.log.out	+	line 18158: RLI434B.bud_fb: 1 argument(s) transported (RLI434B_bud_fb__nat_eq_1)
+fin_transport_bitwise_bud_fb.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_fb.log.out	+	Done!
+fin_transport_bitwise_bud_fb_part.log.out	+	line 18158: RLI434B.bud_fb: 1 argument(s) transported (RLI434B_bud_fb__nat_eq_1)
+fin_transport_bitwise_bud_fb_part.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_fb_part.log.out	+	Done!
+fin_transport_bitwise_bud_fb_over.log.out	+	line 18158: RLI434B.bud_fb: 1 argument(s) transported (RLI434B_bud_fb__nat_eq_1)
+fin_transport_bitwise_bud_fb_over.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_fb_over.log.out	+	Done!
+fin_transport_bitwise_bud_fb_stop.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 18533 steps
+fin_transport_bitwise_bud_fb_stop.log.out	-	argument(s) transported
+fin_transport_bitwise_bud_fb_stop.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_fb_stop.log.out	+	Done!
+fin_transport_bitwise_const_only.log.out	+	line 19217: RLI434B.const_only: 1 argument(s) transported (RLI434B_const_only__nat_eq_1)
+fin_transport_bitwise_const_only.log.out	-	the transport pass fails
+fin_transport_bitwise_const_only.log.out	+	Done!
+fin_transport_bitwise_const_only_part.log.out	+	line 19217: RLI434B.const_only: 1 argument(s) transported (RLI434B_const_only__nat_eq_1)
+fin_transport_bitwise_const_only_part.log.out	-	the transport pass fails
+fin_transport_bitwise_const_only_part.log.out	+	Done!
+fin_transport_bitwise_const_only_over.log.out	+	line 19217: RLI434B.const_only: 1 argument(s) transported (RLI434B_const_only__nat_eq_1)
+fin_transport_bitwise_const_only_over.log.out	-	the transport pass fails
+fin_transport_bitwise_const_only_over.log.out	+	Done!
+fin_transport_bitwise_const_only_stop.log.out	+	line 19217: RLI434B.const_only: the transport pass stops: it needs more than 48935 steps
+fin_transport_bitwise_const_only_stop.log.out	-	argument(s) transported
+fin_transport_bitwise_const_only_stop.log.out	-	the transport pass fails
+fin_transport_bitwise_const_only_stop.log.out	+	Done!
+fin_transport_bitwise_bud_fb_whd.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 8027 steps
+fin_transport_bitwise_bud_fb_whd.log.out	-	argument(s) transported
+fin_transport_bitwise_bud_fb_whd.log.out	-	the transport pass fails
+fin_transport_bitwise_bud_fb_whd.log.out	+	Done!

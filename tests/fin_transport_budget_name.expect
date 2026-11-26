@@ -1,0 +1,10 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_budget_name_base.log.out	+	Done!
+fin_transport_budget_name_deps.log.out	+	Done!
+fin_transport_budget_name_stop.log.out	+	line 17928: RLI434B.bud_and: the transport pass stops: it needs more than 20769 steps
+fin_transport_budget_name_stop.log.out	-	argument(s) transported
+fin_transport_budget_name_stop.log.out	-	the transport pass fails
+fin_transport_budget_name_stop.log.out	+	Done!
+fin_transport_budget_name_part.log.out	+	line 17928: RLI434B.bud_and: 1 argument(s) transported (RLI434B_bud_and__nat_eq_1)
+fin_transport_budget_name_part.log.out	-	the transport pass fails
+fin_transport_budget_name_part.log.out	+	Done!

@@ -55,6 +55,9 @@ fin_transport_lemma_refused.v
 fin_transport_nest.v
 fin_transport_share.v
 fin_transport_charge.v
+fin_transport_bitwise.v
+fin_transport_bitwise_absent.v
+fin_transport_budget_name.v
 transport_work.v
 entry_timeout.v
 entry_timeout_parse.v
