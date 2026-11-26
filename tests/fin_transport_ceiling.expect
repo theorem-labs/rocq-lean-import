@@ -2,7 +2,7 @@
 fin_transport_ceiling_u8.log.out	+	line 9094: RLI434U8.le_65535: 1 argument(s) transported (RLI434U8_le_65535__nat_eq_1)
 fin_transport_ceiling_u8.log.out	+	line 9214: RLI434U8.le16_300: 1 argument(s) transported (RLI434U8_le16_300__nat_eq_1)
 fin_transport_ceiling_u8.log.out	+	line 9243: RLI434U8.le16_65535: 1 argument(s) transported (RLI434U8_le16_65535__nat_eq_1)
-fin_transport_ceiling_u8.log.out	-	RLI434U8.le_300: 
+fin_transport_ceiling_u8.log.out	+	line 9063: RLI434U8.le_300: 1 argument(s) transported (RLI434U8_le_300__nat_eq_1)
 fin_transport_ceiling_u8.log.out	-	RLI434U8.fin_300: 
 fin_transport_ceiling_u8.log.out	+	line 9898: RLI434U8.le_65536
 fin_transport_ceiling_u8.log.out	-	RLI434U8.le_65536: 1 argument(s) transported
@@ -11,8 +11,7 @@ fin_transport_ceiling_u8.log.out	-	RLI434U8.le_65537: 1 argument(s) transported
 fin_transport_ceiling_u8.log.out	-	Error at line
 fin_transport_ceiling_u8.log.out	+	Done!
 fin_transport_ceiling_below.log.out	+	line 11842: RLI434Fin.castq_65535: 1 argument(s) transported (RLI434Fin_castq_65535__nat_eq_1)
-fin_transport_ceiling_below.log.out	+	line 11928: RLI434Fin.badmod_127
-fin_transport_ceiling_below.log.out	-	RLI434Fin.badmod_127: 
+fin_transport_ceiling_below.log.out	+	line 11928: RLI434Fin.badmod_127: 1 argument(s) transported (RLI434Fin_badmod_127__nat_eq_1)
 fin_transport_ceiling_below.log.out	-	Error at line
 fin_transport_ceiling_below.log.out	+	Done!
 fin_transport_ceiling_above.log.out	+	Skipping: Error at line 11991 (for RLI434Fin.u32big_127)

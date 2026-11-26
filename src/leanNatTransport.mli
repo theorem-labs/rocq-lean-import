@@ -31,7 +31,7 @@ val transport : context -> Environ.env -> entry:Names.Id.t -> Constr.types -> Co
     comparisons and memo lookups included, is charged before it runs (LeanChargedTerm) to the step budget of a
     part of the entry, and to ten times that budget (at most [max_int]) for all its parts, but for the lists of
     [consts]: their length is known only once [consts] returns, and each is charged by its length then
-    ([consts] is asked for 19 fixed names, once per entry). It calls no unbounded reduction or retyping of Rocq,
+    ([consts] is asked for 47 fixed names, once per entry). It calls no unbounded reduction or retyping of Rocq,
     and an argument whose type it cannot read by its own bounded head reduction gets no cast. It logs a
     generated lemma the kernel refuses (its terms only up to [LeanChargedTerm.print_bound] nodes), and the
     reason when it stops (a budget) or fails (a fixed text); the value is then left as it is. The lemmas it

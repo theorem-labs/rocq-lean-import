@@ -2,14 +2,14 @@
    of proof arguments across Nat literals"). The values this module computes with OCaml's Z are not trusted:
    they only find the places to transport. Each place gets a lemma [x = y], and the kernel checks it; a wrong
    value gives a lemma the kernel refuses. For two Nat terms the proof goes through Rocq's binary [N] (the
-   lemmas after [toN] in src/Lean.v); for the two values of a [Fin] (the Fin case, [fin_hole]) it is
-   [Logic.eq_refl], which the kernel checks on the unary [Nat], so the value and every operand but a divisor
-   are below [fin_ceiling].
+   lemmas after [toN] in src/Lean.v); for the two values of a [Fin] (the Fin case, [fin_hole]) it goes through
+   the unary literal of their value ([fin_eq_proof]), with which the kernel converts each of them on the unary
+   [Nat], so the value and every operand but a divisor are below [fin_ceiling].
 
    The pass is optional work: every step of it is charged to a budget before the step or allocation it pays
    for (the charged term layer, LeanChargedTerm), but for one: the export's constants of a Lean name, which the
    importer lists ([consts]), are charged by the length of the list once it is returned, since that length is
-   not known before; [setup] asks for 19 fixed names, once per entry. The pass asks Rocq for no unbounded
+   not known before; [setup] asks for 47 fixed names, once per entry. The pass asks Rocq for no unbounded
    reduction or retyping. It reads types and exposes products and sorts by its own charged head reduction
    (unfolding of a transparent constant, beta, zeta, cast, projection of a constructor: LeanChargedTerm's
    [whd]); a type it cannot read that way is no type, and the argument gets no cast. When it stops, Lean's own
@@ -30,9 +30,15 @@ type transported = { value : Constr.t; count : int; lemmas : Id.t list }
 (* The smallest value worth a lemma: the kernel compares smaller ones unit by unit quickly enough. *)
 let transport_min = Z.of_int 4096
 
-(* The Fin case covers Fin values below this one: its lemma is [eq_refl], which the kernel checks by computing
-   [t % 2 ^ 32] on the unary [Nat], in time and stack that grow with [t]. *)
+(* The Fin case covers Fin values below this one: its lemma goes through the unary literal of the value, with
+   which the kernel converts each of the two values by computing it ([t % 2 ^ 32], [x &&& y]) on the unary [Nat],
+   in time and stack that grow with each number it computes. *)
 let fin_ceiling = Z.of_int 65536
+
+(* The parameters and the bounds of two Fin chains that are not the same term are compared by value below this
+   one, every operand, a divisor included, too ([param_value]): the kernel converts them on the unary [Nat] in
+   the cast, about as fast as the measured values up to 1024 (README). A number, not a count of bits. *)
+let param_ceiling = Z.of_int 1025
 
 (* The largest value, in bits, the finder computes: a certificate checks binary arithmetic on it. *)
 let max_bits = 1024
@@ -246,6 +252,81 @@ type op_row = {
   inst_pat : Constant.t list pat;
 }
 
+(* The Nat operations the Fin case reads besides [%] and the forms of [nat_form]: Lean's function, its class
+   function, Nat's instance of the class function as Lean's library builds it, and the value, [None] where the
+   value is not computed (a shift left by more than 16 of a first operand that is not 0). Each operand is a
+   reader's value, below [fin_ceiling], so each result is below 2 ^ 32 ([shiftLeft] below 2 ^ 16 * 2 ^ 16) and
+   each shift OCaml's [Z] makes is small; the bound of [shiftLeft] and the cap of [shiftRight] at 17 change no
+   value a reader keeps: a positive operand shifted left by 17 or more is at least 131072, and a value below
+   2 ^ 16 shifted right by 16 or more is 0. *)
+type fin_op_spec = {
+  fo_fun : string list;
+  fo_class : string list;
+  fo_inst : string list pat;
+  fo_z : Z.t -> Z.t -> Z.t option;
+}
+
+let class_inst inst op_inst = Inst ([ inst ], [ Nat_type; Inst (op_inst, []) ])
+
+let fin_op_specs =
+  let shift_left a b =
+    if Z.equal a Z.zero then Some Z.zero
+    else if Z.leq b (Z.of_int 16) then Some (Z.shift_left a (Z.to_int b))
+    else None
+  in
+  [
+    {
+      fo_fun = [ "Nat"; "land" ];
+      fo_class = [ "HAnd"; "hAnd" ];
+      fo_inst = class_inst "instHAndOfAndOp" [ "Nat"; "instAndOp" ];
+      fo_z = (fun a b -> Some (Z.logand a b));
+    };
+    {
+      fo_fun = [ "Nat"; "lor" ];
+      fo_class = [ "HOr"; "hOr" ];
+      fo_inst = class_inst "instHOrOfOrOp" [ "Nat"; "instOrOp" ];
+      fo_z = (fun a b -> Some (Z.logor a b));
+    };
+    {
+      fo_fun = [ "Nat"; "xor" ];
+      fo_class = [ "HXor"; "hXor" ];
+      fo_inst = class_inst "instHXorOfXorOp" [ "Nat"; "instXorOp" ];
+      fo_z = (fun a b -> Some (Z.logxor a b));
+    };
+    {
+      fo_fun = [ "Nat"; "shiftLeft" ];
+      fo_class = [ "HShiftLeft"; "hShiftLeft" ];
+      fo_inst = class_inst "instHShiftLeftOfShiftLeft" [ "Nat"; "instShiftLeft" ];
+      fo_z = shift_left;
+    };
+    {
+      fo_fun = [ "Nat"; "shiftRight" ];
+      fo_class = [ "HShiftRight"; "hShiftRight" ];
+      fo_inst = class_inst "instHShiftRightOfShiftRight" [ "Nat"; "instShiftRight" ];
+      fo_z = (fun a b -> Some (Z.shift_right a (Z.to_int (Z.min b (Z.of_int 17)))));
+    };
+    {
+      fo_fun = [ "Nat"; "sub" ];
+      fo_class = [ "HSub"; "hSub" ];
+      fo_inst = class_inst "instHSub" [ "instSubNat" ];
+      fo_z = (fun a b -> Some (Z.max Z.zero (Z.sub a b)));
+    };
+    {
+      fo_fun = [ "Nat"; "div" ];
+      fo_class = [ "HDiv"; "hDiv" ];
+      fo_inst = class_inst "instHDiv" [ "Nat"; "instDiv" ];
+      fo_z = (fun a b -> Some (if Z.equal b Z.zero then Z.zero else Z.div a b));
+    };
+  ]
+
+(* A row of [fin_op_specs] at one entry: its constants in the export. *)
+type fin_op_row = {
+  fspec : fin_op_spec;
+  ffuns : Constant.t list;
+  fclasses : Constant.t list;
+  finst : Constant.t list pat;
+}
+
 (* The forms of a closed Nat term: a literal of the importer's form ([Zero], [Succ], [Double], see
    [nat_int] in lean.ml), a term that unfolds to another ([Unfold]: a constant of type Nat, or
    [OfNat.ofNat Nat n (instOfNatNat m)] to [m]), and an operation of a row as the term applies it
@@ -257,8 +338,18 @@ type nat_form =
   | Unfold of Constr.t
   | Op of op_row * Constr.t * Constr.t * Constr.t
 
-(* The constant maps of the memos (by user name, as Rocq's [Cmap_env]). *)
-let cmap () = C.table Constant.UserOrd.hash Constant.UserOrd.equal
+(* The constant maps of the memos (by user name, as Rocq's [Cmap_env]; hashed by label, C.user_constant_hash). *)
+let cmap () = C.table C.user_constant_hash Constant.UserOrd.equal
+
+(* A reader of the Fin case ([fin_read]): the values it keeps are below [ceiling]; the divisor of a [%] is read
+   by [value], with no ceiling, when [divisor_by_value] (the Fin values: the kernel compares a divisor and does
+   not compute it), else by the reader itself (the parameters); its memo per term and per constant. *)
+type reader = {
+  ceiling : Z.t;
+  divisor_by_value : bool;
+  rmemo : Z.t option C.memo;
+  rconsts : (Constant.t, Z.t option) C.table;
+}
 
 (* The pass at one entry: the budget of its parts and the memos of the charged term layer ([ch]), the entry's
    view of the export, which [setup] reads once, and the memos and results of the pass. *)
@@ -279,10 +370,13 @@ type state = {
   mutable lemma_ops : (nat_op * (Constr.t * Constr.t) option) list;  (** [lemma_of], at most one per row *)
   records : (inductive, bool) C.table;  (** [one_field_record], per inductive type *)
   fin_consts : (Constant.t, bool) C.table;  (** [fin_typed_const], per constant *)
+  data_records : (inductive, bool) C.table;  (** [data_record], per inductive type *)
+  data_consts : (Constant.t, bool) C.table;  (** [data_typed_const], per constant *)
+  fin_ops : fin_op_row list;  (** the rows of [fin_op_specs] at this entry *)
   values : Z.t option C.memo;
   const_values : (Constant.t, Z.t option) C.table;
-  fin_values : Z.t option C.memo;  (** [fin_value], per term *)
-  const_fin_values : (Constant.t, Z.t option) C.table;  (** [fin_value], per constant *)
+  fin_reader : reader;  (** [fin_value] *)
+  param_reader : reader;  (** [param_value] *)
   certs : (Z.t * Constr.t * int) option C.memo;
   const_certs : (Constant.t, (Z.t * Constr.t * int) option) C.table;
   mutable next : int;  (** the number of the next lemma this entry generates *)
@@ -577,10 +671,27 @@ let nat_eq_proof st depth x y () =
     Some (app st.refs.nt_nat_eq [| x; y; n_literal st.refs vx; cx; cy |])
   | _ -> None
 
-(* The proof of [x = y] for the Nat values [x] and [y] of the [Fin] at the bottom of two closed terms (see
-   [fin_hole]): [eq_refl x], which the kernel checks by converting [x] with [y] on their own, where it computes
-   [t % 2 ^ 32] directly. *)
-let fin_eq_proof st x () = Some (app (Constr.mkConstructU ((st.refs.nt_eq, 1), eq_inst)) [| nat_type st.refs; x |])
+(* The unary literal [Nat_succ^v Nat_zero] of [v], a value below [fin_ceiling]: its [v] steps charged before
+   its [v] nodes are built. *)
+let nat_unary st v =
+  let nt = st.refs in
+  let n = Z.to_int v in
+  C.tick st.ch n;
+  let rec go k acc = if k = 0 then acc else go (k - 1) (nat_succ nt acc) in
+  go n (nat_zero nt)
+
+(* The proof of [x = y] for the Nat values [x] and [y], of value [v], of the [Fin] at the bottom of two closed
+   terms (see [fin_hole]): through the unary literal [l] of [v], [sprop_transport (fun z => x = z) l y
+   (eq_refl l) (eq_refl x)], so that the kernel converts each of [x] and [y] with [l] on its own, computing it on
+   the unary [Nat]. Two such terms converted with each other ([(224 : UInt8) &&& 128] against [128]) can take
+   the kernel's lazy conversion through a far longer path. [x] and [y] are shared, not copied, and [x], closed,
+   needs no lift under [z]; the other nodes are a fixed few. *)
+let fin_eq_proof st x y v () =
+  let nt = st.refs in
+  let l = nat_unary st v in
+  let eq = Constr.mkIndU (nt.nt_eq, eq_inst) and refl = Constr.mkConstructU ((nt.nt_eq, 1), eq_inst) in
+  let motive = Constr.mkLambda (Context.nameR (Id.of_string "z"), nat_type nt, app eq [| nat_type nt; x; r1 |]) in
+  Some (app nt.nt_transport [| motive; l; y; app refl [| nat_type nt; l |]; app refl [| nat_type nt; x |] |])
 
 (* A closed term reduced to a [Fin] (src/Lean.v's, Lean's [Fin] predeclared) through records of one field
    each ([UInt32.ofBitVec], [BitVec.ofFin]): those constructors with their arguments but the last, outermost
@@ -595,8 +706,10 @@ type fin_side = {
 
 (* A place of an argument's type [a] and its expected type [d]: two closed Nat terms of equal value ([Nat_hole]),
    or two closed terms that reduce to the same constructors down to a [Fin] whose values are closed Nat terms of
-   equal value ([Fin_hole]). *)
-type hole = Nat_hole of Constr.t * Constr.t | Fin_hole of { fa : Constr.t; fd : Constr.t; sa : fin_side; sd : fin_side }
+   equal value [fv] ([Fin_hole]). *)
+type hole =
+  | Nat_hole of Constr.t * Constr.t
+  | Fin_hole of { fa : Constr.t; fd : Constr.t; sa : fin_side; sd : fin_side; fv : Z.t }
 
 let hole_terms = function Nat_hole (x, y) -> (x, y) | Fin_hole { fa; fd; _ } -> (fa, fd)
 
@@ -639,51 +752,95 @@ let rec fin_spine st depth n steps c acc =
         fin_spine st (depth + 1) (n + 1) steps args.(k) ((h, C.sub_ch st.ch args 0 k) :: acc)
       | _ -> None)
 
-(* The value of the closed Nat term [c] for [fin_hole], which reads [Nat.mod] and [HMod.hMod] at Nat's instance
-   too. The kernel checks a Fin lemma by computing both sides on the unary [Nat], in time that grows with each
-   number it computes but a divisor ([Nat.mod n m] compares [m] with [n], which stops at [n]); so [c] and every
-   operand it reads, but a divisor, are below [fin_ceiling]. [None] otherwise. The nesting is checked before
-   the memo is read; a term is computed again only when its slot of the memo holds another term, a constant
-   without universe instance once per entry (its table never evicts), and each computation is charged. *)
-let rec fin_value st depth c =
-  C.check_depth depth;
-  match memo_find st st.fin_values st.const_fin_values c with
-  | Some v -> v
-  | None ->
-    let v = fin_value_node st depth c in
-    memo_add st st.fin_values st.const_fin_values c v;
-    v
-
-and fin_value_node st depth c =
-  C.tick st.ch 1;
-  let below v = if Z.lt v fin_ceiling then Some v else None in
-  let rem x y =
-    match (fin_value st (depth + 1) x, value st (depth + 1) y) with
-    | Some x, Some y when Z.sign y > 0 -> below (Z.rem x y)
-    | _ -> None
-  in
-  let operands_below xs = List.for_all (fun x -> Option.has_some (fin_value st (depth + 1) x)) xs in
+(* The two operands of [c] when it is a [%] the Fin case reads: [HMod.hMod] at Nat's instance applied to six
+   arguments, or [Nat.mod] applied to two; each comparison charged. *)
+let mod_operands st c =
   let nt = st.refs in
   let h, args = Constr.decompose_app c in
   match Constr.kind h with
   | Constr.Const (k, _)
     when Array.length args = 6 && mem_const st k st.hmods && is_nat_ind nt args.(0) && is_nat_ind nt args.(1)
          && is_nat_ind nt args.(2) && pat_matches st st.hmod_nat args.(3) ->
-    rem args.(4) args.(5)
-  | Constr.Const (k, _) when Array.length args = 2 && mem_const st k st.mods -> rem args.(0) args.(1)
-  | _ -> (
+    Some (args.(4), args.(5))
+  | Constr.Const (k, _) when Array.length args = 2 && mem_const st k st.mods -> Some (args.(0), args.(1))
+  | _ -> None
+
+(* [c] as an operation of a row of [fin_op_specs], with its two operands: Lean's function applied to two
+   arguments, or the class function at Nat's instance applied to six; each comparison charged. *)
+let fin_op_app st c =
+  let nt = st.refs in
+  let h, args = Constr.decompose_app c in
+  match Constr.kind h with
+  | Constr.Const (k, _) when Array.length args = 2 ->
+    List.find_map (fun row -> if mem_const st k row.ffuns then Some (row, args.(0), args.(1)) else None) st.fin_ops
+  | Constr.Const (k, _) when Array.length args = 6 ->
+    List.find_map
+      (fun row ->
+        if mem_const st k row.fclasses && is_nat_ind nt args.(0) && is_nat_ind nt args.(1) && is_nat_ind nt args.(2)
+           && pat_matches st row.finst args.(3)
+        then Some (row, args.(4), args.(5))
+        else None)
+      st.fin_ops
+  | _ -> None
+
+(* Whether a reader of the Fin case reads [c] at its head, without reducing it: a [%], a form of [nat_form] or an
+   operation of [fin_op_specs]; charged by the tests it makes. *)
+let fin_known st depth c =
+  Option.has_some (mod_operands st c) || Option.has_some (nat_form st depth c) || Option.has_some (fin_op_app st c)
+
+(* The value of the closed Nat term [c] for the Fin case by the reader [r]: [st.fin_reader] for the two Fin
+   values of [fin_hole] ([fin_value]), [st.param_reader] for the parameters and bounds of their chains
+   ([param_value]). It reads a [%] (its dividend by [r], its divisor by [value] or by [r], positive), a form of
+   [nat_form] (a literal, a constant of type Nat, [OfNat.ofNat Nat], a run of [Nat_succ], [+], [*], [^], each
+   operand by [r]), an operation of [fin_op_specs] (each operand by [r]), and a term it reads none of after a head
+   reduction ([C.whd], from a count of 0, at most [C.max_head_steps] steps) to a term it reads: [BitVec.toNat x]
+   reads the value of the [Fin] that [x] reduces to. The kernel checks a Fin lemma by computing each side on the
+   unary [Nat], in time that grows with each number it computes but a divisor ([Nat.mod n m] compares [m] with
+   [n], which stops at [n]); so the value and every operand it reads are below [r.ceiling], the divisor too when
+   [r] reads it. [None] otherwise, and at any other end of the head reduction. The nesting is checked before the
+   memo is read; a term is computed again only when its slot of the memo holds another term, a constant without
+   universe instance once per entry (its table never evicts), and each computation is charged. *)
+let rec fin_read st r depth c =
+  C.check_depth depth;
+  match memo_find st r.rmemo r.rconsts c with
+  | Some v -> v
+  | None ->
+    let v = fin_value_node st r depth c in
+    memo_add st r.rmemo r.rconsts c v;
+    v
+
+and fin_value_node st r depth c =
+  C.tick st.ch 1;
+  let below v = if Z.lt v r.ceiling then Some v else None in
+  let read = fin_read st r (depth + 1) in
+  let both x y f = match (read x, read y) with Some a, Some b -> Option.bind (f a b) below | _ -> None in
+  match mod_operands st c with
+  | Some (x, y) -> (
+    let divisor = if r.divisor_by_value then value st (depth + 1) y else read y in
+    match (read x, divisor) with Some a, Some b when Z.sign b > 0 -> below (Z.rem a b) | _ -> None)
+  | None -> (
     match nat_form st depth c with
-    | Some (Unfold b) -> fin_value st (depth + 1) b
+    | Some Zero -> Some Z.zero
+    | Some (Unfold b) -> read b
     | Some (Succ x) ->
-      (* [c] is [Nat_succ] applied [j] times to [b]: every operand of the run is below the ceiling when [b] has a
-         Fin value and [c]'s value, the largest of the run, is below it *)
+      (* [c] is [Nat_succ] applied [j] times to [b]; its value is the largest of the run *)
       let b, j = succ_run st x 1 in
-      if Option.has_some (fin_value st (depth + 1) b) then
-        Option.bind (value st (depth + 1) b) (fun v -> below (Z.add v (Z.of_int j)))
-      else None
-    | Some (Double x) -> if operands_below [ x ] then Option.bind (value st depth c) below else None
-    | Some (Op (_, _, x, y)) -> if operands_below [ x; y ] then Option.bind (value st depth c) below else None
-    | Some Zero | None -> Option.bind (value st depth c) below)
+      Option.bind (read b) (fun v -> below (Z.add v (Z.of_int j)))
+    | Some (Double x) -> Option.bind (read x) (fun v -> below (Z.shift_left v 1))
+    | Some (Op (row, _, x, y)) -> both x y row.spec.z
+    | None -> (
+      match fin_op_app st c with
+      | Some (row, x, y) -> both x y row.fspec.fo_z
+      | None -> (
+        match C.whd ~stop:(fin_known st (depth + 1)) st.ch st.ch.C.genv (depth + 1) 0 c with
+        | Some (_, h, args) ->
+          let c' = C.app_ch st.ch h args in
+          if fin_known st (depth + 1) c' then read c' else None
+        | None -> None)))
+
+let fin_value st depth c = fin_read st st.fin_reader depth c
+
+let param_value st depth c = fin_read st st.param_reader depth c
 
 let same_constructor c c' =
   match (Constr.kind c, Constr.kind c') with
@@ -692,25 +849,35 @@ let same_constructor c c' =
 
 let head_const c = match Constr.kind (fst (Constr.decompose_app c)) with Constr.Const (k, _) -> Some k | _ -> None
 
-(* Whether the two sides go through the same records of one field, with the same parameters, to a [Fin] of the
-   same bound; each comparison charged. *)
+(* Whether a parameter, or the bound, of the two chains of a Fin pair is the same: the same term, or two closed
+   Nat terms ([fin_hole] reads closed sides only) of the same value by [param_value], [y] read only when [x] has
+   one. The cast leaves their conversion to the kernel. *)
+let same_param st depth x y =
+  C.equal st.ch depth x y
+  ||
+  match param_value st depth x with
+  | None -> false
+  | Some a -> ( match param_value st depth y with Some b -> Z.equal a b | None -> false)
+
+(* Whether the two sides go through the same records of one field, with the same parameters ([same_param]), to a
+   [Fin] of the same bound; each comparison charged. *)
 let same_records st depth sa sd =
   List.length sa.spine = List.length sd.spine
   && List.for_all2
        (fun (c, ps) (c', ps') ->
          C.tick st.ch 1;
-         same_constructor c c' && Array.length ps = Array.length ps' && Array.for_all2 (C.equal st.ch depth) ps ps')
+         same_constructor c c' && Array.length ps = Array.length ps' && Array.for_all2 (same_param st depth) ps ps')
        sa.spine sd.spine
-  && C.equal st.ch depth sa.bound sd.bound
+  && same_param st depth sa.bound sd.bound
 
 (* The rule of the Fin case (README, "Transport of proof arguments across Nat literals"): [a] (in the
    argument's type) and [d] (in the expected type) are a [Fin_hole] when both are closed, their head constants
    differ, both reduce (at most [C.max_head_steps] steps each side, all its head reductions together) through
-   the same records of one field, with the same parameters, to a [Fin] of the same bound, and the two [Fin]
-   values are closed Nat terms of equal value that are not the same term. [d]'s side is reduced only once [a]'s
-   has reached its [Fin], and its value read only once [a]'s has one. [None] in every other case, two different
-   values included: the kernel converts the two terms, or refuses the argument, as without the pass, and the
-   pass looks inside them as before. Closedness and every comparison are charged. *)
+   the same records of one field, with the same parameters, to a [Fin] of the same bound ([same_records]), and
+   the two [Fin] values are closed Nat terms of equal value that are not the same term. [d]'s side is reduced
+   only once [a]'s has reached its [Fin], and its value read only once [a]'s has one. [None] in every other
+   case, two different values included: the kernel converts the two terms, or refuses the argument, as without
+   the pass, and the pass looks inside them as before. Closedness and every comparison are charged. *)
 let fin_hole st depth a d =
   match (head_const a, head_const d) with
   | Some ka, Some kd when (not (Constant.CanOrd.equal ka kd)) && C.closed st.ch depth a && C.closed st.ch depth d -> (
@@ -724,7 +891,7 @@ let fin_hole st depth a d =
         | Some va -> (
           match fin_value st depth sd.fval with
           | Some vd when Z.equal va vd && not (C.equal st.ch depth sa.fval sd.fval) ->
-            Some (Fin_hole { fa = a; fd = d; sa; sd })
+            Some (Fin_hole { fa = a; fd = d; sa; sd; fv = va })
           | Some _ | None -> None))
       | Some _ | None -> None))
   | _ -> None
@@ -855,10 +1022,10 @@ let has_big_nat st depth c =
     false
   with Found -> true
 
-(* Whether the constant [k]'s declared type ends in a record of one field ([UInt32], [BitVec w]): its
-   declaration read directly, each product it goes through charged. *)
-let fin_typed_const st k =
-  match C.table_find st.ch st.fin_consts k with
+(* Whether the constant [k]'s declared type ends in an inductive type [accepts] holds of: its declaration read
+   directly, each product it goes through charged, the answer kept per constant in [table]. *)
+let typed_const st table accepts k =
+  match C.table_find st.ch table k with
   | Some b -> b
   | None ->
     let rec concl depth ty =
@@ -868,12 +1035,40 @@ let fin_typed_const st k =
       | Constr.Prod (_, _, b) | Constr.Cast (b, _, _) -> concl (depth + 1) b
       | _ -> (
         match Constr.kind (fst (Constr.decompose_app ty)) with
-        | Constr.Ind (ind, _) -> one_field_record st ind
+        | Constr.Ind (ind, _) -> accepts st ind
         | _ -> false)
     in
     let b = match C.const_decl st.ch k with Some cb -> concl 0 cb.Declarations.const_type | None -> false in
-    C.table_add st.ch st.fin_consts k b;
+    C.table_add st.ch table k b;
     b
+
+(* Whether the constant [k]'s declared type ends in a record of one field ([UInt32], [BitVec w]). *)
+let fin_typed_const st k = typed_const st st.fin_consts one_field_record k
+
+(* Whether [ind] is a data record: a record of one field ([one_field_record]) whose field is relevant and of an
+   inductive type ([UInt8] over [BitVec 8], [BitVec w] over [Fin (2 ^ w)]); not a class such as [OfNat α n]
+   (its field is of a variable's type) or [NeZero n] (a proposition). Its declaration read on a miss, one step;
+   the field's type is read at its head, which an application holds without a copy. *)
+let data_record st ind =
+  match C.table_find st.ch st.data_records ind with
+  | Some b -> b
+  | None ->
+    let b =
+      one_field_record st ind
+      &&
+      (C.tick st.ch 1;
+       let _, mip = Inductive.lookup_mind_specif st.ch.C.genv ind in
+       match fst mip.Declarations.mind_nf_lc.(0) with
+       | field :: _ ->
+         Sorts.relevance_equal (Context.Rel.Declaration.get_relevance field) Sorts.Relevant
+         && Constr.isInd (fst (Constr.decompose_app (Context.Rel.Declaration.get_type field)))
+       | [] -> false)
+    in
+    C.table_add st.ch st.data_records ind b;
+    b
+
+(* Whether the constant [k]'s declared type ends in a [data_record]. *)
+let data_typed_const st k = typed_const st st.data_consts data_record k
 
 (* The gate of the Fin case: whether [c], at the nesting [depth], has a closed application of a constant whose
    type ends in a record of one field, or [OfNat.ofNat] at such a record. The Nat case keeps [has_big_nat]. *)
@@ -952,7 +1147,7 @@ and transport_arg_in st env depth arg dom =
         Array.map
           (function
             | Nat_hole (x, y) -> eq_lemma st depth x y (nat_eq_proof st depth x y)
-            | Fin_hole { sa; sd; _ } -> eq_lemma st depth sa.fval sd.fval (fin_eq_proof st sa.fval))
+            | Fin_hole { sa; sd; fv; _ } -> eq_lemma st depth sa.fval sd.fval (fin_eq_proof st sa.fval sd.fval fv))
           holes
       in
       if Array.exists Option.is_empty lemmas then None
@@ -1111,7 +1306,9 @@ let global_type st g =
 (* Whether the entry may need the pass: [ty], [body] or the type of a global they name holds one of the
    triggers (the rows' constants, [Nat_double], which every literal from 5000 on holds) or a constant of
    type Nat of value [transport_min] or more (its declared type read first, so that only a constant of type
-   Nat looks up its value). *)
+   Nat looks up its value); or [ty] or [body] themselves, not the types of the globals they name, hold
+   [OfNat.ofNat T n i] or a constant whose declared type ends in [T], for [T] a [data_record] (the Fin case:
+   [(224 : UInt8) &&& 128], [b : UInt8]). *)
 let may_apply st ty body =
   let big_const depth k c =
     match C.const_decl st.ch k with
@@ -1119,16 +1316,27 @@ let may_apply st ty body =
       match value st depth c with Some v -> Z.geq v transport_min | None -> false)
     | Some _ | None -> false
   in
-  let seen = C.table GlobRef.UserOrd.hash GlobRef.UserOrd.equal in
+  (* [h] applied to [args] is [OfNat.ofNat T n i] with [T] headed by a data record. *)
+  let data_ofnat h args =
+    match Constr.kind h with
+    | Constr.Const (k, _) when mem_const st k st.of_nat && Array.length args = 3 -> (
+      match Constr.kind (fst (Constr.decompose_app args.(0))) with
+      | Constr.Ind (ind, _) -> data_record st ind
+      | _ -> false)
+    | _ -> false
+  in
+  let seen = C.table C.user_globref_hash GlobRef.UserOrd.equal in
   let rec scan types depth c =
     C.tick st.ch 1;
     C.check_depth depth;
     match Constr.kind c with
     | Constr.Const (k, _) ->
-      if Option.has_some (C.table_find st.ch st.triggers k) || big_const depth k c then raise_notrace Found;
+      if Option.has_some (C.table_find st.ch st.triggers k) || big_const depth k c || (types && data_typed_const st k)
+      then raise_notrace Found;
       if types then global depth (GlobRef.ConstRef k)
     | Constr.Ind (ind, _) -> if types then global depth (GlobRef.IndRef ind)
     | Constr.Construct (cs, _) -> if types then global depth (GlobRef.ConstructRef cs)
+    | Constr.App (h, args) when types && data_ofnat h args -> raise_notrace Found
     | _ -> Constr.iter (scan types (depth + 1)) c
   and global depth g =
     if Option.is_empty (C.table_find st.ch seen g) then begin
@@ -1143,7 +1351,7 @@ let may_apply st ty body =
   with Found -> true
 
 (* The export's constants of the Lean name [path]: one step for the call and one per constant of the list the
-   importer returns, charged once it is returned (its length is not known before). [setup] asks for 19 fixed
+   importer returns, charged once it is returned (its length is not known before). [setup] asks for 47 fixed
    names, once per entry; the importer builds each list from the instances it declared of that one name. *)
 let consts ctx ch path =
   let l = ctx.consts path in
@@ -1164,8 +1372,8 @@ let one_relevant_nat nt ty =
   | _ -> false
 
 (* The pass at the entry [entry]: the entry's view of the export, read once and charged as the rest of its part
-   (the rows' constants, the constants of the Fin case, and the declared types of [Nat_succ] and [Nat_double],
-   see [unary_nat_head]), and empty memos. *)
+   (the rows' constants, the constants of the Fin case and its rows, and the declared types of [Nat_succ] and
+   [Nat_double], see [unary_nat_head]), and empty memos. *)
 let setup ctx refs ch entry =
   let rows =
     List.map
@@ -1178,9 +1386,20 @@ let setup ctx refs ch entry =
         })
       op_specs
   in
+  let fin_ops =
+    List.map
+      (fun fspec ->
+        {
+          fspec;
+          ffuns = consts ctx ch fspec.fo_fun;
+          fclasses = consts ctx ch fspec.fo_class;
+          finst = resolve ctx ch fspec.fo_inst;
+        })
+      fin_op_specs
+  in
   let of_nat = consts ctx ch [ "OfNat"; "ofNat" ] in
   let inst_of_nat = consts ctx ch [ "instOfNatNat" ] in
-  let triggers = C.table Constant.CanOrd.hash Constant.CanOrd.equal in
+  let triggers = C.table C.canonical_constant_hash Constant.CanOrd.equal in
   List.iter
     (fun k -> C.table_add ch triggers k ())
     (refs.nt_double :: List.concat_map (fun row -> row.funs @ row.classes) rows);
@@ -1212,12 +1431,15 @@ let setup ctx refs ch entry =
     unary_succ;
     unary_double;
     lemma_ops = [];
-    records = C.table Ind.UserOrd.hash Ind.UserOrd.equal;
+    records = C.table C.user_ind_hash Ind.UserOrd.equal;
     fin_consts = cmap ();
+    data_records = C.table C.user_ind_hash Ind.UserOrd.equal;
+    data_consts = cmap ();
+    fin_ops;
     values = C.memo ();
     const_values = cmap ();
-    fin_values = C.memo ();
-    const_fin_values = cmap ();
+    fin_reader = { ceiling = fin_ceiling; divisor_by_value = true; rmemo = C.memo (); rconsts = cmap () };
+    param_reader = { ceiling = param_ceiling; divisor_by_value = false; rmemo = C.memo (); rconsts = cmap () };
     certs = C.memo ();
     const_certs = cmap ();
     next = 0;

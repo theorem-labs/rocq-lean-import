@@ -15,23 +15,138 @@ let check_depth depth = if depth > max_depth then raise Out_of_budget
    be represented, which is never [max_int] itself). Both operands are nonnegative. *)
 let add_size a b = match (a, b) with Some a, Some b when a <= max_int - b -> Some (a + b) | _ -> None
 
+(* A hash that reads no module path and no universe, so that the same export costs the same steps in whatever
+   file imports it. Before it, a memo slot was [Hashtbl.hash_param 10 100 term], which reads the hash of each
+   constant's kernel name (its module path is the importing file's library, Test.<file> for a test) and the
+   names and numbers of universe levels (the importer's fresh levels carry the library and a process counter):
+   the slots, so the memos' collisions and so the step counts, depended on the file's name. The tests of
+   tests/fin_transport_bitwise.v and of revision 8 passed every budget pin compiled as diag_<test>.v (run
+   fpport-e1nopatch-20261126t153619) and failed nine of them compiled under their own names (runs
+   fpport-plain-20261126t151258 and fpport-e2plain-20261126t153625, the same failures twice, and run
+   fpport-same-20261126t154718, the same tests with counters under their own names). The tables' hashes
+   below read the label alone for the same reason. *)
+let hash_mix h x = ((h * 65599) + x) land max_int
+
+(* By the label of the kernel name, which is the Lean name, never its module path. A key equal by [UserOrd]
+   (or [CanOrd]) has the same user (or canonical) name, so the same label. *)
+let label_hash kn = Id.hash (KerName.label kn)
+let user_constant_hash c = label_hash (Constant.user c)
+let canonical_constant_hash c = label_hash (Constant.canonical c)
+let user_ind_hash (mi, i) = hash_mix (label_hash (MutInd.user mi)) i
+
+let user_globref_hash = function
+  | GlobRef.VarRef id -> hash_mix 1 (Id.hash id)
+  | GlobRef.ConstRef c -> hash_mix 2 (user_constant_hash c)
+  | GlobRef.IndRef ind -> hash_mix 3 (user_ind_hash ind)
+  | GlobRef.ConstructRef (ind, j) -> hash_mix (hash_mix 4 (user_ind_hash ind)) j
+
+(* The hash of a term: its nodes in breadth-first order, at most [hash_visited] of them, until
+   [hash_meaningful] of them that carry a value are read (the bounds of [Hashtbl.hash] in the OCaml of the
+   Rocq 9.2 cut, whose stdlib (4.14) reads [let hash x = seeded_hash_param 10 100 0 x]). Each node costs a
+   constant amount of work but for a name, hashed whole as [Hashtbl.hash] hashes a string. A node carries a
+   value when it is a [Rel] (its index), a [Var] (its name), a [Const] (its label), an [Ind] (its label and
+   index), a [Construct] (those and the constructor's index), a [Sort] (its kind: [SProp], [Prop], [Set],
+   [Type] or a sort of a quality variable, never its universe), a primitive integer, float or string (its
+   value), a [Meta] or an [Evar] (its number); a universe instance counts only by whether it is empty. Any
+   other node counts by its kind ([Proj] with its field's index, [Fix] and [CoFix] with the index of the body
+   they name), and its children are queued: a [Cast]'s term and type, a binder's type and body, a [LetIn]'s
+   definition, type and body, an [App]'s head and arguments, a [Case]'s subject, parameters, return type,
+   indices and branches, a fixpoint's types and bodies, a [Proj]'s subject, an [Array]'s elements, default
+   and type. The queue is a buffer of the module (the hash calls nothing that hashes), emptied after each
+   hash so that it keeps no term alive. *)
+let hash_meaningful = 10
+let hash_visited = 100
+let hash_queue = Array.make hash_visited Constr.mkProp
+
+let hash_push tail c =
+  if tail < hash_visited then begin
+    hash_queue.(tail) <- c;
+    tail + 1
+  end
+  else tail
+
+let rec hash_push_array a i tail =
+  if i = Array.length a || tail = hash_visited then tail else hash_push_array a (i + 1) (hash_push tail a.(i))
+
+let rec hash_push_branches brs i tail =
+  if i = Array.length brs || tail = hash_visited then tail
+  else hash_push_branches brs (i + 1) (hash_push tail (snd brs.(i)))
+
+(* A universe instance by its shape: empty or not; its levels are never read. *)
+let instance_hash h u = hash_mix h (if UVars.Instance.is_empty u then 0 else 1)
+
+let sort_hash (s : Sorts.t) =
+  match s with Sorts.SProp -> 0 | Sorts.Prop -> 1 | Sorts.Set -> 2 | Sorts.Type _ -> 3 | Sorts.QSort _ -> 4
+
+let rec hash_from h head tail meaningful =
+  if head = tail || meaningful = hash_meaningful then begin
+    Array.fill hash_queue 0 tail Constr.mkProp;
+    h
+  end
+  else
+    let next = head + 1 and value = meaningful + 1 in
+    match Constr.kind hash_queue.(head) with
+    | Constr.Rel n -> hash_from (hash_mix (hash_mix h 1) n) next tail value
+    | Constr.Var id -> hash_from (hash_mix (hash_mix h 2) (Id.hash id)) next tail value
+    | Constr.Meta n -> hash_from (hash_mix (hash_mix h 3) n) next tail value
+    | Constr.Evar (ev, _) -> hash_from (hash_mix (hash_mix h 4) (Evar.repr ev)) next tail value
+    | Constr.Sort s -> hash_from (hash_mix (hash_mix h 5) (sort_hash s)) next tail value
+    | Constr.Cast (c, _, t) -> hash_from (hash_mix h 6) next (hash_push (hash_push tail c) t) meaningful
+    | Constr.Prod (_, t, b) -> hash_from (hash_mix h 7) next (hash_push (hash_push tail t) b) meaningful
+    | Constr.Lambda (_, t, b) -> hash_from (hash_mix h 8) next (hash_push (hash_push tail t) b) meaningful
+    | Constr.LetIn (_, b, t, c) ->
+      hash_from (hash_mix h 9) next (hash_push (hash_push (hash_push tail b) t) c) meaningful
+    | Constr.App (f, args) ->
+      hash_from (hash_mix h 10) next (hash_push_array args 0 (hash_push tail f)) meaningful
+    | Constr.Const (k, u) ->
+      hash_from (instance_hash (hash_mix (hash_mix h 11) (user_constant_hash k)) u) next tail value
+    | Constr.Ind (ind, u) ->
+      hash_from (instance_hash (hash_mix (hash_mix h 12) (user_ind_hash ind)) u) next tail value
+    | Constr.Construct ((ind, j), u) ->
+      hash_from (instance_hash (hash_mix (hash_mix (hash_mix h 13) (user_ind_hash ind)) j) u) next tail value
+    | Constr.Case (_, _, pms, ((_, p), _), iv, c, brs) ->
+      let tail = hash_push (hash_push_array pms 0 (hash_push tail c)) p in
+      let tail =
+        match iv with Constr.NoInvert -> tail | Constr.CaseInvert { indices } -> hash_push_array indices 0 tail
+      in
+      hash_from (hash_mix h 14) next (hash_push_branches brs 0 tail) meaningful
+    | Constr.Fix ((_, i), (_, tys, bds)) ->
+      hash_from (hash_mix (hash_mix h 15) i) next (hash_push_array bds 0 (hash_push_array tys 0 tail)) meaningful
+    | Constr.CoFix (i, (_, tys, bds)) ->
+      hash_from (hash_mix (hash_mix h 16) i) next (hash_push_array bds 0 (hash_push_array tys 0 tail)) meaningful
+    | Constr.Proj (p, _, c) ->
+      hash_from (hash_mix (hash_mix h 17) (Projection.arg p)) next (hash_push tail c) meaningful
+    | Constr.Int i -> hash_from (hash_mix (hash_mix h 18) (Uint63.hash i)) next tail value
+    | Constr.Float f -> hash_from (hash_mix (hash_mix h 19) (Float64.hash f)) next tail value
+    | Constr.String s -> hash_from (hash_mix (hash_mix h 20) (Pstring.hash s)) next tail value
+    | Constr.Array (u, elems, def, ty) ->
+      hash_from (instance_hash (hash_mix h 21) u) next
+        (hash_push (hash_push (hash_push_array elems 0 tail) def) ty)
+        meaningful
+
+let term_hash c =
+  hash_queue.(0) <- c;
+  hash_from 0 0 1 0
+
 (* The memo of one kind of result, keyed by a term itself: [memo_slots] slots, each empty or holding one term
-   with its result, the array allocated by the first write. A term goes to the slot
-   [Hashtbl.hash_param 10 100 term land (memo_slots - 1)]: a read compares the term in that slot with [==] only,
-   a write replaces what the slot holds. There is no probing, resizing or structural comparison, so a read or a
-   write costs at most one comparison, whatever the terms that share a slot (a unary literal puts every suffix
-   of its successor chain in the same slot); a term whose result was replaced is computed again, at its full
-   charge. The bounds 10 and 100 are those of [Hashtbl.hash] in the OCaml of the Rocq 9.2 cut, here explicit:
-   its stdlib (4.14) reads [let hash x = seeded_hash_param 10 100 0 x]. *)
+   with its result, the array allocated by the first write. A term goes to the slot [term_hash term] (above)
+   [land (memo_slots - 1)], after the hash's higher bits are folded into its lower ones: a read compares the
+   term in that slot with [==] only, a write replaces what the slot holds. There is no probing, resizing or
+   structural comparison, so a read or a write costs at most one comparison, whatever the terms that share a
+   slot (a unary literal puts every suffix of its successor chain in the same slot); a term whose result was
+   replaced is computed again, at its full charge. *)
 let memo_slots = 512
 
 type 'a memo = { mutable slots : (Constr.t * 'a) option array }
 
 let memo () = { slots = [||] }
-let memo_slot c = Hashtbl.hash_param 10 100 c land (memo_slots - 1)
 
-(* A table of keys that carry their own hash (Rocq's cached name hashes): an array of buckets, each a list of
-   keys with their values. It never evicts: a key added stays until the entry ends. *)
+let memo_slot c =
+  let h = term_hash c in
+  (h lxor (h lsr 9) lxor (h lsr 18)) land (memo_slots - 1)
+
+(* A table of keys with their hash (one of the label hashes above, which read no module path): an array of
+   buckets, each a list of keys with their values. It never evicts: a key added stays until the entry ends. *)
 type ('k, 'a) table = {
   hash : 'k -> int;
   eq : 'k -> 'k -> bool;
@@ -335,51 +450,60 @@ let apply_lambdas ch depth ~fits f args =
     Some
       ((if k = nargs then c else if k = 0 then app_ch ch c args else app_ch ch c (sub_ch ch args k (nargs - k))), k)
 
+let never _ = false
+
 (* [c] in [env] reduced at its head, [n] steps taken before: by unfolding a constant (not an opaque one),
-   beta, zeta, a cast, a local definition of [env], and projecting a constructor's field. The result has the
-   number of steps after, which counts the steps that reduce the subject of a projection too, and the head and
-   arguments where it stops. A projection's step is taken before its subject is reduced, and the subject is one
-   level deeper ([depth]), so that a nest of projections stops at [max_head_steps] steps. [None] at a projection
-   of anything but a constructor, or once the term would take more than [max_head_steps] steps: the count is
-   checked before each step's substitution. Unlike [Reductionops.whd_all] it reduces no match or fixpoint, and
-   every step and every substitution and copy is charged. *)
-let rec whd ch env depth n c =
+   beta, zeta, a cast, a local definition of [env], and projecting a constructor's field, until [stop] holds of
+   the term (default: never). The result has the number of steps after, which counts the steps that reduce the
+   subject of a projection too, and the head and arguments where it stops. [stop] is tested at each step, after
+   its step, nesting and count are checked and before it reduces anything; never on the subject of a projection,
+   which is reduced to a constructor. A projection's step is taken before its subject is reduced, and the
+   subject is one level deeper ([depth]), so that a nest of projections stops at [max_head_steps] steps. [None]
+   at a projection of anything but a constructor, or once the term would take more than [max_head_steps]
+   steps: the count is checked before each step's substitution. Unlike [Reductionops.whd_all] it reduces no
+   match or fixpoint, and every step and every substitution and copy is charged. *)
+let rec whd ?(stop = never) ch env depth n c =
   tick ch 1;
   check_depth depth;
   if n > max_head_steps then None
   else
     let h, args = Constr.decompose_app c in
-    match Constr.kind h with
-    | Constr.Const (k, u) -> (
-      if n + 1 > max_head_steps then None
-      else
-        let body = match const_decl ch k with Some cb -> def_body ch depth u cb | None -> None in
-        match body with
-        | Some body -> (
-          match apply_lambdas ch depth ~fits:(max_head_steps - (n + 1)) body args with
-          | Some (c, j) -> whd ch env depth (n + 1 + j) c
-          | None -> None)
-        | None -> Some (n, h, args))
-    | Constr.Lambda _ when Array.length args > 0 -> (
-      match apply_lambdas ch depth ~fits:(max_head_steps - n) h args with
-      | Some (c, j) -> whd ch env depth (n + j) c
-      | None -> None)
-    | Constr.LetIn (_, v, _, b) ->
-      if n + 1 > max_head_steps then None else whd ch env depth (n + 1) (app_ch ch (subst1_ch ch depth v b) args)
-    | Constr.Cast (c, _, _) -> if n + 1 > max_head_steps then None else whd ch env depth (n + 1) (app_ch ch c args)
-    | Constr.Proj (p, _, s) -> (
-      match whd ch env (depth + 1) (n + 1) s with
-      | Some (n, sh, sargs) when Constr.isConstruct sh ->
-        let i = Projection.npars p + Projection.arg p in
-        if i < Array.length sargs then whd ch env depth n (app_ch ch sargs.(i) args) else None
-      | _ -> None)
-    | Constr.Rel k -> (
-      match Environ.lookup_rel k env with
-      | Context.Rel.Declaration.LocalDef (_, b, _) ->
-        if n + 1 > max_head_steps then None else whd ch env depth (n + 1) (app_ch ch (lift_ch ch depth k b) args)
-      | Context.Rel.Declaration.LocalAssum _ -> Some (n, h, args)
-      | exception Not_found -> None)
-    | _ -> Some (n, h, args)
+    if stop c then Some (n, h, args)
+    else
+      match Constr.kind h with
+      | Constr.Const (k, u) -> (
+        if n + 1 > max_head_steps then None
+        else
+          let body = match const_decl ch k with Some cb -> def_body ch depth u cb | None -> None in
+          match body with
+          | Some body -> (
+            match apply_lambdas ch depth ~fits:(max_head_steps - (n + 1)) body args with
+            | Some (c, j) -> whd ~stop ch env depth (n + 1 + j) c
+            | None -> None)
+          | None -> Some (n, h, args))
+      | Constr.Lambda _ when Array.length args > 0 -> (
+        match apply_lambdas ch depth ~fits:(max_head_steps - n) h args with
+        | Some (c, j) -> whd ~stop ch env depth (n + j) c
+        | None -> None)
+      | Constr.LetIn (_, v, _, b) ->
+        if n + 1 > max_head_steps then None
+        else whd ~stop ch env depth (n + 1) (app_ch ch (subst1_ch ch depth v b) args)
+      | Constr.Cast (c, _, _) ->
+        if n + 1 > max_head_steps then None else whd ~stop ch env depth (n + 1) (app_ch ch c args)
+      | Constr.Proj (p, _, s) -> (
+        match whd ch env (depth + 1) (n + 1) s with
+        | Some (n, sh, sargs) when Constr.isConstruct sh ->
+          let i = Projection.npars p + Projection.arg p in
+          if i < Array.length sargs then whd ~stop ch env depth n (app_ch ch sargs.(i) args) else None
+        | _ -> None)
+      | Constr.Rel k -> (
+        match Environ.lookup_rel k env with
+        | Context.Rel.Declaration.LocalDef (_, b, _) ->
+          if n + 1 > max_head_steps then None
+          else whd ~stop ch env depth (n + 1) (app_ch ch (lift_ch ch depth k b) args)
+        | Context.Rel.Declaration.LocalAssum _ -> Some (n, h, args)
+        | exception Not_found -> None)
+      | _ -> Some (n, h, args)
 
 exception Found
 

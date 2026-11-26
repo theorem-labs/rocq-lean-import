@@ -4,7 +4,8 @@ From LeanImport Require Import Lean.
    Char.utf8Size.fun_cases_unfolding, a proof of v <= UInt32.ofNatLT 127 _ where v <= (127 : UInt32) is expected.
    Rocq's kernel converts the two UInt32 values on the unary Nat in about 1,100 s on the Rocq 9.2 cut. The Fin case
    of the transport pass (README, "Transport of proof arguments across Nat literals") casts each such proof along a
-   lemma on the two Fin values, 127 = 127 % 2 ^ 32, which the kernel checks by eq_refl.
+   lemma on the two Fin values, 127 = 127 % 2 ^ 32, which the kernel checks through the unary literal 127, with
+   which it converts each side on its own.
    dumps/lean434/utf8size_one.ndjson is exported from Char.utf8Size_eq_one_iff alone (export line 11238). The src/
    of the fix's parent refuses that entry at the 120 s limit below (ci/build-9.2-cut.sh --revert-fix).
    tests/utf8size_transport_one.expect checks the logs. *)

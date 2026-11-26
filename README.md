@@ -446,18 +446,21 @@ What it changes:
   `Nat.pow`, whose defining equations the kernel checks by
   `Logic.eq_refl` on open terms, a step per bit of each literal, and
   each binary computation checked on literals. In the Fin case (below)
-  the proof is `Logic.eq_refl` on the two values. A later argument with
-  the same two terms reuses the lemma, within the Rocq file that runs
-  the imports: the cache is not kept in a compiled file, so a file that
-  Requires one with an earlier import generates the lemmas it needs
-  again, under new names. The values the importer computes only find
-  the places: a wrong one gives a lemma the kernel refuses, which is
-  logged and not used: `line N: NAME: the generated lemma ID : X = Y
-  is refused by the kernel` when `X` and `Y` have at most 256 nodes
-  together (then followed by the kernel's error when the proof has at
-  most 256 nodes too), else `line N: NAME: the generated lemma ID is
-  refused by the kernel (its statement has more than 256 nodes and is
-  not printed)`.
+  the proof goes through the unary literal `l` of the value:
+  `sprop_transport (fun z => x = z) l y (eq_refl l) (eq_refl x)`, so
+  that the kernel converts each of the two values with `l` on its own.
+  A later argument with the same two terms reuses the lemma, within the
+  Rocq file that runs the imports: the cache is not kept in a compiled
+  file, so a file that Requires one with an earlier import generates
+  the lemmas it needs again, under new names. The values the importer
+  computes only find the places: a wrong one gives a lemma the kernel
+  refuses, which is logged and not used: `line N: NAME: the generated
+  lemma ID : X = Y is refused by the kernel` when `X` and `Y` have at
+  most 256 nodes together (then followed by the kernel's error when the
+  proof has at most 256 nodes too, which a Fin lemma of a value above
+  about 60 exceeds: its proof holds the unary literal twice), else
+  `line N: NAME: the generated lemma ID is refused by the kernel (its
+  statement has more than 256 nodes and is not printed)`.
 - The import's output has one line per entry whose value changes,
   printed once the kernel has accepted that value:
   `line N: NAME: <k> argument(s) transported (<lemmas>)`.
@@ -471,18 +474,32 @@ What it changes:
   zero to four records of one field (a fifth gives no lemma), the same
   records on both sides with the same parameters, to a `Fin` of the
   same bound, and whose two `Fin` values are closed `Nat` terms of the
-  same value:
+  same value. Two parameters, or the two bounds, are the same when they
+  are the same term, or closed `Nat` terms of the same value of at most
+  1024 whose every operand, a divisor included, is at most 1024 (so
+  `BitVec (2 + 6)` against `BitVec 8`, of bounds `2 ^ (2 + 6)` and
+  `2 ^ 8`; the kernel converts them in the cast):
   Lean v4.34.0's `Char.utf8Size_eq_one_iff` passes a proof of
   `v ≤ UInt32.ofNatLT 127 _` where `v ≤ (127 : UInt32)` is expected,
   and `(127 : UInt32)` stores `127 % 2 ^ 32`. The lemma is
-  `<entry>__nat_eq_<k> : 127 = 127 % 2 ^ 32`, by `Logic.eq_refl`: the
-  kernel computes both values on the unary `Nat`, in time that grows
-  with each number it computes but a divisor. So the value and every
-  operand of it, but the divisor of a `Nat.mod` or of an `HMod.hMod` at
-  Lean's `Nat` instance, are below 65536; otherwise there is no lemma.
-  Two such terms whose `Fin` values differ give no lemma either: they
-  are left to the kernel as without the pass, and the other places of
-  the same argument are still cast.
+  `<entry>__nat_eq_<k> : 127 = 127 % 2 ^ 32`, through the unary literal
+  `127`: the kernel computes each value on the unary `Nat`, in time
+  that grows with each number it computes but a divisor. A `Fin` value
+  is read through the forms of a closed `Nat` term above, `Nat.mod`
+  and `HMod.hMod` at Lean's `Nat` instance, and `Nat.land`, `Nat.lor`,
+  `Nat.xor`, `Nat.shiftLeft` (by at most 16, or of 0), `Nat.shiftRight`,
+  `Nat.sub` (truncated at 0) and `Nat.div` (0 for a divisor 0), each
+  function or its class function at Lean's `Nat` instance (`&&&`,
+  `|||`, `^^^`, `<<<`, `>>>`, `-`, `/`), every operand of each read the
+  same way (so `(255 &&& 127) + 0` has a value); a term it reads none of
+  is reduced at its head (as above, at most 64 steps of its own) until
+  one it reads heads it: `BitVec.toNat 8 (UInt8.toBitVec 224)` reads
+  `224 % 2 ^ 8`. A head reduction that stops anywhere else (a `match`,
+  a fixpoint, an axiom) gives no value. The value and every operand of
+  it, but the divisor of a `%`, are below 65536; otherwise there is no
+  lemma. Two such terms whose `Fin` values differ give no lemma either:
+  they are left to the kernel as without the pass, and the other places
+  of the same argument are still cast.
 
 What it does not change: an entry's declared type (its statement),
 the non-`SProp` arguments (the data, which stay Lean's terms, so that
@@ -494,7 +511,10 @@ every entry that names `eq` does), and a generated lemma relies on no
 axiom (`Print Assumptions`). An entry where the pass casts nothing is
 declared with Lean's own value; a cheap scan for the export's `Nat`
 operations and large literals in the entry and the types of the
-constants it names decides which entries are looked at. Two closed
+constants it names decides which entries are looked at, and it also
+passes on an entry that holds itself `OfNat.ofNat T` or a constant
+whose declared type ends in `T`, for `T` a record of one relevant
+field of an inductive type (`UInt8`, `BitVec w`). Two closed
 `Nat` terms of different values give no lemma, and the argument that
 holds them no cast: the kernel refuses the entry as before. If the
 kernel refuses a transported value, the import logs `line N: NAME:
@@ -512,16 +532,18 @@ value is used; if the entry is refused, they go with it.
 The pass is optional work, and all of it is charged before it runs
 (`tick` and `pay` of its charged term layer, `src/leanChargedTerm.ml`):
 each term it visits, copies or builds, each substitution, comparison
-and lookup, natural number evaluation (each value and each Fin value
-it does not find in its memo) and certificate construction, against the
-`Lean Transport Step Budget` of each part of an entry (the entry's own
-scans and walks are one part, and each argument it looks at is
+and lookup, natural number evaluation (each value, Fin value and
+parameter value it does not find in its memo, each step of the Fin
+case's head reduction, each unary literal it builds) and certificate
+construction, against the `Lean Transport Step Budget` of each part of
+an entry (the entry's own scans and walks are one part, and each
+argument it looks at is
 another), 1 000 000 steps by default, and all the parts of one entry
 together against ten times that budget (at most OCaml's `max_int`,
 2^62 - 1 on 64-bit systems). One charge comes after its work: the
 importer's list of the export's constants of a Lean name, whose length
 is known only once the list is returned, is charged by that length
-then; the pass asks for 19 fixed names, once per entry. A reused
+then; the pass asks for 47 fixed names, once per entry. A reused
 certificate counts again at its full size because the kernel checks
 the proof tree. A substitution pays, before it is made, for each node
 it visits and, at each place it substitutes, for the size of the
@@ -530,13 +552,18 @@ that would build a term of more than `max_int` nodes stops the pass
 before it is made; a term instantiated at a universe instance pays its
 size with the universe data of each node. The pass keeps, per entry,
 the values of constants in tables, which never evict, and the results
-it computes for other terms (values, Fin values, certificates, sizes,
-free variables, beta normal forms) in memos of 512 slots each, one slot
-per term found by a bounded hash: a lookup or a write costs one step
-and compares at most one term, by physical identity, and a result
-replaced by another term of the same slot is computed again at its full
-charge. The pass also caps its depth at 10 000, counted from the
-entry's value or type down through the terms its scans and walks visit
+it computes for other terms (values, Fin values, parameter values,
+certificates, sizes, free variables, beta normal forms) in memos of 512
+slots each, one slot per term found by a bounded hash (at most 10 nodes
+that carry a value among at most 100 visited): a lookup or a write
+costs one step and compares at most one term, by physical identity, and
+a result replaced by another term of the same slot is computed again at
+its full charge. The memos' hash and the tables' read no module path and
+no universe level (a constant counts by the label of its name, a sort
+by its kind), so the same export costs the same steps in whatever file
+imports it (`tests/fin_transport_budget_name.v`). The pass also caps its
+depth at 10 000, counted from the entry's value or type down through
+the terms its scans and walks visit
 and the `Nat` terms the finder computes, together, a result found in a
 memo included. When a limit is reached, the importer logs `line N:
 NAME: the transport pass stops: it needs more than N steps or a nesting
@@ -566,9 +593,11 @@ mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size
 the kernel. The places are found in the types the arguments and the
 function have as written: a `Nat` place is never found by unfolding a
 constant, and a Fin place only by the head reduction of the Fin case
-(at most 64 steps of each side in all), and the operations are the six
-above, with `Nat.mod` in the Fin case only: `Nat.sub`, `Nat.div`,
-`Nat.ble` and `Nat.beq` (`decide` on large numbers) are not covered.
+(at most 64 steps of each side in all). For a `Nat` place the
+operations are the six above; for a `Fin` value also `Nat.mod` and the
+seven of the Fin case; `Nat.sub` and `Nat.div` are not covered for a
+`Nat` place, nor `Nat.ble` and `Nat.beq` (`decide` on large numbers)
+at all.
 Values are computed up to 1024 bits. `USize.size` (`2 ^
 System.Platform.numBits`) has no closed value.
 

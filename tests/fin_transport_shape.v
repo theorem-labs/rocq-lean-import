@@ -32,13 +32,13 @@ From LeanImport Require Import Lean.
    - lam_63 (export line 10986): a is lam3 _: a let-bound lambda of three binders applied to three arguments, which
      zeta exposes at the head, then g24: 63 steps;
    - lam_64 (export line 11013): a is lam4 _: four binders, 64 steps;
+   - sub_value (export line 9616): a's value is 200 - 73, which the Fin case reads;
    No cast, and the kernel's own conversion takes far longer than the 10 s limit below:
    - side_65 (9420): g28 _: 65 steps, over the 64 a side may take;
    - bind3_65 (10081): tee13 0 0 _, tee13 := te13: 65 steps;
    - proj_65 (10222): d is prj20 0: 65 steps;
    - lam_65 (11042): a is lam5 _: five binders, 65 steps;
    - chain_5 (9584): five records (W5 over W4);
-   - sub_value (9616): a's value is 200 - 73, which the pass does not compute;
    - gate_const (9624): d is lit127, a constant applied to nothing, which is no Fin site (the gate looks for
      applications only), so the pass never compares the two sides;
    - stop_match (9756): d is 127 behind an if: head reduction stops at the match;
@@ -48,7 +48,9 @@ From LeanImport Require Import Lean.
    No cast, and the kernel converts the two sides at once:
    - open_pair (9443): a and d are open (n and its proof are bound);
    - two_fields (9503): a pair of type Nat x Nat, a record of two fields;
-   - other_width (9540): d is built at the width 31 + 1, under id: the two chains have other parameters;
+   - other_width (9540): d is built at the width 31 + 1, under id: the widths 31 + 1 and 32 have the same value,
+     but the bounds 2 ^ (31 + 1) and 2 ^ 32 are different terms with no value of at most 1024, so the two chains
+     have other parameters;
    - stop_axiom (9653): both sides reduce to an axiom, where head reduction stops;
    - stop_opaque (9733): both sides reduce to the same opaque definition, which the importer declares with its value:
      head reduction unfolds it, and the two sides reach the same Fin value term;
@@ -67,12 +69,13 @@ Check RLI434S_chain_3__nat_eq_1.
 Check RLI434S_chain_0_small__nat_eq_1.
 Check RLI434S_fin12292__nat_eq_1.
 Check RLI434S_chain_0__nat_eq_1.
+Check RLI434S_sub_value__nat_eq_1.
 Fail Check RLI434S_side_65.
 Fail Check RLI434S_bind3_65.
 Fail Check RLI434S_proj_65.
 Fail Check RLI434S_lam_65.
 Fail Check RLI434S_chain_5.
-Fail Check RLI434S_sub_value.
+Check RLI434S_sub_value.
 Fail Check RLI434S_gate_const.
 Fail Check RLI434S_stop_match.
 Fail Check RLI434S_stop_fix.
@@ -100,7 +103,7 @@ Check RLI434SW_ordinary.
 
 (* W03b: charge a polymorphic body before instantiating it on the Fin head path. *)
 Redirect "fin_transport_shape_poly_body_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8486 8862.
-Set Lean Transport Step Budget 4084.
+Set Lean Transport Step Budget 3936.
 Redirect "fin_transport_shape_poly_body_precharge.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8862 8863.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_poly_body.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8862 8863.
@@ -109,7 +112,7 @@ Check RLI434SW_poly_body.
 (* W09a: cast the side closed by the inner lambda. Decline the open side
    under the forall, whose application on its own does not bind x. *)
 Redirect "fin_transport_shape_binder_depth_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8863 8969.
-Set Lean Transport Step Budget 2492.
+Set Lean Transport Step Budget 2403.
 Redirect "fin_transport_shape_binder_depth_closed.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_binder_depth.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
@@ -117,20 +120,22 @@ Check RLI434SW_binder_depth.
 
 (* W09b: non-identical parameter trees compare equal; their walk is charged. *)
 Redirect "fin_transport_shape_parameters_equal_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8970 9036.
-Set Lean Transport Step Budget 10329.
+Set Lean Transport Step Budget 10177.
 Redirect "fin_transport_shape_parameters_equal_parameters.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_parameters_equal.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
 Check RLI434SW_parameters_equal.
 
-(* W09b: different parameter expressions do not cast, even if convertible. *)
+(* W09b: different parameter expressions do not cast, even if convertible: the widths widthA and widthB have
+   the same value (64), but the bounds 2 ^ widthA and 2 ^ widthB are different terms with no value of at most
+   1024. *)
 Redirect "fin_transport_shape_parameters_differ_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9037 9084.
 Redirect "fin_transport_shape_parameters_differ.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9084 9085.
 Check RLI434SW_parameters_differ.
 
 (* W10a: beta duplication must pay before copying. *)
 Redirect "fin_transport_shape_beta_subst_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9085 9428.
-Set Lean Transport Step Budget 56139.
+Set Lean Transport Step Budget 56070.
 Redirect "fin_transport_shape_beta_subst_beta.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9428 9429.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_beta_subst.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9428 9429.
@@ -138,7 +143,7 @@ Check RLI434SW_beta_subst.
 
 (* W10a: let duplication must pay before copying. *)
 Redirect "fin_transport_shape_let_subst_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9429 9441.
-Set Lean Transport Step Budget 56135.
+Set Lean Transport Step Budget 56066.
 Redirect "fin_transport_shape_let_subst_zeta.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9441 9442.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_let_subst.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9441 9442.
@@ -148,17 +153,17 @@ Check RLI434SW_let_subst.
    part of the entry (the other Fin hole's argument), below the wide pair's argument part under the measured
    mutant that checks the 64-step limit only after all of wideA's binders are substituted. *)
 Redirect "fin_transport_shape_early_cap_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9442 9824.
-Set Lean Transport Step Budget 6313.
+Set Lean Transport Step Budget 6324.
 Redirect "fin_transport_shape_early_cap.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9824 9825.
 Check RLI434SW_early_cap.
 Unset Lean Transport Step Budget.
 
 (* W10d: charge each wide application copy, including when flattening the new head. *)
 Redirect "fin_transport_shape_flatten_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9825 9955.
-Set Lean Transport Step Budget 2719.
+Set Lean Transport Step Budget 2650.
 Redirect "fin_transport_shape_flatten_slice.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 2719.
+Set Lean Transport Step Budget 2650.
 Redirect "fin_transport_shape_flatten_flatten.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_flatten.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
@@ -183,11 +188,11 @@ Check RLI434SW_head_overflow.
 Unset Lean Transport Step Budget.
 
 (* W14b: the long Fin head in the expected type of an argument: that argument's gate is the first to read the
-   head, and peels its product chain in the argument's own part, the entry's largest part (3,165 steps; the own
-   part 558; counters of this file, run r8mut-cnt2-20261126t094103). The stop case is one step below that part;
-   Lean's value then goes to the kernel, whose conversion of the UInt32 values outlasts the 20 s limit. *)
+   head, and peels its product chain in the argument's own part, the entry's largest part (2,998 steps; the own
+   part 393; counters of this file, run fpport-hm-b-20261126t160820). The stop case is one step below that
+   part; Lean's value then goes to the kernel, whose conversion of the UInt32 values outlasts the 20 s limit. *)
 Redirect "fin_transport_shape_product_peel_arg_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10300 10327.
-Set Lean Transport Step Budget 3164.
+Set Lean Transport Step Budget 2997.
 Redirect "fin_transport_shape_product_peel_arg_peel.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10327 10328.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_product_peel_arg.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10327 10328.

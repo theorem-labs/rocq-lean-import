@@ -1,6 +1,6 @@
 # Log file, polarity, literal substring (tab-separated).
 transport_work_instances_deps.log.out	-	Error at line
-transport_work_instances_resolve.log.out	+	line 766: RLI434W.instances: the transport pass stops: it needs more than 160730 steps
+transport_work_instances_resolve.log.out	+	line 766: RLI434W.instances: the transport pass stops: it needs more than 160723 steps
 transport_work_instances_resolve.log.out	-	argument(s) transported
 transport_work_instances_resolve.log.out	+	Done!
 transport_work_instances_resolve.log.out	-	Error at line
@@ -10,7 +10,7 @@ transport_work_instances.log.out	-	the transport pass stops
 transport_work_instances.log.out	+	line 766: RLI434W.instances: 1 argument(s) transported (RLI434W_instances__nat_eq_1)
 transport_work_instances.log.out	-	Error at line
 transport_work_poly_nat_deps.log.out	-	Error at line
-transport_work_poly_nat_body.log.out	+	line 883: RLI434W.poly_nat: the transport pass stops: it needs more than 80446 steps
+transport_work_poly_nat_body.log.out	+	line 883: RLI434W.poly_nat: the transport pass stops: it needs more than 76426 steps
 transport_work_poly_nat_body.log.out	-	argument(s) transported
 transport_work_poly_nat_body.log.out	+	Done!
 transport_work_poly_nat_body.log.out	-	Error at line
@@ -30,7 +30,7 @@ transport_work_names.log.out	-	the transport pass stops
 transport_work_names.log.out	+	line 900: RLI434W.names: 1 argument(s) transported (RLI434W_names__nat_eq_3)
 transport_work_names.log.out	-	Error at line
 transport_work_endpoints_deps.log.out	-	Error at line
-transport_work_endpoints_endpoints.log.out	+	line 907: RLI434W.endpoints: the transport pass stops: it needs more than 182747 steps
+transport_work_endpoints_endpoints.log.out	+	line 907: RLI434W.endpoints: the transport pass stops: it needs more than 184617 steps
 transport_work_endpoints_endpoints.log.out	-	argument(s) transported
 transport_work_endpoints_endpoints.log.out	+	Done!
 transport_work_endpoints_endpoints.log.out	-	Error at line
@@ -46,7 +46,7 @@ transport_work_cache_hit.log.out	-	the transport pass stops
 transport_work_cache_hit.log.out	+	line 909: RLI434W.cache_hit: 1 argument(s) transported (RLI434W_endpoints__nat_eq_1)
 transport_work_cache_hit.log.out	-	Error at line
 transport_work_cache_miss_deps.log.out	-	Error at line
-transport_work_cache_miss_cache.log.out	+	line 1017: RLI434W.cache_miss: the transport pass stops: it needs more than 199657 steps
+transport_work_cache_miss_cache.log.out	+	line 1017: RLI434W.cache_miss: the transport pass stops: it needs more than 201527 steps
 transport_work_cache_miss_cache.log.out	-	argument(s) transported
 transport_work_cache_miss_cache.log.out	+	Done!
 transport_work_cache_miss_cache.log.out	-	Error at line
@@ -66,27 +66,27 @@ transport_work_equal_nodes.log.out	-	the transport pass stops
 transport_work_equal_nodes.log.out	+	line 1039: RLI434W.equal_nodes: 1 argument(s) transported (RLI434W_equal_nodes__nat_eq_1)
 transport_work_equal_nodes.log.out	-	Error at line
 transport_work_motives_deps.log.out	-	Error at line
-transport_work_motives_dedupe.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 317741 steps
+transport_work_motives_dedupe.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316965 steps
 transport_work_motives_dedupe.log.out	-	argument(s) transported
 transport_work_motives_dedupe.log.out	+	Done!
 transport_work_motives_dedupe.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
 transport_work_motives_dedupe.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_fill.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 317741 steps
+transport_work_motives_fill.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316965 steps
 transport_work_motives_fill.log.out	-	argument(s) transported
 transport_work_motives_fill.log.out	+	Done!
 transport_work_motives_fill.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
 transport_work_motives_fill.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_domain_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 317741 steps
+transport_work_motives_domain_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316965 steps
 transport_work_motives_domain_lift.log.out	-	argument(s) transported
 transport_work_motives_domain_lift.log.out	+	Done!
 transport_work_motives_domain_lift.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
 transport_work_motives_domain_lift.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_proof_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 317741 steps
+transport_work_motives_proof_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316965 steps
 transport_work_motives_proof_lift.log.out	-	argument(s) transported
 transport_work_motives_proof_lift.log.out	+	Done!
 transport_work_motives_proof_lift.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
 transport_work_motives_proof_lift.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_lemma_ids.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 317741 steps
+transport_work_motives_lemma_ids.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316965 steps
 transport_work_motives_lemma_ids.log.out	-	argument(s) transported
 transport_work_motives_lemma_ids.log.out	+	Done!
 transport_work_motives_lemma_ids.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
@@ -127,7 +127,7 @@ transport_work_computed_arg_product.log.out	-	the transport pass stops
 transport_work_computed_arg_product.log.out	-	argument(s) transported
 transport_work_computed_arg_product.log.out	-	Error at line
 transport_work_beta_normalize_deps.log.out	-	Error at line
-transport_work_beta_normalize_normalize.log.out	+	line 9292: RLI434W.beta_normalize: the transport pass stops: it needs more than 6296 steps
+transport_work_beta_normalize_normalize.log.out	+	line 9292: RLI434W.beta_normalize: the transport pass stops: it needs more than 6287 steps
 transport_work_beta_normalize_normalize.log.out	-	argument(s) transported
 transport_work_beta_normalize_normalize.log.out	+	Done!
 transport_work_beta_normalize_normalize.log.out	+	Skipping: Error at line 9292 (for RLI434W.beta_normalize)
@@ -168,12 +168,12 @@ transport_work_collision_fresh.log.out	-	the transport pass stops
 transport_work_collision_fresh.log.out	+	line 10213: RLI434W.collision_fresh: 1 argument(s) transported (RLI434W_collision_fresh__nat_eq_1)
 transport_work_collision_fresh.log.out	-	Error at line
 transport_work_collision_chain_deps.log.out	-	Error at line
-transport_work_collision_chain_get.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 74693 steps
+transport_work_collision_chain_get.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 72733 steps
 transport_work_collision_chain_get.log.out	-	argument(s) transported
 transport_work_collision_chain_get.log.out	+	Done!
 transport_work_collision_chain_get.log.out	+	Skipping: Error at line 10421 (for RLI434W.collision_chain)
 transport_work_collision_chain_get.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_collision_chain_put.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 74693 steps
+transport_work_collision_chain_put.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 72733 steps
 transport_work_collision_chain_put.log.out	-	argument(s) transported
 transport_work_collision_chain_put.log.out	+	Done!
 transport_work_collision_chain_put.log.out	+	Skipping: Error at line 10421 (for RLI434W.collision_chain)
@@ -190,7 +190,7 @@ transport_work_nested_cast.log.out	-	the transport pass stops
 transport_work_nested_cast.log.out	+	line 11470: RLI434W.nested_cast: 1 argument(s) transported (RLI434W_dependent__nat_eq_2)
 transport_work_nested_cast.log.out	-	Error at line
 transport_work_normalize_fits_deps.log.out	-	Error at line
-transport_work_normalize_fits_shared_beta.log.out	+	line 11546: RLI434W.normalize_fits: the transport pass stops: it needs more than 8277 steps
+transport_work_normalize_fits_shared_beta.log.out	+	line 11546: RLI434W.normalize_fits: the transport pass stops: it needs more than 8268 steps
 transport_work_normalize_fits_shared_beta.log.out	-	argument(s) transported
 transport_work_normalize_fits_shared_beta.log.out	+	Done!
 transport_work_normalize_fits_shared_beta.log.out	+	Skipping: Error at line 11546 (for RLI434W.normalize_fits)
@@ -201,7 +201,7 @@ transport_work_normalize_fits.log.out	-	the transport pass stops
 transport_work_normalize_fits.log.out	+	line 11546: RLI434W.normalize_fits: 1 argument(s) transported (RLI434W_dependent__nat_eq_2)
 transport_work_normalize_fits.log.out	-	Error at line
 transport_work_instances_own_deps.log.out	-	Error at line
-transport_work_instances_own_collect.log.out	+	line 11823: RLI434W.instances_own: the transport pass stops: it needs more than 28999 steps
+transport_work_instances_own_collect.log.out	+	line 11823: RLI434W.instances_own: the transport pass stops: it needs more than 25411 steps
 transport_work_instances_own_collect.log.out	-	argument(s) transported
 transport_work_instances_own_collect.log.out	+	Done!
 transport_work_instances_own_collect.log.out	-	Error at line
@@ -210,7 +210,7 @@ transport_work_instances_own.log.out	-	the transport pass stops
 transport_work_instances_own.log.out	+	Done!
 transport_work_instances_own.log.out	-	Error at line
 transport_work_global_type_own_deps.log.out	-	Error at line
-transport_work_global_type_own_constructor.log.out	+	line 11839: RLI434W.global_type_own: the transport pass stops: it needs more than 30297 steps
+transport_work_global_type_own_constructor.log.out	+	line 11839: RLI434W.global_type_own: the transport pass stops: it needs more than 26989 steps
 transport_work_global_type_own_constructor.log.out	-	argument(s) transported
 transport_work_global_type_own_constructor.log.out	+	Done!
 transport_work_global_type_own_constructor.log.out	-	Error at line
@@ -219,19 +219,19 @@ transport_work_global_type_own.log.out	-	the transport pass stops
 transport_work_global_type_own.log.out	+	Done!
 transport_work_global_type_own.log.out	-	Error at line
 transport_work_dependent_own_deps.log.out	-	Error at line
-transport_work_dependent_own_binder.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 28332 steps
+transport_work_dependent_own_binder.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25033 steps
 transport_work_dependent_own_binder.log.out	-	argument(s) transported
 transport_work_dependent_own_binder.log.out	+	Done!
 transport_work_dependent_own_binder.log.out	-	Error at line
-transport_work_dependent_own_dom.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 28332 steps
+transport_work_dependent_own_dom.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25033 steps
 transport_work_dependent_own_dom.log.out	-	argument(s) transported
 transport_work_dependent_own_dom.log.out	+	Done!
 transport_work_dependent_own_dom.log.out	-	Error at line
-transport_work_dependent_own_tail.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 28332 steps
+transport_work_dependent_own_tail.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25033 steps
 transport_work_dependent_own_tail.log.out	-	argument(s) transported
 transport_work_dependent_own_tail.log.out	+	Done!
 transport_work_dependent_own_tail.log.out	-	Error at line
-transport_work_dependent_own_copy.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 28332 steps
+transport_work_dependent_own_copy.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25033 steps
 transport_work_dependent_own_copy.log.out	-	argument(s) transported
 transport_work_dependent_own_copy.log.out	+	Done!
 transport_work_dependent_own_copy.log.out	-	Error at line
@@ -240,11 +240,11 @@ transport_work_dependent_own.log.out	-	the transport pass stops
 transport_work_dependent_own.log.out	+	Done!
 transport_work_dependent_own.log.out	-	Error at line
 transport_work_alias_own_deps.log.out	-	Error at line
-transport_work_alias_own_expose.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 28250 steps
+transport_work_alias_own_expose.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 24943 steps
 transport_work_alias_own_expose.log.out	-	argument(s) transported
 transport_work_alias_own_expose.log.out	+	Done!
 transport_work_alias_own_expose.log.out	-	Error at line
-transport_work_alias_own_head.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 28250 steps
+transport_work_alias_own_head.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 24943 steps
 transport_work_alias_own_head.log.out	-	argument(s) transported
 transport_work_alias_own_head.log.out	+	Done!
 transport_work_alias_own_head.log.out	-	Error at line
@@ -253,7 +253,7 @@ transport_work_alias_own.log.out	-	the transport pass stops
 transport_work_alias_own.log.out	+	Done!
 transport_work_alias_own.log.out	-	Error at line
 transport_work_result_own_deps.log.out	-	Error at line
-transport_work_result_own_result.log.out	+	line 11982: RLI434W.result_own: the transport pass stops: it needs more than 28527 steps
+transport_work_result_own_result.log.out	+	line 11982: RLI434W.result_own: the transport pass stops: it needs more than 25220 steps
 transport_work_result_own_result.log.out	-	argument(s) transported
 transport_work_result_own_result.log.out	+	Done!
 transport_work_result_own_result.log.out	-	Error at line

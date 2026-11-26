@@ -23,16 +23,25 @@ val add_size : int option -> int option -> int option
 
 type 'a memo
 (** A fixed-slot physical memo: 512 slots, each empty or holding one term with its result, the array allocated
-    by the first write. A term goes to the slot [Hashtbl.hash_param 10 100 term land 511]; a read compares the
-    term held there with [==] only, a write replaces what the slot holds (no probing, resizing or structural
+    by the first write. A term goes to a slot chosen by a bounded hash of the term (at most 10 nodes that carry
+    a value among at most 100 visited, a constant cost per node), which reads no module path and no universe,
+    so that the same export costs the same steps in whatever file imports it; a read compares the term held
+    there with [==] only, a write replaces what the slot holds (no probing, resizing or structural
     comparison). A term whose result was replaced is computed again, at its full charge. *)
 
 val memo : unit -> 'a memo
 
 type ('k, 'a) table
-(** A chained hash table of keys that carry their own hash (Rocq's names). It never evicts. *)
+(** A chained hash table of keys with their hash. It never evicts. *)
 
 val table : ('k -> int) -> ('k -> 'k -> bool) -> ('k, 'a) table
+
+val user_constant_hash : Names.Constant.t -> int
+val canonical_constant_hash : Names.Constant.t -> int
+val user_ind_hash : Names.inductive -> int
+val user_globref_hash : Names.GlobRef.t -> int
+(** The hashes for a table keyed by [UserOrd] (or [CanOrd] for [canonical_constant_hash]): by the label of the
+    name, which is the Lean name, never its module path (the importing file's library). *)
 
 type t = {
   genv : Environ.env;  (** the environment the pass reads declarations from *)
@@ -126,13 +135,16 @@ val apply_lambdas : t -> int -> fits:int -> Constr.t -> Constr.t array -> (Const
     argument (one step each, at most [fits] of them), with one substitution of the [k] arguments taken, and the
     rest applied: the term and [k]; [None] when [f] would take more than [fits]. *)
 
-val whd : t -> Environ.env -> int -> int -> Constr.t -> (int * Constr.t * Constr.t array) option
-(** [whd ch env depth n c]: [c] reduced at its head, [n] steps taken before, by unfolding a transparent
+val whd :
+  ?stop:(Constr.t -> bool) -> t -> Environ.env -> int -> int -> Constr.t -> (int * Constr.t * Constr.t array) option
+(** [whd ?stop ch env depth n c]: [c] reduced at its head, [n] steps taken before, by unfolding a transparent
     constant, beta, zeta, a cast, a local definition of [env] and the projection of a constructor's field (no
-    match or fixpoint), each step and each substitution and copy charged: the steps after, and the head and
-    arguments where it stops. A projection's step is counted before its subject is reduced, one nesting level
-    deeper. [None] at a projection of anything but a constructor, or once the term would take more than
-    [max_head_steps] steps (the count checked before each step's substitution). *)
+    match or fixpoint), each step and each substitution and copy charged, until [stop] holds of the term (default:
+    never): the steps after, and the head and arguments where it stops. [stop] is tested at each step, after its
+    step, nesting and count are checked and before it reduces anything, and never on a projection's subject. A
+    projection's step is counted before its subject is reduced, one nesting level deeper. [None] at a projection
+    of anything but a constructor, or once the term would take more than [max_head_steps] steps (the count
+    checked before each step's substitution). *)
 
 val nf_beta : t -> int -> Constr.t -> Constr.t
 (** The beta normal form, by its syntax (no constant unfolded), each walk and contraction charged. *)
