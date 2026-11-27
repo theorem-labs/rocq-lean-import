@@ -638,12 +638,17 @@ declarations it reads once per entry (one relevant `Nat` argument). A
 literal holds no other node, so the walk of the entry's value takes it
 whole: a step for the node and one for the walk's own memo of literals
 (its own, so that the walk changes no charge of literal arithmetic or
-of an argument); at a miss (every unary literal of 10 or more has the
-same slot, since the hash reads only its first ten `Nat_succ`), a step
-for each of the 16 literals the walk met last that it compares, and
-only if it is none of them a step per `Nat_succ` and `Nat_double` of
-the literal. A run of `Nat_succ` that is no literal is walked in one
-loop to its base.
+of an argument), and one more to keep its answer at a miss; at a miss
+(every unary literal of 10 or more has the same slot, since the hash
+reads only its first ten `Nat_succ`), a step for each of the at most 16
+literals of 16 levels or more the walk met last that it compares, and,
+only if it is none of them, a step per `Nat_succ` and `Nat_double` of
+the literal. A literal found among them moves first, and a literal of
+16 levels or more walked at a miss is kept first: a step for it and one
+for each literal moved one place. A run of `Nat_succ` that is no
+literal is asked once whether it is a literal (a step per level to the
+point where it is none), then walked in one loop to its base (a step per
+level), the base walked once.
 
 Limits: only on the new path; only proof (`SProp`) positions. A
 mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size

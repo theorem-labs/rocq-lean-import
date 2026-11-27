@@ -15,9 +15,11 @@ From LeanImport Require Import Lean.
      6,091 (the lemma of walk_lits read from the cache). At 16,837 the pass stops at the entry's own part; at
      16,838 it casts.
    - walk_open (line 1403): l holds x under 600 Nat.succ, a run of Nat_succ that is no literal (its base is the
-     entry's variable x), walked in one loop: the entry's own part needs 2,818 steps, its argument 6,091. At 6,090
-     the pass stops at the argument, at 6,091 and at the default it casts; a walk that asked each suffix of the run
-     whether it is a literal would pay a step per level of each suffix, and stop at 6,091.
+     entry's variable x), walked in one loop: the entry's own part needs 2,818 steps, its argument 6,091 (the lemma of
+     walk_lits read from the cache, as for walk_limit). At 6,090 the pass stops at the argument, at 6,091 and at the
+     default it casts; a walk that asked each suffix of the run whether it is a literal would pay a step per level of
+     each suffix, and stop at 6,091. At the src/ of the fix's parent walk_lits stops first, so walk_open's argument
+     finds no cached lemma and needs more: its red there is walk_lits's, not its own.
    Each limit row runs under Succeed, which undoes the import, so that the next row imports the same entry again.
    tests/transport_walk.expect checks the logs. *)
 Set Warnings "+unknown-option".
