@@ -11,8 +11,10 @@
 #
 # Inventory (tests/lean434_features.txt): the base_entry and own_entry columns of a row name the Lean entry its test
 # fails at, "option:<option name>" (a failure at the test's Set line of that option), or "check:rocqchk" (the
-# rocqchk step of tests/Makefile refuses the test's .vo: its stderr line "ROCQCHK FAIL: tests/<name>.vo: ..."; the
-# test must be in ROCQCHK_TESTS of tests/Makefile). Any other "check:" kind fails the inventory checks.
+# rocqchk step of tests/Makefile refuses the test's .vo: its stderr line "ROCQCHK FAIL: tests/<name>.vo: ...", which
+# the verdict line "R5 NEGATIVE MET" then ends with; its line "ROCQCHK MISSING: tests/<name>.vo: ...", a .vo the make
+# did not write, never meets it; the test must be in ROCQCHK_TESTS of tests/Makefile). Any other "check:" kind fails
+# the inventory checks.
 #
 # Exit status: 0 success; 1 a check, the build or a test failed; 2 usage error. --source-at: 3 a bad commit
 # or test (or any other setup failure), 4 the plugin build failed, otherwise the test's own status.
@@ -127,10 +129,11 @@ fail() {
   exit "$FAIL_CODE"
 }
 
-# <test> <entry> <parent commit>: print the verdict of a --revert-fix control whose parent side failed as its row or
-# its r5 lines say, and exit 0; main is its only caller.
+# <test> <entry> <parent commit> [<the log line that met it>]: print the verdict of a --revert-fix control whose
+# parent side failed as its row or its r5 lines say, the line after ": " when given, and exit 0; main is its only
+# caller.
 negative_met() {
-  printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$1" "$2" "$3"
+  printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)%s\n' "$1" "$2" "$3" "${4:+: $4}"
   exit 0
 }
 
@@ -161,16 +164,16 @@ project_tests() { # <root>: the .v files tests/_CoqProject lists, as tests/<name
   return 0
 }
 
-# <root>: the names in the ROCQCHK_TESTS assignment of tests/Makefile (the line "ROCQCHK_TESTS :=" or "=", and the
-# lines a trailing backslash continues it with; a "#" starts a comment), one per line; nothing without that file or
-# that line.
+# <root>: the names in the ROCQCHK_TESTS assignment of tests/Makefile (its first line "ROCQCHK_TESTS :=", and the
+# lines a trailing backslash continues it with; a "#" starts a comment; an assignment with "=" or "+=" is not read),
+# one per line; nothing without that file or that line.
 rocqchk_tests() {
   local line more=0
   local -a toks
   [[ -f $1/tests/Makefile ]] || return 0
   while IFS= read -r line || [[ -n $line ]]; do
     if ((!more)); then
-      [[ $line =~ ^ROCQCHK_TESTS[[:space:]]*:?=(.*)$ ]] || continue
+      [[ $line =~ ^ROCQCHK_TESTS[[:space:]]*:=(.*)$ ]] || continue
       line=${BASH_REMATCH[1]}
     fi
     line=${line%%#*}
@@ -1545,7 +1548,7 @@ main() {
       fi
       if [[ $expected == check:rocqchk ]]; then
         rocqchk_failure_line "$log" "$name"
-        if [[ -n $ROCQCHK_LINE ]]; then negative_met "$test_arg" "$expected" "$parent_src"; fi
+        if [[ -n $ROCQCHK_LINE ]]; then negative_met "$test_arg" "$expected" "$parent_src" "$ROCQCHK_LINE"; fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at the rocqchk step of tests/Makefile (no line 'ROCQCHK FAIL: tests/$name.vo: ...' in its log); its row names $expected ($at)"
       fi
       if [[ $actual == "$expected" ]]; then negative_met "$test_arg" "$expected" "$parent_src"; fi

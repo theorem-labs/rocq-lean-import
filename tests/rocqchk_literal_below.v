@@ -2,11 +2,10 @@ From Stdlib Require Import NArith.
 From LeanImport Require Import Lean.
 From Test Require Import rocqchk_literal_form.
 
-(* Natural literals below 2^62 and refused ones, from dumps/lean434/rocqchk_literal.ndjson (tests/Makefile runs
-   rocqchk on this test's .vo, ROCQCHK_TESTS). The importer keeps a literal as the decimal string of its value
-   (src/leanExpr.mli, Nat), and Lean Import stores its state in the .vo; below 2^62 a Zarith value was an immediate
-   int, so rocqchk read this .vo before that change too. The literals 2^62 and 2^62 + 1 are tests/rocqchk_literal.v
-   and tests/rocqchk_literal_over.v. tests/rocqchk_literal_below.expect checks the logs. *)
+(* Natural literals below 2^62 and refused ones, from dumps/lean434/rocqchk_literal.ndjson; tests/Makefile runs
+   rocqchk on this test's .vo (ROCQCHK_TESTS), which rocqchk read before literals were strings too (why they are:
+   lean_obj in src/lean.ml). The literals 2^62 and 2^62 + 1 are tests/rocqchk_literal.v and
+   tests/rocqchk_literal_over.v. tests/rocqchk_literal_below.expect checks the logs. *)
 Set Lean Error Mode "Skip".
 (* Lines 1-76: Nat, then a def of type Nat per literal: 0, 1, 4999, 5000, 2^62 - 1, "7", "007" and the JSON
    integer 7. *)

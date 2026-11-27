@@ -30,16 +30,14 @@ goal_tests = $(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all))
 EXPECTS = $(addsuffix .expect,$(call goal_tests,$(EXPECT_TESTS)))
 UNLISTED_EXPECTS = $(filter-out $(EXPECT_TESTS:=.expect),$(wildcard *.expect))
 
-# The tests whose .vo the suite checks with rocqchk (the cut's on CI) after the make. Lean Import stores the
-# importer's state in the .vo (src/lean.ml, lean_obj), and rocqchk reads only part of what OCaml's Marshal writes:
-# no custom block, which a Zarith number of 2^62 or more was (tests/rocqchk_literal*.v, and the literals 2^64 of
-# tests/core.v and tests/lean434_bigint.v). After each make of such a test (the goals of EXPECTS), rocqchk checks
-# its .vo with the load path of tests/_CoqProject and the flags of ci/build-9.2-cut.sh --check, its output in
-# <test>.rocqchk.log; a failure prints "ROCQCHK FAIL: tests/<test>.vo: <the log's first line that is not blank>" and
-# fails the make, and so does a test of the list whose .vo a make that passed did not write. Job
-# rqc-red-20261127t112336 ran this step at the cut (its rocqchk, its stack, the plugin before literals were strings):
-# rocqchk_literal_below passed; core, lean434_bigint, rocqchk_literal, rocqchk_literal_over and rocqchk_literal_text
-# failed with "Unhandled code 0018".
+# The tests whose .vo the suite checks with rocqchk (the cut's on CI) after the make, because Lean Import stores the
+# importer's state in the .vo, which rocqchk must read (src/lean.ml, lean_obj, says what it cannot read). After each
+# make of such a test (the goals of EXPECTS), rocqchk checks its .vo with the load path of tests/_CoqProject and the
+# flags of ci/build-9.2-cut.sh --check, its output in <test>.rocqchk.log. A failure prints "ROCQCHK FAIL:
+# tests/<test>.vo: <the log's first line that is not blank>" and fails the make; a test of the list whose .vo a make
+# that passed did not write prints "ROCQCHK MISSING: tests/<test>.vo: ..." and fails it. ci/build-9.2-cut.sh
+# (rocqchk_tests) reads this list for the inventory's check:rocqchk rows: the line "ROCQCHK_TESTS :=" and the lines
+# a trailing backslash continues it with, and no other assignment to ROCQCHK_TESTS.
 ROCQCHK_TESTS := core lean434_bigint rocqchk_literal rocqchk_literal_below rocqchk_literal_over rocqchk_literal_text
 ROCQCHKS = $(call goal_tests,$(ROCQCHK_TESTS))
 
@@ -64,7 +62,7 @@ submake: Makefile.rocq
 	      first=$$(sed -n '/[^[:space:]]/{p;q;}' "$$t.rocqchk.log"); \
 	      echo "ROCQCHK FAIL: tests/$$t.vo: $${first:-no output}" >&2; failed=1; }; \
 	  elif [ $$status -eq 0 ]; then \
-	    echo "ROCQCHK FAIL: tests/$$t.vo: no such file after the make (is $$t.v in tests/_CoqProject?)" >&2; failed=1; \
+	    echo "ROCQCHK MISSING: tests/$$t.vo: no such file after the make (is $$t.v in tests/_CoqProject?)" >&2; failed=1; \
 	  fi; \
 	done; \
 	for spec in $(UNLISTED_EXPECTS); do \

@@ -3,7 +3,7 @@
 # runs self_test. It reads the settings and helpers of that script (SELF, SETTINGS, SCRIPT_REL, INVENTORY, ...).
 
 # ---- Self-test ------------------------------------------------------------------------------------------------
-# One row per rule of ci/build-9.2-cut.sh (S0 to S24d, S7l-A2 to S7l-A8e and V1 to V16), stated in the comments
+# One row per rule of ci/build-9.2-cut.sh (S0 to S27, S7l-A2 to S7l-A8e and V1 to V16), stated in the comments
 # below. Each case of a row runs on its own copy of a scratch git repository (made with git init and real commits
 # under a mktemp -d of $TMPDIR), through a copy of the script with the stubs its "Self-test stubs" section
 # describes. A row passes only when every one of its cases shows the exit status and the lines or files the row
@@ -154,6 +154,11 @@ case $ST_OUTCOME in
     # The test compiles, and the rocqchk step of tests/Makefile refuses tests/<name>.vo, <name> the outcome's: the
     # line that step prints.
     printf 'ROCQCHK FAIL: tests/%s.vo: Unhandled code 0018\n' "${ST_OUTCOME#rocqchk:}" >&2
+    exit 2 ;;
+  rocqchk-missing:*)
+    # A make that passed left no tests/<name>.vo: the line the rocqchk step of tests/Makefile prints then.
+    printf 'ROCQCHK MISSING: tests/%s.vo: no such file after the make (is %s.v in tests/_CoqProject?)\n' \
+      "${ST_OUTCOME#rocqchk-missing:}" "${ST_OUTCOME#rocqchk-missing:}" >&2
     exit 2 ;;
   build-fail)
     printf 'File "src/lean.ml", line 1, characters 0-5:\nError: Unbound value planted_build_error\n'
@@ -329,24 +334,27 @@ st_fx() { # <file> <text, printf %b>: a file of the case's play:<status> outcome
   printf '%b' "$2" >"$ST_CASE/fx/$1" || st_bad "cannot write fx/$1"
 }
 
-st_r5_test() { # <name> <entry>: tests/<name>.v from stdin, listed in tests/_CoqProject, its row fixed by fix a
+st_fixed_test() { # <name> <features> <base_entry> <own_entry>: tests/<name>.v from stdin, listed in tests/_CoqProject,
+  # and its row in the inventory, fixed by fix a (no commit)
   { cat >"$ST_REPO/tests/$1.v" && printf '%s.v\n' "$1" >>"$ST_REPO/tests/_CoqProject" &&
     st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" \
-      "$(st_tsv "tests/$1.v" F9 "$2" - fixed "$ST_FIX_A" -)" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
+      "$(st_tsv "tests/$1.v" "$2" "$3" "$4" fixed "$ST_FIX_A" -)" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
+}
+
+st_r5_test() { # <name> <entry>: st_fixed_test with that base entry, committed
+  st_fixed_test "$1" F9 "$2" -
   st_commit "test $1"
 }
 
-st_chk_test() { # <name> <base_entry> <own_entry> <listed|unlisted|none>: tests/<name>.v from stdin, listed in
-  # tests/_CoqProject, its row fixed by fix a, and a stand-in tests/Makefile: with "listed" its ROCQCHK_TESTS names the
-  # test on a line that continues the assignment, before a comment; with "unlisted" it names a longer name only, and
-  # a commented-out line names the test; with "none" there is no tests/Makefile
+st_chk_test() { # <name> <base_entry> <own_entry> <listed|unlisted|none>: st_fixed_test, and a stand-in tests/Makefile,
+  # committed: with "listed" its ROCQCHK_TESTS := names the test on a line that continues the assignment, before a
+  # comment; with "unlisted" an assignment with "=" names the test, the ":=" after it a longer name only, and a
+  # commented-out line names the test; with "none" there is no tests/Makefile
   local mk=$ST_REPO/tests/Makefile
-  { cat >"$ST_REPO/tests/$1.v" && printf '%s.v\n' "$1" >>"$ST_REPO/tests/_CoqProject" &&
-    st_inventory "$ST_ROW_A" "$ST_ROW_B" "$ST_ROW_C" "$ST_ROW_OPT" \
-      "$(st_tsv "tests/$1.v" F10 "$2" "$3" fixed "$ST_FIX_A" -)" >"$ST_REPO/$INVENTORY"; } || st_bad "cannot write tests/$1.v"
+  st_fixed_test "$1" F10 "$2" "$3"
   case $4 in
     listed) printf 'EXPECT_TESTS := %s\nROCQCHK_TESTS := other_a \\\n  other_b %s # the test\n' "$1" "$1" >"$mk" ;;
-    unlisted) printf 'ROCQCHK_TESTS := other_a \\\n  %s_x\n# ROCQCHK_TESTS += %s\n' "$1" "$1" >"$mk" ;;
+    unlisted) printf 'ROCQCHK_TESTS = %s\nROCQCHK_TESTS := other_a \\\n  %s_x\n# ROCQCHK_TESTS += %s\n' "$1" "$1" "$1" >"$mk" ;;
     none) rm -f -- "$mk" ;;
   esac || st_bad "cannot write $mk"
   st_commit "check test $1"
@@ -1004,10 +1012,11 @@ EOF
 
   # S7o: a row whose entry is check:rocqchk (both columns) is decided by the rocqchk step of tests/Makefile:
   # --revert-fix passes when the head side passes and the parent side's log has the line "ROCQCHK FAIL:
-  # tests/<name>.vo: ..." that the step prints for the test, and names the parent; it fails when the parent side
-  # passes, when it fails at an entry with no such line, when the line is another test's, and when the head side
+  # tests/<name>.vo: ..." that the step prints for the test, and its verdict line names the parent and ends with that
+  # line; it fails when the parent side passes, when it fails at an entry with no such line, when the line is another
+  # test's, when the line is "ROCQCHK MISSING: tests/<name>.vo: ..." (the make wrote no .vo), and when the head side
   # fails; r5 lines in the test of a check row fail it before the test runs.
-  for v in met pass entry other-vo head r5; do
+  for v in met pass entry other-vo missing head r5; do
     st_new "S7o/$v"
     if [[ $v == r5 ]]; then
       st_chk_test case_k check:rocqchk check:rocqchk listed <<<"$(printf '%s\n' 'Redirect "case_k.log" Lean Import "x".' \
@@ -1021,12 +1030,13 @@ EOF
       pass) st_revert pass tests/case_k.v ;;
       entry) st_revert fail:K.one tests/case_k.v ;;
       other-vo) st_revert rocqchk:case_kk tests/case_k.v ;;
+      missing) st_revert rocqchk-missing:case_k tests/case_k.v ;;
       head) st_revert rocqchk:case_k tests/case_k.v ST_OUTCOME_HEAD=rocqchk:case_k ;;
     esac
     case $v in
       met)
         st_rc zero
-        st_line "R5 NEGATIVE MET: tests/case_k.v at check:rocqchk (src/ of $ST_BASE)"
+        st_line "R5 NEGATIVE MET: tests/case_k.v at check:rocqchk (src/ of $ST_BASE): ROCQCHK FAIL: tests/case_k.vo: Unhandled code 0018"
         st_two_calls 131072 131072 'src at head' 'src at base'
         st_tree_untouched "$head"
         ;;
@@ -1039,7 +1049,7 @@ EOF
         st_has 'R5 negative not met: the test fails at K.one, not at the rocqchk step of tests/Makefile'
         st_has "its row names check:rocqchk ($at_a)"
         ;;
-      other-vo)
+      other-vo | missing)
         st_rc nonzero
         st_has "not at the rocqchk step of tests/Makefile (no line 'ROCQCHK FAIL: tests/case_k.vo: ...' in its log)"
         ;;
@@ -1167,10 +1177,11 @@ EOF
   st_row S12
 
   # S12b: an entry "check:<kind>" other than check:rocqchk, in either entry column, fails the inventory checks and
-  # names its line and the kind; so does a check:rocqchk row whose test ROCQCHK_TESTS of tests/Makefile does not name
-  # (a longer name or a commented-out line names it not; a head without tests/Makefile names nothing), plain and
-  # with --handoff; no test runs. A check:rocqchk row whose test the assignment names on a continued line, before a
-  # comment, passes the checks, and the suite runs.
+  # names its line and the kind; so does a check:rocqchk row whose test the "ROCQCHK_TESTS :=" assignment of
+  # tests/Makefile does not name (an assignment with "=" before it, which ":=" overrides, a longer name and a
+  # commented-out line name it not; a head without tests/Makefile names nothing), plain and with --handoff; no test
+  # runs. A check:rocqchk row whose test the assignment names on a continued line, before a comment, passes the
+  # checks, and the suite runs.
   for v in unknown-own unknown-base unlisted unlisted-handoff no-makefile listed; do
     st_new "S12b/$v"
     case $v in
