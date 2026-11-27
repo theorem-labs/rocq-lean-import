@@ -13,7 +13,12 @@ import Init
      4,096,000 unary levels.
    - `walk_limit`: the same with 160 times each, for the rows at the entry's largest part.
    - `walk_open`: `l` holds `x` under 600 applications of `Nat.succ`, a run of `Nat_succ` that is no
-     literal (its base is a variable of the entry). -/
+     literal (its base is a variable of the entry).
+   - `walk_rebuild`: the cast is inside a run of `Nat_succ` that is no literal: `kf 0 h` (whose second argument
+     is expected at `2 ^ 40 = 2 ^ 40`) under 20 applications of `Nat.succ`, the argument of a redex whose value
+     is `True.intro`, so that the cast of `h` changes the run's base and the walk rebuilds the run.
+   - `walk_evict`: `l` holds the 17 literals `1000` to `1016` in turn, then `1001` to `1016` twice: more than
+     the 16 literals the walk keeps, so that the first pass drops `1000`, the least recently met. -/
 namespace RLI434Wk
 
 theorem walk_lits (h : 549755813888 + 549755813888 = 1099511627776) : 1099511627776 = 1099511627776 :=
@@ -90,5 +95,22 @@ set_option maxHeartbeats 2000000 in
 theorem walk_open (x : Nat) (h : 549755813888 + 549755813888 = 1099511627776) : 1099511627776 = 1099511627776 :=
   (fun (_ : List Nat) => h) [
     x.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ]
+
+def kf (n : Nat) (_ : 1099511627776 = 1099511627776) : Nat := n
+
+theorem walk_rebuild (h : 549755813888 + 549755813888 = 1099511627776) : True :=
+  (fun (_ : Nat) => True.intro)
+    (kf 0 h).succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ.succ
+
+-- written with `::`, not `[...]`: Lean elaborates a list literal of this length with `let`s over its chunks, which
+-- the walk meets out of the list's order
+theorem walk_evict (h : 549755813888 + 549755813888 = 1099511627776) : 1099511627776 = 1099511627776 :=
+  (fun (_ : List Nat) => h) (
+    1000 :: 1001 :: 1002 :: 1003 :: 1004 :: 1005 :: 1006 :: 1007 :: 1008 :: 1009 :: 1010 :: 1011 :: 1012 ::
+    1013 :: 1014 :: 1015 :: 1016 ::
+    1001 :: 1002 :: 1003 :: 1004 :: 1005 :: 1006 :: 1007 :: 1008 :: 1009 :: 1010 :: 1011 :: 1012 :: 1013 ::
+    1014 :: 1015 :: 1016 ::
+    1001 :: 1002 :: 1003 :: 1004 :: 1005 :: 1006 :: 1007 :: 1008 :: 1009 :: 1010 :: 1011 :: 1012 :: 1013 ::
+    1014 :: 1015 :: 1016 :: [])
 
 end RLI434Wk
