@@ -22,6 +22,7 @@ tests/parse_text_recovery_prefix.v	text-saved-numbered-record-recovery	RLITextAf
 tests/parse_text_numbering.v	text-numbered-sequence-check	RLITextAfterGaps	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
 tests/parse_wrong_payload.v	ndjson-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
 tests/parse_wrong_payload_prefix.v	ndjson-prefix-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/entry_timeout_parse.v	ndjson-negative-id	option:Lean Entry Timeout	line-132	fixed	c17da2641ba58527c8c0b3536a0af12df1fa8c5b	-
 tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
 tests/uint32_transport_ofnatlt.v	uint32-ofnatlt-transport	BitVec.ofNatLT	UInt32.ofNatLT	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
 tests/uint32_transport_shiftleft.v	uint32-shiftleft-transport	Nat.pow_pos._f	UInt32.toNat_shiftLeft	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
