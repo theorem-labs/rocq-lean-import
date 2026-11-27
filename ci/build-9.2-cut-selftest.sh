@@ -7,7 +7,8 @@
 # below. Each case of a row runs on its own copy of a scratch git repository (made with git init and real commits
 # under a mktemp -d of $TMPDIR), through a copy of the script with the stubs its "Self-test stubs" section
 # describes. A row passes only when every one of its cases shows the exit status and the lines or files the row
-# names.
+# names. Rows S25 to S27 (st_repo_rows) read the repository that holds this file instead: its tests' Redirect logs,
+# the inputs of build_switch and the workflow.
 
 ST_MEMBERS=(Eq Nat Nat.le Or And Fin UInt32 BitVec Char ULift UInt32.size Nat.isValidChar Nat.pow)
 ST_ROOT='' ST_CASE='' ST_REPO='' ST_LABEL='' ST_WHY='' ST_RC=0 ST_N=0 ST_PASS=0 ST_FAIL=0
@@ -181,6 +182,15 @@ case $ST_OUTCOME in
       while IFS= read -r f; do chmod 000 -- "$2/tests/$f"; done <"$ST_FX/unreadable"
     fi
     exit "${ST_OUTCOME#play:}" ;;
+  expect)
+    # The case filled ST_FX with the Redirect logs of the test: each goes to tests/ of the tree, and the tree's own
+    # tests/check_expect.py checks tests/<test name>.expect on them, as tests/Makefile does after a compile. Its
+    # lines are in the run's output, and its status is the test's.
+    for f in "$ST_FX"/*; do
+      if [[ -f $f ]]; then cp -- "$f" "$2/tests/"; fi
+    done
+    python3 "$2/tests/check_expect.py" "$2/tests/$3.expect"
+    exit ;;
   *) echo "stub: unknown ST_OUTCOME '$ST_OUTCOME'" >&2; exit 99 ;;
 esac
 EOF
@@ -236,7 +246,7 @@ EOF
 st_template() { # the repository every case copies: base, three fix commits, then the head with the inventory
   local t=$ST_ROOT/template f
   mkdir -p "$t/ci" "$t/src" "$t/tests" "$t/dumps" || return 1
-  cp -- "$SELF" "$t/$SCRIPT_REL" && cp -- "$SETTINGS" "$t/ci/" || return 1
+  cp -- "$SELF" "$t/$SCRIPT_REL" && cp -- "$SETTINGS" "$t/ci/" && cp -- "$ROOT/tests/check_expect.py" "$t/tests/" || return 1
   st_lean_ml >"$t/src/lean.ml"
   printf 'src at base\n' >"$t/src/marker"
   printf '# stand-in\n' >"$t/Makefile"
@@ -927,6 +937,50 @@ EOF
   done
   st_row S7k
 
+  # S7m: an "r5 assertion" line whose text holds a ' or a \ is met by the failure tests/check_expect.py itself prints:
+  # the stub's expect outcome runs the check_expect.py of the tree on the parent side's log, and its line
+  # "unexpected '<text>'" holds the text as it is, between plain single quotes, as expect_failure_seen reads it.
+  local q entry
+  for v in quote backslash; do
+    st_new "S7m/$v"
+    if [[ $v == quote ]]; then entry="Q.mk'" q="Q.mk' cannot be declared"; else entry=Q.mk q='Q.mk reads C:\lean\x'; fi
+    printf 'case_q.log.out\t-\t%s\n' "$q" >"$ST_REPO/tests/case_q.expect"
+    st_r5_test case_q "$entry" <<<"(* r5 assertion: \"case_q.log\" $q *)"$'\n''Redirect "case_q.log" Lean Import "../dumps/small.ndjson".'
+    printf 'line 7: %s\n%s\nDone!\n' "$entry" "$q" >"$ST_CASE/fx/case_q.log.out"
+    st_revert expect tests/case_q.v
+    st_rc zero
+    st_line "EXPECT FAIL: tests/case_q.expect:1: case_q.log.out: unexpected '$q'"
+    st_line "R5 NEGATIVE MET: tests/case_q.v at $entry (src/ of $ST_BASE)"
+  done
+  st_row S7m
+
+  # S7n: a commented-out Redirect is no Redirect for any reader of REDIRECT_RE: --revert-fix does not read the log a
+  # commented-out Redirect would write (redirect_logs), a planted line followed only by a commented-out Redirect has
+  # no case (planted_cases), and an r5 line that names only a commented-out Redirect is bad (r5_lines).
+  st_new S7n/redirect-logs
+  printf '%s\n' '(* Redirect "lean434_a_old.log" Lean Import "../dumps/small.ndjson". *)' \
+    'Redirect "lean434_a.log" Lean Import "../dumps/small.ndjson".' >"$ST_REPO/tests/lean434_a.v"
+  st_commit "test a: a commented-out Redirect before its own"
+  st_revert 'redirect:lean434_a_old.log=Alpha.two lean434_a.log=Alpha.one' tests/lean434_a.v
+  st_rc zero
+  st_line "R5 NEGATIVE MET: tests/lean434_a.v at Alpha.one (src/ of $ST_BASE)"
+  st_new S7n/planted
+  printf '%s\n' '(* planted: Planted.hidden *)' '(* Redirect "planted_hidden.log" Lean Import "../dumps/small.ndjson". *)' \
+    >>"$ST_REPO/tests/planted_sa.v"
+  st_commit "a planted line followed only by a commented-out Redirect"
+  st_run ST_OUTCOME=source:0 -- --source-at "$ST_BASE" planted_sa
+  st_rc 3
+  st_has 'SOURCE-AT ERROR: tests/planted_sa.v line 18: no Redirect after the planted line of Planted.hidden'
+  st_not_ran
+  st_new S7n/r5
+  st_r5_test case_n N <<<"$(printf '%s\n' '(* Redirect "case_n.log" Lean Import "x". *)' '(* r5 log: "case_n.log" x *)' \
+    '(* r5 error: The reference N was not found *)' 'Check N.')"
+  st_revert fail:N tests/case_n.v
+  st_rc nonzero
+  st_has 'tests/case_n.v line 2: no Redirect "case_n.log" in the test'
+  st_not_ran
+  st_row S7n
+
   st_r5_header_rows
 
   # S8: --revert-fix of a test with no row fails; each mode with no argument or one short prints the usage and
@@ -955,18 +1009,30 @@ EOF
   st_not_ran
   st_row S9
 
-  # S9b: a switch whose Rocq commit cannot be read (missing, empty, not a file) fails, the cut is never
-  # assumed; no test runs.
-  for v in missing empty directory; do
+  # S9b: a switch whose Rocq commit cannot be read (missing, empty, not a file) is a build that did not finish,
+  # since build_switch writes that file once the switch is complete: the script builds the switch again (the
+  # self-test never builds one, so it fails there and names the unfinished switch), and --import, which never
+  # builds one, fails and says to unpack the root. The cut is never assumed; no test runs.
+  local unfinished
+  for v in missing empty directory import; do
     st_new "S9b/$v"
+    unfinished="the switch at $ST_CASE/cut/opam/cut is unfinished: $ST_CASE/cut/rocq-commit is missing, unreadable or empty"
     rm -f -- "$ST_CASE/cut/rocq-commit"
     case $v in
       empty) : >"$ST_CASE/cut/rocq-commit" ;;
       directory) mkdir -- "$ST_CASE/cut/rocq-commit" ;;
     esac
-    st_run --
+    if [[ $v == import ]]; then
+      work=$ST_CASE/work
+      mkdir -p -- "$work" && printf 'Check nat.\n' >"$work/Import.v"
+      st_run -- --import "$work/Import.v"
+      st_has "$unfinished; unpack the packed opam root at $ST_CASE/cut first"
+      [[ ! -e $work/Import.v.stack ]] || st_bad "a .stack file was written"
+    else
+      st_run --
+      st_has "$unfinished, and the self-test never builds one"
+    fi
     st_rc nonzero
-    st_has 'cannot read the Rocq commit of the switch'
     st_lacks "ROCQ COMMIT $CUT_ROCQ_COMMIT"
     st_not_ran
   done
@@ -1080,7 +1146,6 @@ EOF
   grep -qxF -e "$stack1" -- "$ST_CASE/err" || st_bad "the STACK line is not on stderr"
   [[ $(grep -nxF -e "$stack1" -- "$ST_CASE/err" | cut -d: -f1) -lt $(grep -nF 'STUB RUN-TEST' -- "$ST_CASE/err" | cut -d: -f1) ]] ||
     st_bad "the STACK line does not come before the test run"
-  work=$ST_CASE/work
   st_new S17/import
   st_set_stack "$ST_REPO/$SCRIPT_REL" none
   work=$ST_CASE/work
@@ -1117,8 +1182,10 @@ EOF
   st_not_ran
   st_row S17
 
-  # S18: CUT_STACK_KIB at or below the hard limit (the hard limit itself included) is set, read back and
-  # reported, for the suite, --import and --check; the setter lowers an unlimited hard limit to it.
+  # S18: CUT_STACK_KIB at or below the hard limit (the hard limit itself included) is asked for, read back and
+  # reported, for the suite, --import and --check. The read-back stub replaces the setter, stack_apply, which then
+  # does nothing; the stub reports the soft stack asked for and, for an unlimited hard limit, a hard limit lowered
+  # to it, as stack_apply sets them.
   st_new S18/suite
   st_set_stack "$ST_REPO/$SCRIPT_REL" 65536
   st_run --
@@ -1379,6 +1446,72 @@ EOF
   st_lacks 'SOURCE-AT TEST'
   st_lacks 'SOURCE-AT ACCEPTED'
   st_row S24c
+
+  st_repo_rows
+}
+
+# S25 to S27: rules on the repository that holds this file ($ROOT), read as it is, with no case and no stub.
+st_repo_rows() {
+  local f p line n=0 self=0 build=0 body w found wf=$ROOT/.github/workflows/build-9.2-cut.yml
+  local -a logs=()
+  local -A ignored=()
+
+  # S25: the log of each Redirect of a test, tests/<name>.out (redirect_logs), is a file that .gitignore ignores, so
+  # that a run of the suite leaves no file git status lists.
+  ST_LABEL=S25
+  for f in "$ROOT"/tests/*.v; do
+    while IFS= read -r p; do
+      if [[ -n $p ]]; then logs+=("$p"); fi
+    done <<<"$(redirect_logs "$f" tests)"
+  done
+  if ((${#logs[@]} == 0)); then
+    st_bad "no Redirect in $ROOT/tests/*.v"
+  else
+    found=$(printf '%s\n' "${logs[@]}" | git -C "$ROOT" check-ignore --stdin)
+    while IFS= read -r p; do
+      if [[ -n $p ]]; then ignored[$p]=1; fi
+    done <<<"$found"
+    for p in "${logs[@]}"; do
+      [[ -n ${ignored[$p]:-} ]] || st_bad "$p, the log of a Redirect of a test, is not ignored by git (.gitignore)"
+    done
+  fi
+  st_row S25
+
+  # S26: what build_switch builds the switch from is in ci/cut-settings.sh, the one file the workflow's cache key
+  # hashes: the text of build_switch (declare -f, without its comments) names no version, package or compiler
+  # option, and the settings give the OCaml configuration, the pins and the packages it installs.
+  ST_LABEL=S26
+  body=$(declare -f build_switch)
+  if [[ $body =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then st_bad "build_switch names the version ${BASH_REMATCH[0]}"; fi
+  for w in flambda naked_pointers rocq-runtime rocq-core coq-core coqide-server coq-stdlib rocq-stdlib dune yojson; do
+    [[ $body != *"$w"* ]] || st_bad "build_switch names $w"
+  done
+  for w in OCAML_SWITCH_CONFIG ROCQ_SOURCE_PINS VERSION_PINS SWITCH_INSTALL; do
+    grep -q "^$w=" -- "$SETTINGS" || st_bad "$SETTINGS sets no $w"
+  done
+  st_row S26
+
+  # S27: the workflow runs this self-test before the build: its step "run: ci/build-9.2-cut.sh --self-test" comes
+  # before its step "run: ci/build-9.2-cut.sh".
+  ST_LABEL=S27
+  if [[ -f $wf ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+      n=$((n + 1))
+      line=${line#"${line%%[![:space:]]*}"} line=${line%"${line##*[![:space:]]}"}
+      if [[ $line == 'run: ci/build-9.2-cut.sh --self-test' ]] && ((!self)); then self=$n; fi
+      if [[ $line == 'run: ci/build-9.2-cut.sh' ]] && ((!build)); then build=$n; fi
+    done <"$wf"
+    if ((!self)); then
+      st_bad "no step of $wf runs ci/build-9.2-cut.sh --self-test"
+    elif ((!build)); then
+      st_bad "no step of $wf runs ci/build-9.2-cut.sh"
+    elif ((self > build)); then
+      st_bad "$wf runs the self-test (line $self) after the build (line $build)"
+    fi
+  else
+    st_bad "no $wf"
+  fi
+  st_row S27
 }
 
 st_h_case() { # <label> <test file text> <run's log, printf %b> <case_h.log.out, printf %b, or - for none>: a case whose

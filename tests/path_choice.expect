@@ -54,34 +54,31 @@ path_choice_no_lean.log.out	+	Done!
 path_choice_no_lean.log.out	-	Error at line
 path_choice_no_lean.log.out	+	BitVec is predeclared
 path_choice_no_lean.log.out	-	BitVec.(field).toFin
-path_choice_no_lean.log.out	+	lean
+path_choice_no_lean.log.out	+	field lean is absent
 # no_version
 path_choice_no_version.log.out	+	Done!
 path_choice_no_version.log.out	-	Error at line
 path_choice_no_version.log.out	+	BitVec is predeclared
 path_choice_no_version.log.out	-	BitVec.(field).toFin
-path_choice_no_version.log.out	+	lean.version
+path_choice_no_version.log.out	+	field lean.version is absent
 # empty_version
 path_choice_empty_version.log.out	+	Done!
 path_choice_empty_version.log.out	-	Error at line
 path_choice_empty_version.log.out	+	BitVec is predeclared
 path_choice_empty_version.log.out	-	BitVec.(field).toFin
-path_choice_empty_version.log.out	+	lean.version
-path_choice_empty_version.log.out	+	""
+path_choice_empty_version.log.out	+	field lean.version is ""
 # numeric
 path_choice_numeric.log.out	+	Done!
 path_choice_numeric.log.out	-	Error at line
 path_choice_numeric.log.out	+	BitVec is predeclared
 path_choice_numeric.log.out	-	BitVec.(field).toFin
-path_choice_numeric.log.out	+	lean.version
-path_choice_numeric.log.out	+	434
+path_choice_numeric.log.out	+	field lean.version is 434
 # bad_version
 path_choice_bad_version.log.out	+	Done!
 path_choice_bad_version.log.out	-	Error at line
 path_choice_bad_version.log.out	+	BitVec is predeclared
 path_choice_bad_version.log.out	-	BitVec.(field).toFin
-path_choice_bad_version.log.out	+	lean.version
-path_choice_bad_version.log.out	+	nightly-2025-01-01
+path_choice_bad_version.log.out	+	field lean.version is "nightly-2025-01-01"
 # 4340
 path_choice_4340.log.out	+	Done!
 path_choice_4340.log.out	-	Error at line

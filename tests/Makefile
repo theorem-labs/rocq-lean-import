@@ -6,8 +6,9 @@ DUMPS := ../dumps
 
 # The tests whose Redirect logs <test>.expect checks (check_expect.py): after each make of such a test, its
 # .expect is checked, and a missing or empty one fails. Every .expect file must belong to a test named here.
-# A test whose Redirect logs nothing checks (path_deferred_saved.v, the library tests/path_deferred_reload.v
-# loads, and the tests of the base) has no .expect.
+# A test whose Redirect logs nothing checks has no .expect: for example path_deferred_saved.v, the library
+# tests/path_deferred_reload.v loads, lean434_stack.v, whose log only ci/build-9.2-cut.sh --revert-fix reads, and
+# the tests of the base.
 EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bitwise fin_transport_bitwise_absent \
   fin_transport_budget_name \
   fin_transport_ceiling fin_transport_charge fin_transport_lemma_refused fin_transport_nest fin_transport_refused \
@@ -32,7 +33,7 @@ UNLISTED_EXPECTS = $(filter-out $(EXPECT_TESTS:=.expect),$(wildcard *.expect))
 submake: Makefile.rocq
 	@for f in init stdlib lean434/strings; do \
 	  test -f $(DUMPS)/$$f.ndjson || \
-	    ( cd $(DUMPS) && python3 -c "from pathlib import Path; from zipfile import ZipFile; p = Path('$$f.ndjson.zip'); ZipFile(p).extractall(p.parent)" ) || exit; \
+	    ( cd $(DUMPS) && python3 -m zipfile -e $$f.ndjson.zip $$(dirname $$f) ) || exit; \
 	done
 	@status=0; failed=0; \
 	$(MAKE) $(MAKE_OPTS) -f Makefile.rocq ROCQ='python3 check_expect.py --rocq $(COQBIN)rocq' $(MAKECMDGOALS) || status=$$?; \

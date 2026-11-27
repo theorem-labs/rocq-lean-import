@@ -51,6 +51,9 @@ RT_BUILD_FAILED=125         # RUN_TEST's status when the plugin build, not the t
 UNKNOWN_OPTION_MSG='There is no flag or option with this name'
 STACK_ANCHOR='# The CUT_STACK_KIB=<integer> line, when a commit adds one, goes right below this line.'
 LFS_POINTER_HEAD='version https://git-lfs.github.com/spec/v1'
+# A Redirect command at the start of a line of a test, its name captured; a commented-out one is none, as for
+# REDIRECT in tests/check_expect.py. The one pattern of planted_cases, redirect_logs and r5_lines.
+REDIRECT_RE='^[[:space:]]*Redirect[[:space:]]+"([^"]+)"'
 
 # ---- Self-test stubs ------------------------------------------------------------------------------------------
 # --self-test runs copies of this script with CUT_SELF_TEST_STUBS=1 set; only then are the variables below
@@ -86,7 +89,8 @@ usage() {
   cat <<'EOF'
 Usage:
   ci/build-9.2-cut.sh
-      Check the inventory, build Rocq at the cut (once per $CUT_ROOT), build the plugin, run the suite.
+      Check the inventory, build Rocq at the cut (once per $CUT_ROOT, again after a build that did not
+      finish), build the plugin, run the suite.
   ci/build-9.2-cut.sh --handoff
       The same, and fail while an inventory row is still open.
   ci/build-9.2-cut.sh --revert-fix <test>
@@ -103,8 +107,9 @@ Usage:
       unknown) and each planted entry its own case accepted. Exit 3: bad commit or test, no rocq on PATH;
       4: plugin build failed; else the test's.
   ci/build-9.2-cut.sh --self-test
-      Check this script's rules (rows S0 to S24c, S7l-A2 to S7l-A8e and V1 to V16 of
-      ci/build-9.2-cut-selftest.sh) with stubs (needs git and bash only).
+      Check this script's rules (rows S0 to S27, S7l-A2 to S7l-A8e and V1 to V16 of
+      ci/build-9.2-cut-selftest.sh) with stubs, and the repository's Redirect logs, build settings and
+      workflow (needs git, bash and python3).
 Environment: CUT_ROOT (default /scratch/cs/cut) holds the opam root, the sources and the rocq-commit file
 (not read by --source-at); CUT_JOBS (default: nproc) is the build parallelism.
 EOF
@@ -114,6 +119,13 @@ EOF
 fail() {
   printf '%s%s\n' "$FAIL_PREFIX" "$*" >&2
   exit "$FAIL_CODE"
+}
+
+# <test> <entry> <parent commit>: print the verdict of a --revert-fix control whose parent side failed as its row or
+# its r5 lines say, and exit 0; main is its only caller.
+negative_met() {
+  printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$1" "$2" "$3"
+  exit 0
 }
 
 cleanup() {
@@ -559,7 +571,7 @@ step() { # <command...>: run one build step, naming it when it fails
 }
 
 build_switch() { # build the opam root at $OPAMROOT with the switch "cut" holding Rocq at the cut
-  local cmd pkg config
+  local cmd pkg pin version config line want=''
   local -a missing=()
   for cmd in gcc make m4 git rsync pkg-config python3 unzip tar patch; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
@@ -572,7 +584,7 @@ build_switch() { # build the opam root at $OPAMROOT with the switch "cut" holdin
     return 1
   fi
   ensure_opam || return 1
-  # The switch is missing, so whatever else is under the root is an earlier, unfinished build.
+  # The switch is missing or unfinished, so whatever else is under the root is an earlier, unfinished build.
   rm -rf -- "$OPAMROOT" "$CUT_ROOT/rocq-commit"
   step mkdir -p -- "$CUT_ROOT/src" || return 1
   shallow_fetch "$OPAM_REPOSITORY_URL" "$OPAM_REPOSITORY_COMMIT" "$CUT_ROOT/src/opam-repository" || return 1
@@ -583,21 +595,23 @@ build_switch() { # build the opam root at $OPAMROOT with the switch "cut" holdin
   step env -u OPAMSWITCH "$OPAM_BIN" option --global 'archive-mirrors=["https://opam.ocaml.org/cache"]' || return 1
   step env -u OPAMSWITCH "$OPAM_BIN" switch create cut --packages="$OCAML_SWITCH_PACKAGES" || return 1
   config=$("$OPAM_BIN" exec -- ocamlopt -config) || return 1
-  if ! grep -qx 'version: 4.14.2' <<<"$config" || ! grep -qx 'flambda: true' <<<"$config" ||
-    ! grep -qx 'naked_pointers: false' <<<"$config"; then
-    echo "the switch's ocamlopt -config does not report version 4.14.2, flambda true, naked_pointers false" >&2
-    return 1
-  fi
+  for line in "${OCAML_SWITCH_CONFIG[@]}"; do want+="${want:+, }${line/: / }"; done
+  for line in "${OCAML_SWITCH_CONFIG[@]}"; do
+    if ! grep -qxF -e "$line" <<<"$config"; then
+      echo "the switch's ocamlopt -config does not report $want" >&2
+      return 1
+    fi
+  done
   step "$OPAM_BIN" repo add --this-switch coq-released "$CUT_ROOT/src/rocq-opam/released" || return 1
   shallow_fetch "$CUT_ROCQ_REPO" "$CUT_ROCQ_COMMIT" "$CUT_ROOT/src/rocq" || return 1
-  # All five: an unpinned one resolves to the upstream release.
-  for pkg in rocq-runtime rocq-core coq-core coqide-server coq; do
+  for pkg in "${ROCQ_SOURCE_PINS[@]}"; do
     step "$OPAM_BIN" pin add -yn --with-version "$ROCQ_VERSION" "$pkg" "$CUT_ROOT/src/rocq" || return 1
   done
-  step "$OPAM_BIN" pin add -yn --kind=version coq-stdlib "$ROCQ_STDLIB_VERSION" || return 1
-  step "$OPAM_BIN" pin add -yn --kind=version rocq-stdlib "$ROCQ_STDLIB_VERSION" || return 1
-  step "$OPAM_BIN" pin add -yn --kind=version dune "$DUNE_VERSION" || return 1
-  step "$OPAM_BIN" install coq coq-stdlib yojson || return 1
+  for pin in "${VERSION_PINS[@]}"; do
+    read -r pkg version <<<"$pin"
+    step "$OPAM_BIN" pin add -yn --kind=version "$pkg" "$version" || return 1
+  done
+  step "$OPAM_BIN" install "${SWITCH_INSTALL[@]}" || return 1
   # `rocq --version` prints only 9.2+rc2 at this commit and at older ones: this file is the only record.
   git -C "$CUT_ROOT/src/rocq" rev-parse HEAD >"$CUT_ROOT/rocq-commit" || return 1
   step "$OPAM_BIN" clean -a -c -s --logs || return 1
@@ -882,18 +896,17 @@ option_failure_seen() {
 }
 
 # <test file>: the planted cases of the test, one fact per "(* planted: <name> *)" line, whose case is the first
-# Redirect command after it (a line starting Redirect "<redirect>"):
+# Redirect command after it (REDIRECT_RE):
 #   case<TAB><name><TAB><redirect>
 #   orphan<TAB><line no><TAB><name>    no Redirect follows the planted line
 planted_cases() {
   local line n=0 i planted_re='^[[:space:]]*\(\*[[:space:]]+planted:[[:space:]]+([^[:space:]]+)[[:space:]]+\*\)[[:space:]]*$'
-  local redirect_re='^[[:space:]]*Redirect[[:space:]]+"([^"]+)"'
   local -a pending=() marker_lines=()
   while IFS= read -r line || [[ -n $line ]]; do
     n=$((n + 1))
     if [[ $line =~ $planted_re ]]; then
       pending+=("${BASH_REMATCH[1]}") marker_lines+=("$n")
-    elif [[ $line =~ $redirect_re ]]; then
+    elif [[ $line =~ $REDIRECT_RE ]]; then
       for i in "${!pending[@]}"; do printf 'case\t%s\t%s\n' "${pending[i]}" "${BASH_REMATCH[1]}"; done
       pending=() marker_lines=()
     fi
@@ -902,10 +915,11 @@ planted_cases() {
   return 0
 }
 
-redirect_logs() { # <test file> <dir>: <dir>/<name>.out for each Redirect "<name>" of the test (Rocq adds .out)
-  local line re='Redirect[[:space:]]+"([^"]+)"'
+# <test file> <dir>: <dir>/<name>.out for each Redirect "<name>" of the test (REDIRECT_RE; Rocq adds .out)
+redirect_logs() {
+  local line
   while IFS= read -r line || [[ -n $line ]]; do
-    if [[ $line =~ $re ]]; then printf '%s/%s.out\n' "$2" "${BASH_REMATCH[1]}"; fi
+    if [[ $line =~ $REDIRECT_RE ]]; then printf '%s/%s.out\n' "$2" "${BASH_REMATCH[1]}"; fi
   done <"$1"
   return 0
 }
@@ -1016,12 +1030,12 @@ r5_lines() {
   local line kind rest i j n
   local marker_re='^[[:space:]]*\(\*[[:space:]]+r5[[:space:]]' comment_re='^[[:space:]]*\(\*'
   local line_re='^[[:space:]]*\(\*[[:space:]]+r5 (error|log|log lacks|assertion):[[:space:]]+(.*[^[:space:]])[[:space:]]+\*\)[[:space:]]*$'
-  local named_re='^"([^"]+)"[[:space:]]+(.+)$' redirect_re='^[[:space:]]*Redirect[[:space:]]+"([^"]+)"'
+  local named_re='^"([^"]+)"[[:space:]]+(.+)$'
   local -a lines=()
   local -A redirects=()
   mapfile -t lines <"$1"
   for line in "${lines[@]}"; do
-    if [[ $line =~ $redirect_re ]]; then redirects[${BASH_REMATCH[1]}]=1; fi
+    if [[ $line =~ $REDIRECT_RE ]]; then redirects[${BASH_REMATCH[1]}]=1; fi
   done
   n=${#lines[@]}
   for ((i = 0; i < n; i++)); do
@@ -1363,13 +1377,24 @@ main() {
       "$head_src" "$stack_line" "$parent_src" "$parent_stack_line"
   fi
 
-  # The switch: built when missing, except where a packed root must have been unpacked; --source-at uses none.
-  if [[ $mode != source && ! -d $OPAMROOT/cut ]]; then
-    if [[ $mode == import || $mode == check ]]; then
-      fail "no switch at $OPAMROOT/cut; unpack the packed opam root at $CUT_ROOT first"
+  # The switch: built when missing or unfinished (no Rocq commit in $CUT_ROOT/rocq-commit, which build_switch
+  # writes once the switch is complete; S9b), except where a packed root must have been unpacked; --source-at uses
+  # none.
+  if [[ $mode != source ]]; then
+    local switch_state=''
+    read_rocq_commit "$CUT_ROOT"
+    if [[ ! -d $OPAMROOT/cut ]]; then
+      switch_state="no switch at $OPAMROOT/cut"
+    elif [[ -z $RC_SHA ]]; then
+      switch_state="the switch at $OPAMROOT/cut is unfinished: $CUT_ROOT/rocq-commit is missing, unreadable or empty"
     fi
-    if [[ ${CUT_SELF_TEST_STUBS:-} == 1 ]]; then fail "no switch at $OPAMROOT/cut, and the self-test never builds one"; fi
-    build_switch || fail "building the switch at $OPAMROOT/cut failed (see the output above)"
+    if [[ -n $switch_state ]]; then
+      if [[ $mode == import || $mode == check ]]; then
+        fail "$switch_state; unpack the packed opam root at $CUT_ROOT first"
+      fi
+      if [[ ${CUT_SELF_TEST_STUBS:-} == 1 ]]; then fail "$switch_state, and the self-test never builds one"; fi
+      build_switch || fail "building the switch at $OPAMROOT/cut failed (see the output above)"
+    fi
   fi
 
   # The Rocq commit: the switch's, read from $CUT_ROOT/rocq-commit, must be readable and be the cut's
@@ -1429,8 +1454,7 @@ main() {
         unmet=$(r5_unmet "$run_tree/tests/$name.v" "$expected" "$log" "$run_tree/tests")
         if [[ -z $unmet ]]; then
           while IFS=$'\t' read -r kind a b; do printf 'R5 CASE MET: tests/%s.v, r5 %s %s: %s\n' "$name" "$kind" "$a" "$b" >&2; done <<<"$r5_facts"
-          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
-          exit 0
+          negative_met "$test_arg" "$expected" "$parent_src"
         fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails, but not as the r5 lines of tests/$name.v say: ${unmet//$'\n'/; }; its row names $expected ($at)"
       fi
@@ -1441,16 +1465,10 @@ main() {
       actual=$(first_entry_error "${logs[@]}")
       if [[ -z $actual ]]; then actual='no "Error at line N (for X)" line of its log or its Redirect .out files'; fi
       if [[ $expected == option:* ]]; then
-        if option_failure_seen "$log" "${expected#option:}"; then
-          printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
-          exit 0
-        fi
+        if option_failure_seen "$log" "${expected#option:}"; then negative_met "$test_arg" "$expected" "$parent_src"; fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at its Set line for \"${expected#option:}\"; its row names $expected ($at)"
       fi
-      if [[ $actual == "$expected" ]]; then
-        printf 'R5 NEGATIVE MET: %s at %s (src/ of %s)\n' "$test_arg" "$expected" "$parent_src"
-        exit 0
-      fi
+      if [[ $actual == "$expected" ]]; then negative_met "$test_arg" "$expected" "$parent_src"; fi
       fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, but its row names $expected ($at)"
       ;;
     source)

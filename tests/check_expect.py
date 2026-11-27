@@ -116,7 +116,8 @@ def check(spec):
             elif (text in log) == (polarity == "+"):
                 continue
             else:
-                reason = f"{name}: {'missing' if polarity == '+' else 'unexpected'} {text!r}"
+                # The text as it is, in single quotes: expect_failure_seen in ci/build-9.2-cut.sh reads it so.
+                reason = f"{name}: {'missing' if polarity == '+' else 'unexpected'} '{text}'"
         print(f"EXPECT FAIL: tests/{spec.name}:{number}: {reason}", file=sys.stderr)
         ok = False
     if assertions == 0:

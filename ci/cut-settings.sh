@@ -8,12 +8,21 @@
 # The Rocq commit the plugin is built and tested against (branch release/9.2/2026-11-15-speed-8.0.9).
 CUT_ROCQ_REPO=https://github.com/theorem-labs/rocq.git
 CUT_ROCQ_COMMIT=07e45e36f6e9966faa88bcc16fa5a1bd7bc34b72
-ROCQ_VERSION=9.2.0 # the version the five Rocq packages are pinned at
+ROCQ_VERSION=9.2.0 # the version the Rocq packages of ROCQ_SOURCE_PINS are pinned at
+# The Rocq packages pinned to the cut's source at ROCQ_VERSION: all five, since an unpinned one resolves to the
+# upstream release.
+ROCQ_SOURCE_PINS=(rocq-runtime rocq-core coq-core coqide-server coq)
 ROCQ_STDLIB_VERSION=9.1.0
 DUNE_VERSION=3.23.1
+# The packages pinned at a released version, "<package> <version>" each.
+VERSION_PINS=("coq-stdlib $ROCQ_STDLIB_VERSION" "rocq-stdlib $ROCQ_STDLIB_VERSION" "dune $DUNE_VERSION")
+# The packages installed in the switch once the pins are set.
+SWITCH_INSTALL=(coq coq-stdlib yojson)
 # The value of OCAML_SWITCH_PACKAGES in theorem-labs/grading-tools main docker/integration-test.Dockerfile,
 # read 2026-11-24.
 OCAML_SWITCH_PACKAGES=ocaml-variants.4.14.2+options,ocaml-option-flambda,ocaml-option-nnp
+# The lines "<key>: <value>" the switch's `ocamlopt -config` must print for the compiler those packages select.
+OCAML_SWITCH_CONFIG=('version: 4.14.2' 'flambda: true' 'naked_pointers: false')
 OPAM_REPOSITORY_URL=https://github.com/ocaml/opam-repository.git
 OPAM_REPOSITORY_COMMIT=92ad3ffdce82239c0acb2f053fc49c02fc3b85c1
 ROCQ_OPAM_URL=https://github.com/rocq-prover/opam.git # its released/ directory holds coq-stdlib

@@ -67,33 +67,22 @@ Unset Lean Transport Step Budget.
 Redirect "transport_work_equal_nodes.log" Lean Import "../dumps/lean434/transport_work.ndjson" 1039 1040.
 Check RLI434W_equal_nodes.
 
-(* W12/W15/W26c: three distinct holes and one duplicate; keep lemma order and charge cumulative proof lift. *)
+(* W12/W15/W26c: three distinct holes and one duplicate; keep lemma order and charge cumulative proof lift. The one
+   stop case serves each of these charges: a pass that drops one of them casts there. *)
 Redirect "transport_work_motives_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 1040 8921.
 Set Lean Transport Step Budget 316980.
-Redirect "transport_work_motives_dedupe.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 316980.
-Redirect "transport_work_motives_fill.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 316980.
-Redirect "transport_work_motives_domain_lift.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 316980.
-Redirect "transport_work_motives_proof_lift.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 316980.
-Redirect "transport_work_motives_lemma_ids.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
+Redirect "transport_work_motives_stop.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
 Unset Lean Transport Step Budget.
 Redirect "transport_work_motives.log" Lean Import "../dumps/lean434/transport_work.ndjson" 8921 8922.
 Check RLI434W_motives.
 
 (* W16: the fitting dependent proof casts. Its argument part is larger than its own part, which W16's charges
-   are in, so W16's stop cases are on dependent_own below. *)
+   are in, so W16's stop case is on dependent_own below. *)
 Redirect "transport_work_dependent_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 8922 9015.
 Redirect "transport_work_dependent.log" Lean Import "../dumps/lean434/transport_work.ndjson" 9015 9016.
 Check RLI434W_dependent.
 
-(* W18/W19a: a transparent product alias still exposes a proof binder (stop cases on alias_own below). *)
+(* W18/W19a: a transparent product alias still exposes a proof binder (its stop case is on alias_own below). *)
 Redirect "transport_work_alias_product_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 9016 9031.
 Redirect "transport_work_alias_product.log" Lean Import "../dumps/lean434/transport_work.ndjson" 9031 9032.
 Check RLI434W_alias_product.
@@ -146,13 +135,12 @@ Redirect "transport_work_collision_fresh_deps.log" Lean Import "../dumps/lean434
 Redirect "transport_work_collision_fresh.log" Lean Import "../dumps/lean434/transport_work.ndjson" 10213 10214.
 Check RLI434W_collision_fresh.
 
-(* W24b: colliding suffixes with a finite budget for the direct-mapped cache. *)
+(* W24b: colliding suffixes with a finite budget for the direct-mapped cache. One step below the entry's largest
+   part the pass stops (a pass without the get or the put charge casts there), and at that part it casts (a pass
+   that pays more, as a chained table does, stops). *)
 Redirect "transport_work_collision_chain_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 10214 10421.
 Set Lean Transport Step Budget 81119.
-Redirect "transport_work_collision_chain_get.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 10421 10422.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 81119.
-Redirect "transport_work_collision_chain_put.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 10421 10422.
+Redirect "transport_work_collision_chain_stop.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 10421 10422.
 Unset Lean Transport Step Budget.
 Set Lean Transport Step Budget 81120.
 Redirect "transport_work_collision_chain.log" Lean Import "../dumps/lean434/transport_work.ndjson" 10421 10422.
@@ -183,7 +171,7 @@ Check RLI434W_normalize_fits.
    Each Fin hole compares UInt8 values, which the kernel converts at once after a stop. The casting import of
    each entry runs under Succeed too, so that no lemma or declaration of these entries is left for the cases
    after them; its log line, written once the kernel has accepted the transported value, is the check. The
-   own parts, from the counters of this file at every part's default budget (Job lport-l11b-20261126t203814):
+   own parts, from the counters of this file at every part's default budget:
    instances_own 25,431, global_type_own 27,009, dependent_own 25,053, alias_own 24,963, result_own 25,240; no
    argument part of these entries was above 5,948 there. *)
 
@@ -203,30 +191,18 @@ Unset Lean Transport Step Budget.
 Redirect "transport_work_global_type_own.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11839 11840.
 
 (* W16: a dependent domain, a codomain exposed after the substitution of the arguments before it, and the
-   first copy of the argument array; one stop case for each charge. *)
+   first copy of the argument array; the one stop case serves each of these charges. *)
 Redirect "transport_work_dependent_own_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 11840 11875.
 Set Lean Transport Step Budget 25052.
-Redirect "transport_work_dependent_own_binder.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 25052.
-Redirect "transport_work_dependent_own_dom.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 25052.
-Redirect "transport_work_dependent_own_tail.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 25052.
-Redirect "transport_work_dependent_own_copy.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
+Redirect "transport_work_dependent_own_stop.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
 Unset Lean Transport Step Budget.
 Redirect "transport_work_dependent_own.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11875 11876.
 
-(* W18/W19a: the head's type is read and its product exposed through the alias Dep8; one stop case for the
-   product exposure (W18) and one for the head's type read (W19a). *)
+(* W18/W19a: the head's type is read and its product exposed through the alias Dep8; the one stop case serves
+   the product exposure (W18) and the head's type read (W19a). *)
 Redirect "transport_work_alias_own_deps.log" Lean Import "../dumps/lean434/transport_work.ndjson" 11876 11891.
 Set Lean Transport Step Budget 24962.
-Redirect "transport_work_alias_own_expose.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11891 11892.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 24962.
-Redirect "transport_work_alias_own_head.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11891 11892.
+Redirect "transport_work_alias_own_stop.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11891 11892.
 Unset Lean Transport Step Budget.
 Redirect "transport_work_alias_own.log" Succeed Lean Import "../dumps/lean434/transport_work.ndjson" 11891 11892.
 

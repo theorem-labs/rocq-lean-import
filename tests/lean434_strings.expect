@@ -7,4 +7,4 @@ lean434_strings.log.out	+	Done!
 # The r5 assertion of tests/lean434_strings.v: before its fix, the import skips RLI434.astral.
 lean434_strings.log.out	-	Skipping: Error at line 343136 (for RLI434.astral)
 # RLI434.astral is declared (Locate names the constant).
-lean434_strings_locate.out	+	Constant Test.lean434_strings.RLI434_astral
+lean434_strings_locate.log.out	+	Constant Test.lean434_strings.RLI434_astral

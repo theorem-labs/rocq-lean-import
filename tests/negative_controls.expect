@@ -27,6 +27,6 @@ negative_controls_n5.log.out	+	Done!
 negative_controls_n5.log.out	-	(for Nat.pow)
 # n6
 negative_controls_n6.log.out	+	Error at line 879 (for sizeIsFive)
-negative_controls_n6.log.out	-	Control.Timeout
+negative_controls_n6.log.out	-	Timeout!
 negative_controls_n6.log.out	+	Done!
 negative_controls_n6.log.out	-	(for UInt32.size)

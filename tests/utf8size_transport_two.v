@@ -4,7 +4,7 @@ From LeanImport Require Import Lean.
    and passes proofs at the thresholds UInt32.ofNatLT 127 _ and UInt32.ofNatLT 2047 _, two Fin holes in some of its
    arguments, each cast along its own lemma (README, "Transport of proof arguments across Nat literals"). Its
    transport pass needs 2,220,205 steps in all: 524,616 for its own scans and walks and 1,695,589 for the 128
-   arguments it looks at, the largest of which needs 94,622 (counters of Job fpport-hm-a-20261126t160812). Each
+   arguments it looks at, the largest of which needs 94,622 (from the pass's counters). Each
    of these parts has the step budget, 1,000,000 by default, and the entry as a whole ten times that (README, "Lean
    Transport Step Budget"), so the pass completes.
    dumps/lean434/utf8size_two.ndjson is exported from Char.utf8Size_eq_two_iff alone (export line 11778). The src/

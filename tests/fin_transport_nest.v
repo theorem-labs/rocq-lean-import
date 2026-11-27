@@ -11,11 +11,10 @@ From LeanImport Require Import Lean.
        := fun v h => And.intro _ _ h (RLI434N.axNest v).
    The pass casts h along RLI434N_nest_1000__nat_eq_1 and finds no Fin pair in idA N against idB N; the kernel
    converts that argument at once. On the Rocq 9.2 cut the entry's own part takes 9,097 steps and that argument
-   27,251, its largest part (with literal arithmetic's evaluation of the pair, counters of the L port); a pass that
+   27,251, its largest part (with literal arithmetic's evaluation of the pair; counters of this file); a pass that
    followed the nest to its end (no step reserved for a projection before its subject) would take more for it
-   (the F+ port measured 938 more; not re-measured at this source). At the budget below, 27,251, such a pass
-   would stop for the whole entry,
-   and its cast of h would be lost (the kernel then takes far longer than the 10 s limit). The budget
+   (938 more, measured on an earlier source). At the budget below, 27,251, such a pass would stop for the whole
+   entry, and its cast of h would be lost (the kernel then takes far longer than the 10 s limit). The budget
    applies to this entry only: the lines before it import at the default, but for RLI434N.cast_127 (export line
    8503), which is read and not imported. On an importer without the option the Set line only warns, and the
    entry is refused (no cast at all).

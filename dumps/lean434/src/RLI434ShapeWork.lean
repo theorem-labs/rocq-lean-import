@@ -8,7 +8,6 @@ private theorem lt7 : 7 < UInt32.size := by decide
 private theorem lt127 : 127 < UInt32.size := by decide
 
 def plain (n : Nat) (h : n < UInt32.size) : UInt32 := UInt32.ofNatLT n h
-def wrapped (n : Nat) (h : n < UInt32.size) : UInt32 := id (UInt32.ofNatLT n h)
 
 theorem ordinary (v : UInt32) (h : v ≤ plain 127 lt127) : v ≤ 127 := h
 

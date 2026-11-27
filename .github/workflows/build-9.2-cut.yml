@@ -47,6 +47,10 @@ jobs:
           fetch-depth: 0 # the inventory checks read the history
           persist-credentials: false # no later step needs the token
 
+      # The rows of ci/build-9.2-cut-selftest.sh, before the build: stubs stand in for the build and the tests.
+      - name: Self-test of ci/build-9.2-cut.sh
+        run: ci/build-9.2-cut.sh --self-test
+
       - name: Install system prerequisites
         run: |
           sudo apt-get update

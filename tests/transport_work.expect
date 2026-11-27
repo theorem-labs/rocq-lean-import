@@ -66,31 +66,11 @@ transport_work_equal_nodes.log.out	-	the transport pass stops
 transport_work_equal_nodes.log.out	+	line 1039: RLI434W.equal_nodes: 1 argument(s) transported (RLI434W_equal_nodes__nat_eq_1)
 transport_work_equal_nodes.log.out	-	Error at line
 transport_work_motives_deps.log.out	-	Error at line
-transport_work_motives_dedupe.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
-transport_work_motives_dedupe.log.out	-	argument(s) transported
-transport_work_motives_dedupe.log.out	+	Done!
-transport_work_motives_dedupe.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
-transport_work_motives_dedupe.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_fill.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
-transport_work_motives_fill.log.out	-	argument(s) transported
-transport_work_motives_fill.log.out	+	Done!
-transport_work_motives_fill.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
-transport_work_motives_fill.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_domain_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
-transport_work_motives_domain_lift.log.out	-	argument(s) transported
-transport_work_motives_domain_lift.log.out	+	Done!
-transport_work_motives_domain_lift.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
-transport_work_motives_domain_lift.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_proof_lift.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
-transport_work_motives_proof_lift.log.out	-	argument(s) transported
-transport_work_motives_proof_lift.log.out	+	Done!
-transport_work_motives_proof_lift.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
-transport_work_motives_proof_lift.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_motives_lemma_ids.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
-transport_work_motives_lemma_ids.log.out	-	argument(s) transported
-transport_work_motives_lemma_ids.log.out	+	Done!
-transport_work_motives_lemma_ids.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
-transport_work_motives_lemma_ids.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+transport_work_motives_stop.log.out	+	line 8921: RLI434W.motives: the transport pass stops: it needs more than 316980 steps
+transport_work_motives_stop.log.out	-	argument(s) transported
+transport_work_motives_stop.log.out	+	Done!
+transport_work_motives_stop.log.out	+	Skipping: Error at line 8921 (for RLI434W.motives)
+transport_work_motives_stop.log.out	+	Timed out after 20 s (Lean Entry Timeout)
 transport_work_motives.log.out	+	line 8921: RLI434W.motives
 transport_work_motives.log.out	+	Done!
 transport_work_motives.log.out	-	the transport pass stops
@@ -168,16 +148,11 @@ transport_work_collision_fresh.log.out	-	the transport pass stops
 transport_work_collision_fresh.log.out	+	line 10213: RLI434W.collision_fresh: 1 argument(s) transported (RLI434W_collision_fresh__nat_eq_1)
 transport_work_collision_fresh.log.out	-	Error at line
 transport_work_collision_chain_deps.log.out	-	Error at line
-transport_work_collision_chain_get.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 81119 steps
-transport_work_collision_chain_get.log.out	-	argument(s) transported
-transport_work_collision_chain_get.log.out	+	Done!
-transport_work_collision_chain_get.log.out	+	Skipping: Error at line 10421 (for RLI434W.collision_chain)
-transport_work_collision_chain_get.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-transport_work_collision_chain_put.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 81119 steps
-transport_work_collision_chain_put.log.out	-	argument(s) transported
-transport_work_collision_chain_put.log.out	+	Done!
-transport_work_collision_chain_put.log.out	+	Skipping: Error at line 10421 (for RLI434W.collision_chain)
-transport_work_collision_chain_put.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+transport_work_collision_chain_stop.log.out	+	line 10421: RLI434W.collision_chain: the transport pass stops: it needs more than 81119 steps
+transport_work_collision_chain_stop.log.out	-	argument(s) transported
+transport_work_collision_chain_stop.log.out	+	Done!
+transport_work_collision_chain_stop.log.out	+	Skipping: Error at line 10421 (for RLI434W.collision_chain)
+transport_work_collision_chain_stop.log.out	+	Timed out after 20 s (Lean Entry Timeout)
 transport_work_collision_chain.log.out	+	line 10421: RLI434W.collision_chain
 transport_work_collision_chain.log.out	+	Done!
 transport_work_collision_chain.log.out	-	the transport pass stops
@@ -219,35 +194,19 @@ transport_work_global_type_own.log.out	-	the transport pass stops
 transport_work_global_type_own.log.out	+	Done!
 transport_work_global_type_own.log.out	-	Error at line
 transport_work_dependent_own_deps.log.out	-	Error at line
-transport_work_dependent_own_binder.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25052 steps
-transport_work_dependent_own_binder.log.out	-	argument(s) transported
-transport_work_dependent_own_binder.log.out	+	Done!
-transport_work_dependent_own_binder.log.out	-	Error at line
-transport_work_dependent_own_dom.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25052 steps
-transport_work_dependent_own_dom.log.out	-	argument(s) transported
-transport_work_dependent_own_dom.log.out	+	Done!
-transport_work_dependent_own_dom.log.out	-	Error at line
-transport_work_dependent_own_tail.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25052 steps
-transport_work_dependent_own_tail.log.out	-	argument(s) transported
-transport_work_dependent_own_tail.log.out	+	Done!
-transport_work_dependent_own_tail.log.out	-	Error at line
-transport_work_dependent_own_copy.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25052 steps
-transport_work_dependent_own_copy.log.out	-	argument(s) transported
-transport_work_dependent_own_copy.log.out	+	Done!
-transport_work_dependent_own_copy.log.out	-	Error at line
+transport_work_dependent_own_stop.log.out	+	line 11875: RLI434W.dependent_own: the transport pass stops: it needs more than 25052 steps
+transport_work_dependent_own_stop.log.out	-	argument(s) transported
+transport_work_dependent_own_stop.log.out	+	Done!
+transport_work_dependent_own_stop.log.out	-	Error at line
 transport_work_dependent_own.log.out	+	line 11875: RLI434W.dependent_own: 2 argument(s) transported (RLI434W_dependent_own__nat_eq_1)
 transport_work_dependent_own.log.out	-	the transport pass stops
 transport_work_dependent_own.log.out	+	Done!
 transport_work_dependent_own.log.out	-	Error at line
 transport_work_alias_own_deps.log.out	-	Error at line
-transport_work_alias_own_expose.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 24962 steps
-transport_work_alias_own_expose.log.out	-	argument(s) transported
-transport_work_alias_own_expose.log.out	+	Done!
-transport_work_alias_own_expose.log.out	-	Error at line
-transport_work_alias_own_head.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 24962 steps
-transport_work_alias_own_head.log.out	-	argument(s) transported
-transport_work_alias_own_head.log.out	+	Done!
-transport_work_alias_own_head.log.out	-	Error at line
+transport_work_alias_own_stop.log.out	+	line 11891: RLI434W.alias_own: the transport pass stops: it needs more than 24962 steps
+transport_work_alias_own_stop.log.out	-	argument(s) transported
+transport_work_alias_own_stop.log.out	+	Done!
+transport_work_alias_own_stop.log.out	-	Error at line
 transport_work_alias_own.log.out	+	line 11891: RLI434W.alias_own: 1 argument(s) transported (RLI434W_alias_own__nat_eq_1)
 transport_work_alias_own.log.out	-	the transport pass stops
 transport_work_alias_own.log.out	+	Done!

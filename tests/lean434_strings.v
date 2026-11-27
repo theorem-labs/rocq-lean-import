@@ -22,4 +22,4 @@ Redirect "lean434_strings.log" Lean Import "../dumps/lean434/strings.ndjson".
 
 (* RLI434.astral is declared: tests/lean434_strings.expect reads this log. Locate does not fail when no constant
    has the name, so the compile ends normally and the .expect is checked also when the import skipped it. *)
-Redirect "lean434_strings_locate" Locate RLI434_astral.
+Redirect "lean434_strings_locate.log" Locate RLI434_astral.

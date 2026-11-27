@@ -758,12 +758,11 @@ type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | BitVec
 type predeclared_def_kind = UInt32_size | Nat_isValidChar | Nat_pow
 type predeclared_ind_as_def_kind = ULift_cumul
 
-(* The path of the export being imported ([LeanParseNdjson.export_path]), with
-   its Lean version on the new path. [do_input] sets it from the parser before
-   it declares each entry: what [LeanParseNdjson.path] read from the NDJSON
-   metadata; the legacy path for the old text format. An instance that
-   [ensure_exists] declares later is declared on the path saved with its entry
-   (see [on_path]). *)
+(* The path of the export being imported, with its Lean version on the new
+   path. [do_input] sets it from the parser before it declares each entry:
+   what [LeanParseNdjson.path] read from the NDJSON metadata; the legacy path
+   for the old text format. An instance that [ensure_exists] declares later is
+   declared on the path saved with its entry (see [on_path]). *)
 let current_path = ref LeanParseNdjson.Legacy
 
 let on_new_path () =
@@ -2447,9 +2446,9 @@ let add_entry_limited entry =
         | _ -> memory_limit_reached info)
       | Some _, _ -> memory_limit_reached info))
 
-(* Parse the line [l]: for its names, levels and expressions only when
-   [prefix], a line before the first line to import (see [import]); the old
-   text format reads nothing from such a line. *)
+(* Parse the line [l]: for its metadata, names, levels and expressions only
+   when [prefix], a line before the first line to import (see [import]); the
+   old text format reads nothing from such a line. *)
 let do_line ~prefix state l =
   let do_line () =
     match state.pstate with

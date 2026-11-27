@@ -133,16 +133,11 @@ fin_transport_shape_early_cap.log.out	-	the transport pass stops
 fin_transport_shape_early_cap.log.out	+	line 9824: RLI434SW.early_cap: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
 fin_transport_shape_early_cap.log.out	-	Error at line
 fin_transport_shape_flatten_deps.log.out	-	Error at line
-fin_transport_shape_flatten_slice.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2650 steps
-fin_transport_shape_flatten_slice.log.out	-	argument(s) transported
-fin_transport_shape_flatten_slice.log.out	+	Done!
-fin_transport_shape_flatten_slice.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
-fin_transport_shape_flatten_slice.log.out	+	Timed out after 20 s (Lean Entry Timeout)
-fin_transport_shape_flatten_flatten.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2650 steps
-fin_transport_shape_flatten_flatten.log.out	-	argument(s) transported
-fin_transport_shape_flatten_flatten.log.out	+	Done!
-fin_transport_shape_flatten_flatten.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
-fin_transport_shape_flatten_flatten.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_flatten_stop.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2650 steps
+fin_transport_shape_flatten_stop.log.out	-	argument(s) transported
+fin_transport_shape_flatten_stop.log.out	+	Done!
+fin_transport_shape_flatten_stop.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
+fin_transport_shape_flatten_stop.log.out	+	Timed out after 20 s (Lean Entry Timeout)
 fin_transport_shape_flatten.log.out	+	line 9955: RLI434SW.flatten
 fin_transport_shape_flatten.log.out	+	Done!
 fin_transport_shape_flatten.log.out	-	the transport pass stops

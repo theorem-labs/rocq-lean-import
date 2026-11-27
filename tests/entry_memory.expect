@@ -1,6 +1,6 @@
 # Log file, polarity, literal substring (tab-separated); "<=N" compares two heap readings (tests/check_expect.py).
-entry_memory_zero.log.out	+	Lean Entry Memory Limit
-entry_memory_negative.log.out	+	Lean Entry Memory Limit
+entry_memory_zero.log.out	+	Lean Entry Memory Limit must be a positive number of GiB, not 0.
+entry_memory_negative.log.out	+	Lean Entry Memory Limit must be a positive number of GiB, not -1.
 entry_memory_under.log.out	+	Done!
 entry_memory_under.log.out	-	Error at line
 entry_memory_fail.log.out	+	Error at line 2491 (for RLI434.boundedVal._proof_1)

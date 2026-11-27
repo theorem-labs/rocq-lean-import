@@ -42,7 +42,7 @@ From LeanImport Require Import Lean.
      badmod_match (17916): 127 % 200 at a Mod Nat instance that stops at a match;
    - shl_17 (16530): 1 <<< 17, a shift left of more than 16, imported on its own at an Entry Timeout of 60 s:
      with no cast the kernel converts 1 <<< 17 itself, about 10 s under load (the 10 s limit of the other
-     entries stopped it once, run fpport-final-20261126t162541); land_axiom (16590): (axN &&& 255) % 256 against
+     entries stopped it once); land_axiom (16590): (axN &&& 255) % 256 against
      UInt8.ofNat (axN &&& 255), axN an axiom: an operand with no value;
    - fb_65 (17010): let y := 0; k31 y, 65 steps;
    - w_1025 (17486): 1025; w_bsub (17498) and w_bxor (17510): 1025 - 1 and 1025 ^^^ 1, an operand above 1024;
@@ -92,7 +92,7 @@ Check RLI434B_land_axiom.
 Check RLI434B_gate_box.
 
 (* B-part: three runs of each budget entry, at its largest part (counters of this file at every part's default
-   budget, Job lport-l11b-20261126t203814) - 1, at it and + 1, then the default. bud_and: its argument part
+   budget) - 1, at it and + 1, then the default. bud_and: its argument part
    20,770 (its own part 1,614); bud_w: its argument part 74,768 (34,507); bud_fb: its argument part 18,117
    (3,114); const_only: its own part 48,955 (its argument part 7,787) *)
 Redirect "fin_transport_bitwise_bud_and_deps.log" Lean Import "../dumps/lean434/bitwise.ndjson" 17917 17928.

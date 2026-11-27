@@ -1,6 +1,6 @@
 # Log file, polarity, literal substring (tab-separated).
-entry_timeout_zero.log.out	+	Lean Entry Timeout
-entry_timeout_negative.log.out	+	Lean Entry Timeout
+entry_timeout_zero.log.out	+	Lean Entry Timeout must be a positive number of seconds, not 0.
+entry_timeout_negative.log.out	+	Lean Entry Timeout must be a positive number of seconds, not -1.
 entry_timeout_large.log.out	+	line 131: RLI434T.fast
 entry_timeout_large.log.out	+	- 5 entries
 entry_timeout_unset.log.out	+	line 2195: RLI434T.slow_sum

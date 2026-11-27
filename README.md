@@ -797,7 +797,7 @@ A string option: `"Fail"` (the default), `"Stop"` or `"Skip"`. It decides
 what `Lean Import` does with a line it refuses: a line whose entry it cannot
 declare, or a line it cannot parse. In an NDJSON export, a line before
 the first line to import (`Lean Import "file" FROM` starts at line FROM)
-is parsed for its names, levels and expressions only (a declaration
+is parsed for its metadata, names, levels and expressions only (a declaration
 there is not read); when it cannot be parsed, it is refused like any
 other line. The old text format reads nothing before line FROM. The
 refusal reads `Error at line N (for NAME)`, followed by the
@@ -954,6 +954,22 @@ uses the stack setting of the first fix commit's parent, or the default
 soft limit if it has no setting. A control cannot revert both kinds of
 change. Its `R5 CONTROL` line records the source commit and the stack
 read back for each side.
+
+R5 is the name of this per-fix control: a fix is shown by its test, which
+passes at the head and fails when the fix is reverted. "R5 negative" is
+that failure on the parent side, and `R5 NEGATIVE MET` is the verdict
+line when it fails as its row says: at the row's own entry (`own_entry`,
+the fourth column) or, when that is `-`, at its base entry (`base_entry`,
+the third column, the first error at the base); an entry `option:NAME`
+is a failure at the test's `Set NAME` line. A test whose failure there is
+not its first `Error at line N (for X)` says what the failure is
+in comment lines that start `(* r5 `: `r5 error: TEXT` (the Rocq error
+of the next command holds TEXT and names the entry), `r5 log: "LOG"
+TEXT` and `r5 log lacks: "LOG" TEXT` (the log of `Redirect "LOG"` has,
+or has not, the line TEXT), and `r5 assertion: "LOG" TEXT` (the test's
+`.expect` fails with `unexpected 'TEXT'` on that log). Such a test has
+exactly one `r5 error` or `r5 assertion` line; `r5_lines` in
+`ci/build-9.2-cut.sh` states each rule in full.
 
 Lean 4.34.0's entry `_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1`
 (as printed by the importer) fails with `Stack overflow.` at 8, 16, 32

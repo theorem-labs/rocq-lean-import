@@ -158,13 +158,11 @@ Redirect "fin_transport_shape_early_cap.log" Lean Import "../dumps/lean434/fin_s
 Check RLI434SW_early_cap.
 Unset Lean Transport Step Budget.
 
-(* W10d: charge each wide application copy, including when flattening the new head. *)
+(* W10d: charge each wide application copy, including when flattening the new head; one stop case for both
+   copies. *)
 Redirect "fin_transport_shape_flatten_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9825 9955.
 Set Lean Transport Step Budget 2650.
-Redirect "fin_transport_shape_flatten_slice.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
-Unset Lean Transport Step Budget.
-Set Lean Transport Step Budget 2650.
-Redirect "fin_transport_shape_flatten_flatten.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
+Redirect "fin_transport_shape_flatten_stop.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_flatten.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9955 9956.
 Check RLI434SW_flatten.
@@ -189,7 +187,7 @@ Unset Lean Transport Step Budget.
 
 (* W14b: the long Fin head in the expected type of an argument: that argument's gate is the first to read the
    head, and peels its product chain in the argument's own part, the entry's largest part (2,998 steps; the own
-   part 393; counters of this file, Job lport-l11b-20261126t203814). The stop case is one step below that
+   part 393; counters of this file). The stop case is one step below that
    part; Lean's value then goes to the kernel, whose conversion of the UInt32 values outlasts the 20 s limit. *)
 Redirect "fin_transport_shape_product_peel_arg_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10300 10327.
 Set Lean Transport Step Budget 2997.
