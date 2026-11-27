@@ -9,6 +9,11 @@
 # and which status to exit with. The helpers (check_inventory, revert_fix_prepare, stack_check, ...) gather facts
 # and hand them back; they decide nothing.
 #
+# Inventory (tests/lean434_features.txt): the base_entry and own_entry columns of a row name the Lean entry its test
+# fails at, "option:<option name>" (a failure at the test's Set line of that option), or "check:rocqchk" (the
+# rocqchk step of tests/Makefile refuses the test's .vo: its stderr line "ROCQCHK FAIL: tests/<name>.vo: ..."; the
+# test must be in ROCQCHK_TESTS of tests/Makefile). Any other "check:" kind fails the inventory checks.
+#
 # Exit status: 0 success; 1 a check, the build or a test failed; 2 usage error. --source-at: 3 a bad commit
 # or test (or any other setup failure), 4 the plugin build failed, otherwise the test's own status.
 
@@ -95,7 +100,8 @@ Usage:
       The same, and fail while an inventory row is still open.
   ci/build-9.2-cut.sh --revert-fix <test>
       Run <test> in two builds with the head's tests/ and dumps/: it must pass on the head side and fail
-      on the parent side at its inventory entry or as its r5 lines say ("R5 negative"). Revert only the
+      on the parent side at its inventory entry or as its r5 lines say ("R5 negative"); an entry
+      check:rocqchk is met by tests/Makefile's line "ROCQCHK FAIL: tests/<name>.vo: ...". Revert only the
       source or only the stack. A stack stated in the inventory applies to both sides of a source control.
   ci/build-9.2-cut.sh --import <file.v> [-- <rocq compile flags>]
       Compile one file with the cut, in the file's directory; writes <file.v>.stack.
@@ -104,8 +110,8 @@ Usage:
   ci/build-9.2-cut.sh --source-at <commit> <test>
       Build the plugin from <commit>'s src/ with the head's tests/ and dumps/, with the rocq, make and OCaml
       of PATH (no opam switch; $CUT_ROOT is not used), run <test>, report that toolchain's rocq-commit (or
-      unknown) and each planted entry its own case accepted. Exit 3: bad commit or test, no rocq on PATH;
-      4: plugin build failed; else the test's.
+      unknown), each planted entry its own case accepted, and the test's "ROCQCHK FAIL" line if any. Exit 3:
+      bad commit or test, no rocq on PATH; 4: plugin build failed; else the test's.
   ci/build-9.2-cut.sh --self-test
       Check this script's rules (rows S0 to S27, S7l-A2 to S7l-A8e and V1 to V16 of
       ci/build-9.2-cut-selftest.sh) with stubs, and the repository's Redirect logs, build settings and
@@ -152,6 +158,28 @@ project_tests() { # <root>: the .v files tests/_CoqProject lists, as tests/<name
       if [[ $tok == *.v ]]; then printf 'tests/%s\n' "${tok#./}"; fi
     done
   done <"$1/tests/_CoqProject"
+  return 0
+}
+
+# <root>: the names in the ROCQCHK_TESTS assignment of tests/Makefile (the line "ROCQCHK_TESTS :=" or "=", and the
+# lines a trailing backslash continues it with; a "#" starts a comment), one per line; nothing without that file or
+# that line.
+rocqchk_tests() {
+  local line more=0
+  local -a toks
+  [[ -f $1/tests/Makefile ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    if ((!more)); then
+      [[ $line =~ ^ROCQCHK_TESTS[[:space:]]*:?=(.*)$ ]] || continue
+      line=${BASH_REMATCH[1]}
+    fi
+    line=${line%%#*}
+    more=0
+    if [[ $line =~ ^(.*)\\[[:space:]]*$ ]]; then line=${BASH_REMATCH[1]} more=1; fi
+    read -r -a toks <<<"$line"
+    if ((${#toks[@]})); then printf '%s\n' "${toks[@]}"; fi
+    ((more)) || return 0
+  done <"$1/tests/Makefile"
   return 0
 }
 
@@ -235,15 +263,21 @@ predeclared_members() {
 #   unreadable <line no> <why> <line text, tabs shown as \t>
 #   row <line no> <file> <base_entry> <own_entry> <status> <in tests/_CoqProject: yes|no> <commits> <stack>
 #   commit <line no> <file> <commit> <yes|no|malformed>   (yes: an ancestor of HEAD; fixed rows only)
+#   check <line no> <file> <entry> <listed|unlisted|unknown>   (an entry column "check:<kind>": unknown for a kind
+#                                                            other than rocqchk, else whether ROCQCHK_TESTS names
+#                                                            the test; once per distinct entry of the row)
 #   lean434 <tests/lean434_*.v file> <has a row: yes|no>
 #   predeclared-file <present|missing>
 #   member <Lean name> <function> <marked in tests/predeclared.v: yes|no>
 #   table-error <function> <why>
 check_inventory() {
-  local root=$1 inv=$1/$INVENTORY line n=0 f state rest file status c verdict kind a b m
-  local -a fld lean434=() cs
-  local -A project=() has_row=() marked=()
+  local root=$1 inv=$1/$INVENTORY line n=0 f state rest file status c verdict kind a b m e test_name
+  local -a fld lean434=() cs es
+  local -A project=() has_row=() marked=() rocqchk=()
   local marker_re='^[[:space:]]*\(\*[[:space:]]+predeclared member:[[:space:]]+([^[:space:]]+)[[:space:]]+\*\)[[:space:]]*$'
+  while IFS= read -r f; do
+    if [[ -n $f ]]; then rocqchk["$f"]=1; fi
+  done <<<"$(rocqchk_tests "$root")"
   while IFS= read -r f; do
     if [[ -n $f ]]; then project["$f"]=1; fi
   done <<<"$(project_tests "$root")"
@@ -323,6 +357,19 @@ check_inventory() {
           printf 'commit\t%s\t%s\t%s\t%s\n' "$n" "$file" "$c" "$verdict"
         done
       fi
+      es=("${fld[2]}")
+      if [[ ${fld[3]} != "${fld[2]}" ]]; then es+=("${fld[3]}"); fi
+      for e in "${es[@]}"; do
+        [[ $e == check:* ]] || continue
+        if [[ $e != check:rocqchk ]]; then
+          verdict=unknown
+        else
+          test_name=${file#tests/} test_name=${test_name%.v}
+          verdict=unlisted
+          if [[ -n ${rocqchk[$test_name]:-} ]]; then verdict=listed; fi
+        fi
+        printf 'check\t%s\t%s\t%s\t%s\n' "$n" "$file" "$e" "$verdict"
+      done
     done <"$inv"
   fi
   for f in "${lean434[@]}"; do
@@ -895,6 +942,23 @@ option_failure_seen() {
   return 1
 }
 
+# <log> <test name>: fact ROCQCHK_LINE, the first line of the log, its leading and trailing blanks removed, that starts
+# "ROCQCHK FAIL: tests/<name>.vo:", the line the rocqchk step of tests/Makefile prints when rocqchk refuses that .vo;
+# empty when there is none
+rocqchk_failure_line() {
+  local line t
+  ROCQCHK_LINE=''
+  [[ -f $1 ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    t=${line#"${line%%[![:space:]]*}"}
+    if [[ $t == "ROCQCHK FAIL: tests/$2.vo:"* ]]; then
+      ROCQCHK_LINE=${t%"${t##*[![:space:]]}"}
+      return 0
+    fi
+  done <"$1"
+  return 0
+}
+
 # <test file>: the planted cases of the test, one fact per "(* planted: <name> *)" line, whose case is the first
 # Redirect command after it (REDIRECT_RE):
 #   case<TAB><name><TAB><redirect>
@@ -1186,17 +1250,18 @@ main() {
   WORK=$(mktemp -d "${TMPDIR:-/tmp}/build-9.2-cut.XXXXXX") || fail "cannot create a scratch directory under ${TMPDIR:-/tmp}"
   SCRATCH_DIRS+=("$WORK")
 
-  # Inventory checks, in the default mode, --handoff and --revert-fix (S1-S4, S3b, S10-S13): every row of the
+  # Inventory checks, in the default mode, --handoff and --revert-fix (S1-S4, S3b, S10-S13, S12b): every row of the
   # inventory is readable and agrees with tests/_CoqProject (every row's test is listed there: a listed row's
   # test checks that its feature's entry is refused, so the suite passes), a fixed row names commits that are ancestors of HEAD, every tests/lean434_*.v has a
-  # row, and every member of the predeclared tables of src/lean.ml has its marker in tests/predeclared.v;
+  # row, every member of the predeclared tables of src/lean.ml has its marker in tests/predeclared.v, and an entry
+  # "check:<kind>" is check:rocqchk, of a test that ROCQCHK_TESTS of tests/Makefile names;
   # --handoff also fails on an open row. A missing or empty inventory skips the checks while the head has no
   # tests/lean434_*.v. --import and --check run on trees without history (S23), and --source-at measures an
   # old src/ with only its own exit codes (S24): neither checks the inventory.
   local -a row_line=() row_file=() row_base=() row_own=() row_status=() row_inproj=() row_commits=() row_stack=()
   if [[ $mode == suite || $mode == revert ]]; then
-    local facts kind a b c d e g h inv_state=missing pred_state=missing where st
-    local -a fails=() lean434=() lean434_norow=() commit_fails=() table_errors=() unmarked=() unreadable=()
+    local facts kind a b c d e g h cn inv_state=missing pred_state=missing where st
+    local -a fails=() lean434=() lean434_norow=() commit_fails=() check_fails=() table_errors=() unmarked=() unreadable=()
     local -A first_line=()
     facts=$(check_inventory "$ROOT") || fail "the inventory checks could not run"
     while IFS=$'\t' read -r kind a b c d e f g h; do
@@ -1213,6 +1278,15 @@ main() {
           elif [[ $d != yes ]]; then
             commit_fails+=("$INVENTORY line $a ($b): commit $c is not an ancestor of HEAD (or not in this clone)")
           fi
+          ;;
+        check)
+          case $d in
+            unknown) check_fails+=("$INVENTORY line $a ($b): unknown entry kind '$c'; the one check kind is check:rocqchk") ;;
+            unlisted)
+              cn=${b#tests/} cn=${cn%.v}
+              check_fails+=("$INVENTORY line $a ($b): entry $c, but ROCQCHK_TESTS of tests/Makefile does not name $cn, so the suite runs no rocqchk on tests/$cn.vo")
+              ;;
+          esac
           ;;
         lean434)
           lean434+=("$a")
@@ -1255,7 +1329,7 @@ main() {
             fails+=("--handoff: $where is still open")
           fi
         done
-        fails+=("${commit_fails[@]}")
+        fails+=("${commit_fails[@]}" "${check_fails[@]}")
         for f in "${lean434_norow[@]}"; do fails+=("$f has no row in $INVENTORY"); done
         if [[ $pred_state == missing ]]; then
           fails+=("$PREDECLARED_TEST is missing; it is required once $INVENTORY exists")
@@ -1310,7 +1384,7 @@ main() {
     source_at_prepare "$ROOT" "$WORK/head" "$head_src" "$name"
     [[ $SA_STATUS == ok ]] || fail "--revert-fix $test_arg: head side: $SA_CAUSE"
     # The r5 lines of the head's test (r5_lines), checked before it runs (S7k): a test that has them is decided by
-    # them, with exactly one error or assertion line, and never on an option row.
+    # them, with exactly one error or assertion line, and never on an option row or a check row (S7o).
     r5_facts=$(r5_lines "$WORK/head/tests/$name.v")
     if [[ -n $r5_facts ]]; then
       local verdicts=0
@@ -1326,6 +1400,7 @@ main() {
         exit "$FAIL_CODE"
       fi
       [[ $expected != option:* ]] || fail "--revert-fix $test_arg: an option row is decided at its Set line, but tests/$name.v has r5 lines"
+      [[ $expected != check:* ]] || fail "--revert-fix $test_arg: a check row is decided by the rocqchk step of tests/Makefile, but tests/$name.v has r5 lines"
       ((verdicts == 1)) || fail "--revert-fix $test_arg: tests/$name.v has $verdicts r5 error or assertion lines; it needs exactly one"
     fi
   fi
@@ -1442,8 +1517,8 @@ main() {
       [[ $SA_STATUS == ok ]] || fail "--revert-fix $test_arg: parent side ($at): $SA_CAUSE"
       fetch_lfs "$run_tree" || fail "--revert-fix $test_arg: parent side ($at): fetching the git-LFS fixtures failed"
       run_logged "$log" parent "$parent_want" one "$run_tree" "$name"
-      # Check the parent side's failure: r5 lines, an option's Set line, or the first entry error of the
-      # run's log followed by Redirect logs in the order of the test's Redirect commands (S7c-S7f).
+      # Check the parent side's failure: r5 lines, an option's Set line, the rocqchk step of a check row, or the first
+      # entry error of the run's log followed by Redirect logs in the order of the test's Redirect commands (S7c-S7f).
       if ((RUN_RC == RT_BUILD_FAILED)); then
         fail "--revert-fix $test_arg: the parent side's plugin build failed ($at): $(first_error_line "$log"); a failed build is not \"R5 negative\""
       fi
@@ -1468,6 +1543,11 @@ main() {
         if option_failure_seen "$log" "${expected#option:}"; then negative_met "$test_arg" "$expected" "$parent_src"; fi
         fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at its Set line for \"${expected#option:}\"; its row names $expected ($at)"
       fi
+      if [[ $expected == check:rocqchk ]]; then
+        rocqchk_failure_line "$log" "$name"
+        if [[ -n $ROCQCHK_LINE ]]; then negative_met "$test_arg" "$expected" "$parent_src"; fi
+        fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, not at the rocqchk step of tests/Makefile (no line 'ROCQCHK FAIL: tests/$name.vo: ...' in its log); its row names $expected ($at)"
+      fi
       if [[ $actual == "$expected" ]]; then negative_met "$test_arg" "$expected" "$parent_src"; fi
       fail "--revert-fix $test_arg: R5 negative not met: the test fails at $actual, but its row names $expected ($at)"
       ;;
@@ -1479,6 +1559,8 @@ main() {
         exit 4
       fi
       if ((RUN_RC == 0)); then printf 'SOURCE-AT TEST pass\n'; else printf 'SOURCE-AT TEST fail\n'; fi
+      rocqchk_failure_line "$log" "$name"
+      if [[ -n $ROCQCHK_LINE ]]; then printf 'SOURCE-AT %s\n' "$ROCQCHK_LINE"; fi
       while IFS=$'\t' read -r kind a b; do
         [[ $kind == case ]] || continue
         case_outcome "$run_tree/tests/$b.out" "$a"

@@ -1,0 +1,40 @@
+# Log file, polarity, literal substring (tab-separated).
+# Lines 1-76: each literal below 2^62 is declared.
+rocqchk_literal_below.log.out	+	line 55: RLIChk.zero
+rocqchk_literal_below.log.out	+	line 58: RLIChk.one
+rocqchk_literal_below.log.out	+	line 61: RLIChk.n4999
+rocqchk_literal_below.log.out	+	line 64: RLIChk.n5000
+rocqchk_literal_below.log.out	+	line 67: RLIChk.below
+rocqchk_literal_below.log.out	+	line 70: RLIChk.seven
+rocqchk_literal_below.log.out	+	line 73: RLIChk.seven_zeros
+rocqchk_literal_below.log.out	+	line 76: RLIChk.seven_int
+rocqchk_literal_below.log.out	-	Error at line
+rocqchk_literal_below.log.out	-	RLIChk.limit
+rocqchk_literal_below.log.out	+	Done!
+# Lines 83-107: the prefix 1-82 declares nothing; RLIChk.refused_big is refused at its undeclared head; each refused
+# literal line gives the parser's message, and the def that uses it is refused in turn; "" (line 97) is read as 0.
+rocqchk_literal_below_refused.log.out	-	RLIChk.limit
+rocqchk_literal_below_refused.log.out	-	RLIChk.over
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 89 (for RLIChk.refused_big)
+rocqchk_literal_below_refused.log.out	+	missing RLIChk.missing
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 91 (for line-91)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 91: natural literal must be non-negative
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 92 (for RLIChk.neg_str)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 92: uses expression id 50 of a refused line
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 94 (for line-94)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 94: bad natural literal
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 95: uses expression id 51 of a refused line
+rocqchk_literal_below_refused.log.out	-	Error at line 97
+rocqchk_literal_below_refused.log.out	-	Error at line 98
+rocqchk_literal_below_refused.log.out	+	line 98: RLIChk.empty_str
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 100 (for line-100)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 100: natural literal must be non-negative
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 101: uses expression id 53 of a refused line
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 103 (for line-103)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 103: bad natural literal
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 104: uses expression id 54 of a refused line
+rocqchk_literal_below_refused.log.out	+	Skipping: Error at line 106 (for line-106)
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 106: bad natural literal
+rocqchk_literal_below_refused.log.out	+	NDJSON parse error at line 107: uses expression id 55 of a refused line
+rocqchk_literal_below_refused.log.out	+	Done!
+rocqchk_literal_below_refused.log.out	+	Skipped 11

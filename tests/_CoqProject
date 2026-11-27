@@ -37,6 +37,11 @@ lean434_linear.v
 lean434_bigint.v
 lean434_bigint_decide.v
 lean434_stack.v
+rocqchk_literal_form.v
+rocqchk_literal_below.v
+rocqchk_literal.v
+rocqchk_literal_over.v
+rocqchk_literal_text.v
 nat_transport.v
 nat_transport_budget.v
 nat_transport_step_budget.v

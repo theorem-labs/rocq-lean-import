@@ -18,13 +18,30 @@ EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bit
   nat_transport nat_transport_budget nat_transport_parts nat_transport_step_budget \
   nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \
   parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload parse_wrong_payload_prefix path_choice \
-  path_deferred_legacy path_deferred_reload path_deferred_string predeclared string_literal_mk uint32_legacy_only \
+  path_deferred_legacy path_deferred_reload path_deferred_string predeclared rocqchk_literal_below \
+  rocqchk_literal_text string_literal_mk uint32_legacy_only \
   transport_walk transport_work uint32_transport_ofnatlt uint32_transport_shiftleft univ_undeclared \
   utf8size_transport_one utf8size_transport_two
-EXPECTS = $(addsuffix .expect,$(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all)),\
-  $(EXPECT_TESTS),\
-  $(filter $(patsubst %.vo,%,$(filter %.vo,$(MAKECMDGOALS))),$(EXPECT_TESTS))))
+# The tests of the list $(1) that this make's goals build: all of them for the goal all or for no goal, else
+# those a goal names as <test>.vo. EXPECTS and ROCQCHKS share it.
+goal_tests = $(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all)),\
+  $(1),\
+  $(filter $(patsubst %.vo,%,$(filter %.vo,$(MAKECMDGOALS))),$(1)))
+EXPECTS = $(addsuffix .expect,$(call goal_tests,$(EXPECT_TESTS)))
 UNLISTED_EXPECTS = $(filter-out $(EXPECT_TESTS:=.expect),$(wildcard *.expect))
+
+# The tests whose .vo the suite checks with rocqchk (the cut's on CI) after the make. Lean Import stores the
+# importer's state in the .vo (src/lean.ml, lean_obj), and rocqchk reads only part of what OCaml's Marshal writes:
+# no custom block, which a Zarith number of 2^62 or more was (tests/rocqchk_literal*.v, and the literals 2^64 of
+# tests/core.v and tests/lean434_bigint.v). After each make of such a test (the goals of EXPECTS), rocqchk checks
+# its .vo with the load path of tests/_CoqProject and the flags of ci/build-9.2-cut.sh --check, its output in
+# <test>.rocqchk.log; a failure prints "ROCQCHK FAIL: tests/<test>.vo: <the log's first line that is not blank>" and
+# fails the make, and so does a test of the list whose .vo a make that passed did not write. Job
+# rqc-red-20261127t112336 ran this step at the cut (its rocqchk, its stack, the plugin before literals were strings):
+# rocqchk_literal_below passed; core, lean434_bigint, rocqchk_literal, rocqchk_literal_over and rocqchk_literal_text
+# failed with "Unhandled code 0018".
+ROCQCHK_TESTS := core lean434_bigint rocqchk_literal rocqchk_literal_below rocqchk_literal_over rocqchk_literal_text
+ROCQCHKS = $(call goal_tests,$(ROCQCHK_TESTS))
 
 # Rocq's makefile compiles each test (its .vo, .vos and .vok rules) with $(ROCQ) compile. check_expect.py --rocq
 # runs that command after it deletes the logs of the test it compiles, so a log only an earlier compile wrote
@@ -41,6 +58,15 @@ submake: Makefile.rocq
 	  if [ $$status -eq 0 ] || [ -f "$${spec%.expect}.vo" ]; then expects="$$expects $$spec"; fi; \
 	done; \
 	if [ -n "$$expects" ]; then python3 check_expect.py $$expects || failed=1; fi; \
+	for t in $(ROCQCHKS); do \
+	  if [ -f "$$t.vo" ]; then \
+	    $(COQBIN)rocqchk -silent -o -Q ../src LeanImport -R . Test Test.$$t > "$$t.rocqchk.log" 2>&1 || { \
+	      first=$$(sed -n '/[^[:space:]]/{p;q;}' "$$t.rocqchk.log"); \
+	      echo "ROCQCHK FAIL: tests/$$t.vo: $${first:-no output}" >&2; failed=1; }; \
+	  elif [ $$status -eq 0 ]; then \
+	    echo "ROCQCHK FAIL: tests/$$t.vo: no such file after the make (is $$t.v in tests/_CoqProject?)" >&2; failed=1; \
+	  fi; \
+	done; \
 	for spec in $(UNLISTED_EXPECTS); do \
 	  echo "EXPECT FAIL: tests/$$spec: its test is not in EXPECT_TESTS of tests/Makefile" >&2; failed=1; \
 	done; \

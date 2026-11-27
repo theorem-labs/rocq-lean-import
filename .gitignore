@@ -13,6 +13,8 @@ src/g_lean.ml
 META*
 
 *.log.out
+# the rocqchk step of tests/Makefile
+*.rocqchk.log
 
 # decompressed from dumps/*.ndjson.zip by the tests
 /dumps/init.ndjson
