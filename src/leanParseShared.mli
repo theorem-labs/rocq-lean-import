@@ -8,6 +8,9 @@ module RRange : sig
   val length : 'a t -> int
   val append : 'a t -> 'a -> 'a t
   val get : 'a t -> int -> 'a
+  (** [get r i] is the [i]th value appended, from 0; [Not_found] when [i] is
+      negative or not below [length r]. *)
+
   val singleton : 'a -> 'a t
 end
 

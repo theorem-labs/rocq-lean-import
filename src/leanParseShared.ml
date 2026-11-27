@@ -18,7 +18,7 @@ end = struct
   let append { data; len } x = { data = Range.cons x data; len = len + 1 }
 
   let get { data; len } i =
-    if i >= len then raise Not_found else Range.get data (len - i - 1)
+    if i < 0 || i >= len then raise Not_found else Range.get data (len - i - 1)
 
   let singleton x = { data = Range.cons x Range.empty; len = 1 }
 end

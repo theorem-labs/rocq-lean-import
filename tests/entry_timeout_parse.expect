@@ -50,6 +50,21 @@ entry_timeout_parse_messages.log.out	+	unsupported NDJSON record
 entry_timeout_parse_messages.log.out	+	line 133: RLI434T.fast
 entry_timeout_parse_messages.log.out	+	Done!
 entry_timeout_parse_messages.log.out	+	Skipped 2
+# negative_id: a negative id is unknown, as an absent one is (before the fix, an anomaly)
+entry_timeout_parse_negative_id.log.out	+	Skipping: Error at line 132 (for line-132)
+entry_timeout_parse_negative_id.log.out	+	NDJSON parse error at line 132: unknown name id -1
+entry_timeout_parse_negative_id.log.out	+	Skipping: Error at line 134 (for line-134)
+entry_timeout_parse_negative_id.log.out	+	NDJSON parse error at line 134: unknown level id -1
+entry_timeout_parse_negative_id.log.out	+	Skipping: Error at line 136 (for line-136)
+entry_timeout_parse_negative_id.log.out	+	NDJSON parse error at line 136: unknown expression id -1
+entry_timeout_parse_negative_id.log.out	-	Anomaly
+entry_timeout_parse_negative_id.log.out	-	Error at line 133 (
+entry_timeout_parse_negative_id.log.out	-	Error at line 135 (
+entry_timeout_parse_negative_id.log.out	-	Error at line 137 (
+entry_timeout_parse_negative_id.log.out	+	line 138: RLINegativeNext
+entry_timeout_parse_negative_id.log.out	-	Error at line 138 (
+entry_timeout_parse_negative_id.log.out	+	Done!
+entry_timeout_parse_negative_id.log.out	+	Skipped 3
 # prefix
 entry_timeout_parse_prefix.log.out	+	Skipping: Error at line 132 (for line-132)
 entry_timeout_parse_prefix.log.out	+	unknown expression id 9999

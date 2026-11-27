@@ -125,10 +125,6 @@ let id_fields = function
   | `Assoc fields -> List.filter (fun (k, _) -> List.mem k id_keys) fields
   | _ -> []
 
-let record_id ~lcnt key = function
-  | `Int i -> i
-  | _ -> err ~lcnt ("field " ^ key ^ " must be an integer")
-
 let bad_next ~lcnt kind expected actual =
   err ~lcnt
     (kind ^ " id " ^ string_of_int actual ^ " is not the next expected id "
@@ -355,7 +351,7 @@ let parse_inductive ~lcnt state payload =
 (* [MAJOR.MINOR.PATCH] at the start of [v], after one optional leading [v],
    followed by nothing or by a suffix after [-] ([4.17.0-rc1]). *)
 let version_triple v =
-  let v = if String.length v > 0 && v.[0] = 'v' then String.sub v 1 (String.length v - 1) else v in
+  let v = if String.starts_with ~prefix:"v" v then String.sub v 1 (String.length v - 1) else v in
   let core = match String.index_opt v '-' with Some k -> String.sub v 0 k | None -> v in
   let number s =
     if s <> "" && String.for_all (fun c -> '0' <= c && c <= '9') s then int_of_string_opt s
@@ -368,9 +364,9 @@ let version_triple v =
 (* The path of an export, from its metadata [meta.lean.version]: Lean 4.17.0
    and later take the new path, with that version [MAJOR.MINOR.PATCH]; an
    earlier version takes the legacy one. A metadata object with no [lean]
-   object, no [version] string, or a version that does not start with
-   [MAJOR.MINOR.PATCH] takes the legacy path, as before this choice existed,
-   with a warning that names the field and its value. *)
+   object, no [version] string, or a version that is not exactly three numbers
+   before its first [-] (after one optional leading [v]; [4.17.0.1] is not)
+   takes the legacy path, with a warning that names the field and its value. *)
 let export_path ~lcnt meta =
   let legacy field value =
     Feedback.msg_warning
@@ -414,17 +410,16 @@ let has_tag tags json = List.exists (fun k -> member k json <> None) tags
 
 let has_payload json =
   has_tag name_tags json || has_tag level_tags json || has_tag expr_tags json
-  || member "meta" json <> None
-  || List.exists (fun (k, _) -> member k json <> None) declarations
+  || has_tag ("meta" :: List.map fst declarations) json
 
 let unsupported ~prefix ~lcnt state =
   if prefix then (state, None) else err ~lcnt "unsupported NDJSON record"
 
-let bad_id ~prefix ~lcnt state json key kind expected id =
+let bad_id ~prefix ~lcnt state json key kind expected =
   (* As before, an untagged name or level record with no clear next id is
      unsupported. A tagged record must report what is wrong with its id. *)
   if has_payload json then
-    let actual = record_id ~lcnt key id in
+    let actual = require_int ~lcnt key json in
     bad_next ~lcnt kind expected actual
   else unsupported ~prefix ~lcnt state
 
@@ -444,15 +439,15 @@ let parse_line ~prefix ~lcnt state l =
        A wrong or missing tag therefore refuses that id in its own sequence. *)
     | [ ("in", `Int i) ] when i = RRange.length state.names -> parse_name ~lcnt state i json
     | [ ("il", `Int i) ] when i = RRange.length state.univs -> parse_level ~lcnt state i json
-    | [ ("ie", id) ] ->
-      let i = record_id ~lcnt "ie" id in
+    | [ ("ie", _) ] ->
+      let i = require_int ~lcnt "ie" json in
       let expected = RRange.length state.exprs in
       if i <> expected then bad_next ~lcnt "expression" expected i;
       parse_expr ~lcnt state i json
-    | [ ("in", id) ] ->
-      bad_id ~prefix ~lcnt state json "in" "name" (RRange.length state.names) id
-    | [ ("il", id) ] ->
-      bad_id ~prefix ~lcnt state json "il" "level" (RRange.length state.univs) id
+    | [ ("in", _) ] ->
+      bad_id ~prefix ~lcnt state json "in" "name" (RRange.length state.names)
+    | [ ("il", _) ] ->
+      bad_id ~prefix ~lcnt state json "il" "level" (RRange.length state.univs)
     | [] when has_tag name_tags json -> err ~lcnt "no field in"
     | [] when has_tag level_tags json -> err ~lcnt "no field il"
     | [] ->

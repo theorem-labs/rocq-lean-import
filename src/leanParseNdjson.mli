@@ -28,8 +28,9 @@ val empty_state : parsing_state
 val is_ndjson_line : string -> bool
 
 val do_prefix_line : lcnt:int -> parsing_state -> string -> parsing_state
-(** Read a line before the first line to import: its names, levels and
-    expressions only; a declaration is skipped without being parsed. *)
+(** Read a line before the first line to import: its metadata (which sets
+    [path]), names, levels and expressions only; a declaration is skipped
+    without being parsed. *)
 
 val do_line : lcnt:int -> parsing_state -> string -> parsing_state * action option
 val pp_state : parsing_state -> Pp.t

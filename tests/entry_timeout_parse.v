@@ -18,9 +18,15 @@ Redirect "entry_timeout_parse_bad_format.log" Succeed Lean Import "../dumps/lean
 Redirect "entry_timeout_parse_truncated.log" Succeed Lean Import "../dumps/lean434/parse_truncated.ndjson".
 Redirect "entry_timeout_parse_empty.log" Succeed Lean Import "../dumps/lean434/parse_empty.ndjson".
 Redirect "entry_timeout_parse_messages.log" Succeed Lean Import "../dumps/lean434/parse_messages.ndjson".
+(* A negative id (lines 132, 134 and 136 of parse_negative_id.ndjson) is an unknown id, as an absent one is: each
+   line is refused with "unknown ... id -1", and the axiom of line 138 is imported. *)
+Redirect "entry_timeout_parse_negative_id.log" Succeed Lean Import "../dumps/lean434/parse_negative_id.ndjson".
+(* Before its fix (ci/build-9.2-cut.sh --revert-fix), each of those lines is refused with an anomaly, the
+   Invalid_argument of the range lookup: *)
+(* r5 assertion: "entry_timeout_parse_negative_id.log" Anomaly *)
 (* A line before the first line to import (the 134 below) is read for its
-   names, levels and expressions only, and is refused like any other line:
-   lines 132 and 133 of parse_id.ndjson are, and the import goes on. *)
+   metadata, names, levels and expressions only, and is refused like any other
+   line: lines 132 and 133 of parse_id.ndjson are, and the import goes on. *)
 Redirect "entry_timeout_parse_prefix.log" Succeed Lean Import "../dumps/lean434/parse_id.ndjson" 134.
 
 Set Lean Error Mode "Stop".

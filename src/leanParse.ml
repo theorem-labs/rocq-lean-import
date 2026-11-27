@@ -43,7 +43,7 @@ let get kind range refused id =
   let id = int_of_string id in
   if Int.Set.mem id refused then
     CErrors.user_err Pp.(str "uses " ++ str kind ++ spc () ++ int id ++ str " of a refused line");
-  match (if id < 0 then raise Not_found else RRange.get range id) with
+  match RRange.get range id with
   | value -> value
   | exception Not_found ->
     CErrors.user_err Pp.(str "unknown " ++ str kind ++ spc () ++ int id)
