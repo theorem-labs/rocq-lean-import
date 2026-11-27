@@ -1041,7 +1041,7 @@ let string_lit_expr version s =
   (* [U.Prop] is Lean's universe level 0, as in the exports. *)
   let list_ctor k = App (const [ "List"; k ] [ U.Prop ], char) in
   let cons rest c =
-    App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanExpr.Nat (Z.of_int c))), rest)
+    App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanExpr.Nat (string_of_int c))), rest)
   in
   let string_ctor = if version < (4, 26, 0) then [ "String"; "mk" ] else [ "String"; "ofList" ] in
   App (const string_ctor [], List.fold_left cons (list_ctor "nil") (List.rev (code_points s)))
@@ -1302,7 +1302,7 @@ let rec to_constr =
           ()
       in
       ret c
-    | Nat i ->
+    | Nat s ->
       (* [nat_ints] is not synchronized so ensure Nat is instantiated *)
       instantiate (N.append N.anon "Nat") [] >>= fun nat ->
       let nat, _ = Constr.destInd nat in
@@ -1316,7 +1316,7 @@ let rec to_constr =
             EConstr.to_constr evd p)
           ()
       in
-      ret (nat_int nat double i)
+      ret (nat_int nat double (Z.of_string s))
     | String s -> (
       match !current_path with
       | LeanParseNdjson.New version -> to_constr env (string_lit_expr version s)
@@ -2593,6 +2593,13 @@ and refuse state ~from ~until ch exn msg =
 
 let pstate = Summary.ref ~name:"lean-parse-state" LeanParse.empty_state
 
+(* The importer's state as one library object: [import] adds it at the end of each import, and it is written in the
+   .vo (Keep) and restored by [cache] when it is added and when the library is loaded. The Summary.refs it restores
+   are frozen and unfrozen in memory only. rocqchk reads the object with the rest of the .vo, and its reader
+   (checker/analyze.ml) reads no OCaml custom block (a Zarith value of 2^62 or more, an Int32, a Bigarray) and no
+   float array: the tuple holds the text parser's state, [sets], [declared], [entries], [squash_info] and
+   [height_cache], that is names (string lists), strings (a literal is one, [LeanExpr.Nat]), ints, bools, Rocq's
+   Level, Universe and GlobRef values, and maps, sets, lists and ranges of these. *)
 let lean_obj =
   let cache (pstatev, setsv, declaredv, entriesv, squash_infov, heightv) =
     pstate := pstatev;

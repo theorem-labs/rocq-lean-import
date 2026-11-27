@@ -183,19 +183,19 @@ let parse_level ~lcnt state next json =
   in
   ({ state with univs = RRange.append state.univs level }, None)
 
-let parse_nat_lit ~lcnt = function
-  | `String n ->
-    let n =
+(* A natural literal ([LeanExpr.Nat]): a string of a number Zarith reads, or an integer; refused when negative.
+   Kept as [Z.to_string] of its value, so that ["007"], ["7"] and [7] are the same string. *)
+let parse_nat_lit ~lcnt json =
+  let n =
+    match json with
+    | `String n -> (
       try Z.of_string n
-      with Invalid_argument _ | Failure _ -> err ~lcnt "bad natural literal"
-    in
-    if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
-    n
-  | `Int n ->
-    let n = Z.of_int n in
-    if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
-    n
-  | _ -> err ~lcnt "bad natural literal"
+      with Invalid_argument _ | Failure _ -> err ~lcnt "bad natural literal")
+    | `Int n -> Z.of_int n
+    | _ -> err ~lcnt "bad natural literal"
+  in
+  if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
+  Z.to_string n
 
 let parse_expr ~lcnt state next json =
   let placeholder () =
