@@ -976,73 +976,14 @@ let one_more_int nat =
   nat_ints := ZMap.add i c !nat_ints;
   max_known_int := i
 
-let max_nat_int = Z.of_string "5000"
-
-let nat_int_binary nat double i =
-  assert (Z.leq Z.zero i);
-  let rec to_binary z acc =
-    if Z.equal z Z.zero then acc
-    else
-      let bit = if Z.equal (Z.rem z (Z.of_int 2)) Z.zero then 0 else 1 in
-      to_binary (Z.div z (Z.of_int 2)) (bit :: acc)
-  in
-  let binary_representation = to_binary i [] in
-  let xO = Constr.mkConstructU ((nat, 1), UVars.Instance.empty) in
-  let xS = Constr.mkConstructU ((nat, 2), UVars.Instance.empty) in
-  let fS x = Constr.mkApp (xS, [| x |]) in
-  let fDouble x = Constr.mkApp (double, [| x |]) in
-  let rec construct_nat binary_list_rev =
-    match binary_list_rev with
-    | [] -> xO
-    | 0 :: rest ->
-      let rest_constr = construct_nat rest in
-      fDouble rest_constr
-    | 1 :: rest ->
-      let rest_constr = construct_nat rest in
-      fS (fDouble rest_constr)
-    | _ -> assert false
-  in
-  construct_nat (List.rev binary_representation)
-
-(* A literal [i] from [max_nat_int] on is [Nat_succ] applied [r] times to the
-   binary form of [i - r], with [r] in 1..[lit_segment] chosen so that [i - r]
-   is congruent to [lit_segment / 2] modulo [lit_segment]. In each block
-   [b + 1] through [b + lit_segment], large literals use the same binary
-   form of [b]. If [j] and [j - 1] are large literals in the same block,
-   the predecessor of the literal [j] is the literal [j - 1], term for term.
-   At the lower boundary the predecessor of the literal [b + 1] is the
-   binary form of [b], not the literal [b].
-
-   This matters to the kernel's conversion. Matching a literal against
-   [Nat_succ] yields its predecessor; when that is a closed term, two of them are
-   compared structurally ([fast_test]). When it comes from reducing
-   [Nat_double], it is a closure of [double]'s fixpoint, and two such closures
-   are compared one [Nat_succ] at a time, each a non-tail call: the depth is the
-   value. When conversion strips [k] successors off the literal [j] and
-   meets the literal [j - k] in the same block ([k < r]), the two terms
-   match structurally. Crossing the block boundary can still force a unary
-   walk: [Nat.pred] of the literal 134217733 reaches the bare binary form
-   of 134217732, not the literal 134217732.
-
-   [lit_segment] is small because the cost of some conversions grows quickly
-   with the number [r] of leading [Nat_succ]: importing
-   dumps/lean434/linear.ndjson (fixedVar = 100000000) takes 3.7 s with [r] = 8
-   and 10.9 s with [r] = 16, and one entry runs past 60 s with [r] = 32 or with
-   the plain binary form. *)
-let lit_segment = 8
-
+(* A literal below [LeanNatTransport.max_nat_int] is [Nat_succ] applied [i]
+   times to [Nat_zero], each predecessor the literal [i - 1] (kept in
+   [nat_ints]); from it on, the form [LeanNatTransport.large_literal] builds
+   (shared with the transport pass, whose evaluation writes the literals it
+   computes in the same form). *)
 let nat_int nat double i =
   assert (Z.leq Z.zero i);
-  if Z.leq max_nat_int i then begin
-    let half = Z.of_int (lit_segment / 2) in
-    let seg = Z.of_int lit_segment in
-    let r = 1 + Z.to_int (Z.rem (Z.sub (Z.pred i) half) seg) in
-    let xS = Constr.mkConstructU ((nat, 2), UVars.Instance.empty) in
-    let rec succs k c =
-      if k = 0 then c else succs (k - 1) (Constr.mkApp (xS, [| c |]))
-    in
-    succs r (nat_int_binary nat double (Z.sub i (Z.of_int r)))
-  end
+  if Z.leq LeanNatTransport.max_nat_int i then LeanNatTransport.large_literal nat double i
   else begin
     while Z.lt !max_known_int i do
       one_more_int nat
@@ -2291,23 +2232,8 @@ exception TimedOut
 let entry_timeout = ref None
 
 let () =
-  Goptions.declare_int_option
-    {
-      optdepr = None;
-      optstage = Interp;
-      optkey = [ "Lean"; "Entry"; "Timeout" ];
-      optread = (fun () -> !entry_timeout);
-      optwrite =
-        (fun x ->
-          (match x with
-          | Some n when n <= 0 ->
-            CErrors.user_err
-              Pp.(
-                str "Lean Entry Timeout must be a positive number of seconds, not "
-                ++ int n ++ str ".")
-          | None | Some _ -> ());
-          entry_timeout := x);
-    }
+  LeanNatTransport.declare_positive_int_option
+    ~key:[ "Lean"; "Entry"; "Timeout" ] ~unit:"seconds" entry_timeout
 
 (* Lean Entry Memory Limit: by how many GiB declaring one entry may grow the
    major heap above its size at the entry's start, unset by default. An entry
@@ -2316,23 +2242,8 @@ let () =
 let entry_memory_limit = ref None
 
 let () =
-  Goptions.declare_int_option
-    {
-      optdepr = None;
-      optstage = Interp;
-      optkey = [ "Lean"; "Entry"; "Memory"; "Limit" ];
-      optread = (fun () -> !entry_memory_limit);
-      optwrite =
-        (fun x ->
-          (match x with
-          | Some n when n <= 0 ->
-            CErrors.user_err
-              Pp.(
-                str "Lean Entry Memory Limit must be a positive number of GiB, not "
-                ++ int n ++ str ".")
-          | None | Some _ -> ());
-          entry_memory_limit := x);
-    }
+  LeanNatTransport.declare_positive_int_option
+    ~key:[ "Lean"; "Entry"; "Memory"; "Limit" ] ~unit:"GiB" entry_memory_limit
 
 (* The refusals of an entry stopped by a limit: the limit, and the size of the
    major heap at the entry's start, in MiB. *)

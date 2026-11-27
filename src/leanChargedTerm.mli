@@ -11,6 +11,9 @@ exception Out_of_budget
 exception Out_of_total
 (** All the parts of the entry together need more than their budget. *)
 
+exception Out_of_pair
+(** The current pair of literal arithmetic needs more than its cap ([with_pair]); caught by [with_pair] alone. *)
+
 val max_depth : int
 (** The deepest nesting the pass follows, counted from the entry's value or type down through the terms its
     scans and walks visit and the Nat terms it computes; deeper, it stops ([Out_of_budget]) before its recursion
@@ -51,30 +54,50 @@ val globref_table : unit -> (Names.GlobRef.t, 'a) table
 
 val id_table : unit -> (Names.Id.t, 'a) table
 
+val constructor_table : unit -> (Names.constructor, 'a) table
+(** Keyed by [Construct.UserOrd]. *)
+
+val held_table : unit -> (Names.Constant.t * Z.t * Z.t, 'a) table
+(** Keyed by a function ([Constant.CanOrd]) and two values. *)
+
+val value_table : unit -> (Z.t, 'a) table
+(** Keyed by a closed Nat value. *)
+
 type t = {
   genv : Environ.env;  (** the environment the pass reads declarations from *)
   mutable steps : int;  (** the steps left to the current part *)
   mutable total : int;  (** the steps left to all the parts of the entry together *)
+  mutable pair : int;  (** the steps left to the current pair of literal arithmetic, [max_int] outside one *)
+  mutable in_pair : bool;  (** whether a pair runs *)
   sizes : int option memo;  (** [size] *)
   free : int memo;  (** [free] *)
   normal : Constr.t memo;  (** [nf_beta] *)
 }
 
 val create : Environ.env -> steps:int -> total:int -> t
+(** With no pair running. *)
 
 val tick : t -> int -> unit
-(** [tick ch n] charges [n] (nonnegative) steps to the current part and to the total, before the work they pay
-    for: [Out_of_budget] or [Out_of_total] when either goes below zero. *)
+(** [tick ch n] charges [n] (nonnegative) steps to the current part, to the total and to the pair's counter,
+    before the work they pay for, and tests them in that order: [Out_of_budget], [Out_of_total] or
+    [Out_of_pair] when one goes below zero. *)
 
 val pay : t -> int option -> unit
 (** Charge a size estimate: one larger than [max_int] raises [Out_of_budget] before the work; one equal to what
     is left is accepted. *)
 
-val memo_get : t -> 'a memo -> Constr.t -> 'a option
-(** One step, then the slot's result when it holds that very term. *)
+val with_pair : t -> int -> (unit -> 'a) -> 'a option
+(** [with_pair ch cap f]: [f ()], whose charges are at most [cap] when no pair runs ([None] when they would be
+    more), its result when one runs (the pair's counter counts them with the running pair's). The counter is
+    [max_int] again once [f] returns or raises; any exception but [Out_of_pair] is raised again. *)
 
-val memo_put : t -> 'a memo -> Constr.t -> 'a -> unit
-(** One step, then the slot holds the term and its result. *)
+type 'a lookup = Hit of 'a | Miss of int  (** [Miss] carries the slot of the term missed *)
+
+val memo_find : t -> 'a memo -> Constr.t -> 'a lookup
+(** One step, then the slot's result when it holds that very term, else the slot. *)
+
+val memo_set : t -> 'a memo -> int -> Constr.t -> 'a -> unit
+(** [memo_set ch m slot c v]: one step, then the slot [memo_find] gave for [c] holds [c] and [v]. *)
 
 val table_find : t -> ('k, 'a) table -> 'k -> 'a option
 (** One step, and one for each key of the bucket it compares. *)
@@ -86,19 +109,10 @@ val table_add : t -> ('k, 'a) table -> 'k -> 'a -> unit
 val node_steps : Constr.t -> int
 (** The steps of one visit of a node: the node and its immediate subterms. *)
 
-val closed_leaf : Constr.t -> bool
-(** A leaf without a de Bruijn index: a constant, constructor, inductive type, sort, variable or literal. *)
-
-val is_leaf : Constr.t -> bool
-(** [Constr.isRel c || closed_leaf c]. *)
-
 val size : t -> int -> Constr.t -> int option
 (** [size ch depth c]: the nodes of [c] as a tree (shared subterms counted at each occurrence), each with its
     own universe data (the instance of a constant, inductive type, constructor, match or array, the levels of a
     sort), computed on the shared term, each node visited charged; [None] above [max_int]. *)
-
-val free : t -> int -> Constr.t -> int
-(** The greatest de Bruijn index free in the term (0 when it is closed). *)
 
 val closed : t -> int -> Constr.t -> bool
 
@@ -116,6 +130,12 @@ val subst_walk : t -> int -> Constr.t array -> int -> int -> Constr.t -> Constr.
 val subst1_ch : t -> int -> Constr.t -> Constr.t -> Constr.t
 (** [Vars.subst1], charged as [subst_walk]. *)
 
+val subst_closed : t -> int -> Constr.t array -> int -> int -> Constr.t -> Constr.t
+(** [subst_closed ch depth args lo k c]: [subst_walk] for closed replacements, with the same steps for [k] and for
+    each node it reads or copies, but with no payment for a replacement placed again and none for a lift: the
+    replacement is shared, never copied, so that the term it builds may hold far more nodes as a tree than it
+    charged. The caller's obligation: every term of [args] is closed. *)
+
 val app_ch : t -> Constr.t -> Constr.t array -> Constr.t
 (** [Constr.mkApp], the copy of both argument arrays charged. *)
 
@@ -125,23 +145,19 @@ val sub_ch : t -> 'a array -> int -> int -> 'a array
 val smart_map_ch : t -> ('a -> 'a) -> 'a array -> 'a array
 (** [CArray.Smart.map], the copy charged when an element changes. *)
 
-val instantiate : t -> int -> UVars.Instance.t -> Constr.t -> Constr.t
-(** The term at a universe instance: at a nonempty one its [size] and the instance's length are paid first. *)
-
 val const_decl : t -> Names.Constant.t -> Declarations.constant_body option
 (** The declaration of a constant, one step. *)
 
 val def_body : t -> int -> UVars.Instance.t -> Declarations.constant_body -> Constr.t option
-(** The value of a transparent constant at a universe instance ([instantiate]): the one reader of constant
-    bodies. *)
+(** The value of a transparent constant at a universe instance (at a nonempty one, its size and the instance's length
+    paid first): the one reader of constant bodies. *)
 
 val max_head_steps : int
 (** The most steps [whd] takes on one term (64). *)
 
-val apply_lambdas : t -> int -> fits:int -> Constr.t -> Constr.t array -> (Constr.t * int) option
-(** [apply_lambdas ch depth ~fits f args]: [f] applied to [args], each leading lambda of [f] taking an
-    argument (one step each, at most [fits] of them), with one substitution of the [k] arguments taken, and the
-    rest applied: the term and [k]; [None] when [f] would take more than [fits]. *)
+val beta_closed : t -> int -> Constr.t -> Constr.t array -> Constr.t
+(** [f] applied to [args]: each leading lambda takes an argument, one step each, the arguments taken substituted by
+    [subst_closed], and the rest applied. *)
 
 val whd :
   ?stop:(Constr.t -> bool) -> t -> Environ.env -> int -> int -> Constr.t -> (int * Constr.t * Constr.t array) option
@@ -154,20 +170,24 @@ val whd :
     of anything but a constructor, or once the term would take more than [max_head_steps] steps (the count
     checked before each step's substitution). *)
 
-val nf_beta : t -> int -> Constr.t -> Constr.t
-(** The beta normal form, by its syntax (no constant unfolded), each walk and contraction charged. *)
-
 val beta : t -> int -> Constr.t -> Constr.t
-(** [nf_beta] when a charged scan finds a redex, else the term itself. *)
+(** The beta normal form by its syntax (no constant unfolded), each walk and contraction charged, when a charged scan
+    finds a redex; else the term itself. *)
 
 val const_type : t -> int -> Names.Constant.t -> UVars.Instance.t -> Constr.types option
 (** The declared type of a constant at a universe instance. *)
+
+val ind_type : t -> int -> Names.inductive -> UVars.Instance.t -> Constr.types option
+(** The declared type (arity) of an inductive type at a universe instance; [None] for a template one. *)
 
 val ctor_type : t -> int -> Names.constructor -> UVars.Instance.t -> Constr.types option
 (** The declared type of a constructor at a universe instance; [None] for a template inductive type. *)
 
 val expose_prod : t -> Environ.env -> int -> Constr.types -> Constr.types option
 (** The type reduced at its head ([whd]) to a product; [None] when [whd] does not get there. *)
+
+val expose_sort : t -> Environ.env -> int -> Constr.types -> Sorts.t option
+(** The type reduced at its head ([whd]) to a sort; [None] when [whd] does not get there. *)
 
 val type_of : t -> Environ.env -> int -> Constr.t -> Constr.types option
 (** The type of a term, as [Retyping.get_type_of] gives it for the terms it reads: a variable's declared type,

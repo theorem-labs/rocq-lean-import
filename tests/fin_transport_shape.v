@@ -112,7 +112,7 @@ Check RLI434SW_poly_body.
 (* W09a: cast the side closed by the inner lambda. Decline the open side
    under the forall, whose application on its own does not bind x. *)
 Redirect "fin_transport_shape_binder_depth_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8863 8969.
-Set Lean Transport Step Budget 2403.
+Set Lean Transport Step Budget 2407.
 Redirect "fin_transport_shape_binder_depth_closed.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_binder_depth.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8969 8970.
@@ -120,7 +120,7 @@ Check RLI434SW_binder_depth.
 
 (* W09b: non-identical parameter trees compare equal; their walk is charged. *)
 Redirect "fin_transport_shape_parameters_equal_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 8970 9036.
-Set Lean Transport Step Budget 10177.
+Set Lean Transport Step Budget 10169.
 Redirect "fin_transport_shape_parameters_equal_parameters.log" Succeed Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_shape_parameters_equal.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9036 9037.
@@ -153,7 +153,7 @@ Check RLI434SW_let_subst.
    part of the entry (the other Fin hole's argument), below the wide pair's argument part under the measured
    mutant that checks the 64-step limit only after all of wideA's binders are substituted. *)
 Redirect "fin_transport_shape_early_cap_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9442 9824.
-Set Lean Transport Step Budget 6324.
+Set Lean Transport Step Budget 6225.
 Redirect "fin_transport_shape_early_cap.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 9824 9825.
 Check RLI434SW_early_cap.
 Unset Lean Transport Step Budget.
@@ -189,7 +189,7 @@ Unset Lean Transport Step Budget.
 
 (* W14b: the long Fin head in the expected type of an argument: that argument's gate is the first to read the
    head, and peels its product chain in the argument's own part, the entry's largest part (2,998 steps; the own
-   part 393; counters of this file, run fpport-hm-b-20261126t160820). The stop case is one step below that
+   part 393; counters of this file, Job lport-l11b-20261126t203814). The stop case is one step below that
    part; Lean's value then goes to the kernel, whose conversion of the UInt32 values outlasts the 20 s limit. *)
 Redirect "fin_transport_shape_product_peel_arg_deps.log" Lean Import "../dumps/lean434/fin_shape_work.ndjson" 10300 10327.
 Set Lean Transport Step Budget 2997.

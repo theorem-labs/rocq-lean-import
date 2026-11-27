@@ -447,7 +447,11 @@ Register reflective_Char_legacy_mk_prim as lean.Char.legacy.mk.reflective_prim.
    values of a [Fin] that two closed terms reduce to) do not go through [N]: each is [sprop_transport]
    along [eq_refl] of the unary literal of the value, applied to [eq_refl] of the first value, so that the
    kernel converts each value with that literal on the unary [Nat]; the importer generates one only when
-   the value and every operand of it but a divisor are below 65536. *)
+   the value and every operand of it but a divisor are below 65536. Literal arithmetic (two closed terms
+   of a data type that the importer evaluates) adds the lemmas of Lean's [-] ([toN_pred], [toN_sub]), of a
+   division ([Nat_le_of_toN], [toN_of_eq], with Lean's [Nat.div_eq_of_lt_le]) and the cast at a type of
+   any universe ([sprop_transport_any]); [toN_nat], [Nat_le_of_toN] and the [toN] lemmas rely on no
+   axiom, [toN_of_eq] and [sprop_transport_any] only on the definitional UIP of [eq]. *)
 Section nat_transport.
   Import ZArith NArith Lia.
   Local Unset Universe Polymorphism.
@@ -546,10 +550,53 @@ Section nat_transport.
   Definition sprop_transport (P : Nat -> SProp) {x y : Nat} (e : @eq@{Set} Nat x y) (p : P x) : P y.
   Proof. destruct e; exact p. Defined.
 
+  (* Lean's [Nat.pred] and [Nat.sub], given as their defining equations, each closed by [Logic.eq_refl]. *)
+  Lemma toN_pred (pred : Nat -> Nat) (pred_0 : Logic.eq (pred Nat_zero) Nat_zero)
+    (pred_S : forall n, Logic.eq (pred (Nat_succ n)) n) (a : Nat)
+    : Logic.eq (toN (pred a)) (N.pred (toN a)).
+  Proof. destruct a as [|a]; [rewrite pred_0 | rewrite pred_S]; cbn [toN]; lia. Qed.
+
+  Lemma toN_sub (pred : Nat -> Nat) (Hpred : forall a, Logic.eq (toN (pred a)) (N.pred (toN a)))
+    (sub : Nat -> Nat -> Nat)
+    (sub_0 : forall n, Logic.eq (sub n Nat_zero) n)
+    (sub_S : forall n m, Logic.eq (sub n (Nat_succ m)) (pred (sub n m)))
+    (a b : Nat) : Logic.eq (toN (sub a b)) (N.sub (toN a) (toN b)).
+  Proof.
+    induction b as [|b IH].
+    - rewrite sub_0; cbn [toN]; lia.
+    - rewrite sub_S, Hpred, IH; cbn [toN]; lia.
+  Qed.
+
+  Lemma toN_nat (n : Nat) : Logic.eq (toN n) (N.of_nat (nat_of_Nat n)).
+  Proof. induction n as [|n IH]; cbn [toN nat_of_Nat]; [reflexivity | rewrite IH; lia]. Qed.
+
+  (* A proof of Lean's [a ≤ b] from the binary values of [a] and [b]. *)
+  Lemma Nat_le_of_toN (a b : Nat) (wa wb : N) (Ha : Logic.eq (toN a) wa) (Hb : Logic.eq (toN b) wb)
+    (E : Logic.eq (N.leb wa wb) true) : Nat_le a b.
+  Proof.
+    apply nat_le_Nat_le. apply N.leb_le in E. rewrite <- Ha, <- Hb, !toN_nat in E. lia.
+  Qed.
+
+  (* The binary value of a term [x] that Lean proves equal to a term of known value (a proof of Lean's
+     library such as [Nat.div_eq_of_lt_le]). *)
+  Lemma toN_of_eq (x y : Nat) (w : N) (E : @eq@{Set} Nat x y) (H : Logic.eq (toN y) w) : Logic.eq (toN x) w.
+  Proof. destruct E; exact H. Qed.
+
   Register N.add as lean.N.add.
   Register N.mul as lean.N.mul.
   Register N.pow as lean.N.pow.
+  Register N.sub as lean.N.sub.
 End nat_transport.
+
+(* Literal arithmetic: the cast at the type of the two terms, universe-polymorphic in the universe [u] of
+   the type, which the importer reads from the type (Lean's [Bool], [Int] and omega's [Constraint]). *)
+Section literal_arithmetic.
+  Local Set Universe Polymorphism.
+
+  Definition sprop_transport_any@{u} (A : Type@{u}) (P : A -> SProp) {x y : A} (e : @eq@{u} A x y) (p : P x)
+    : P y.
+  Proof. destruct e; exact p. Defined.
+End literal_arithmetic.
 
 Register toN_succ_step as lean.toN_succ_step.
 Register toN_double_step as lean.toN_double_step.
@@ -560,3 +607,8 @@ Register toN_mul as lean.toN_mul.
 Register toN_pow as lean.toN_pow.
 Register Nat_eq_of_toN as lean.Nat_eq_of_toN.
 Register sprop_transport as lean.sprop_transport.
+Register sprop_transport_any as lean.sprop_transport_any.
+Register toN_pred as lean.toN_pred.
+Register toN_sub as lean.toN_sub.
+Register Nat_le_of_toN as lean.Nat_le_of_toN.
+Register toN_of_eq as lean.toN_of_eq.

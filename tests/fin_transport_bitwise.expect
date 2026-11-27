@@ -170,7 +170,7 @@ fin_transport_bitwise_bud_fb_part.log.out	+	Done!
 fin_transport_bitwise_bud_fb_over.log.out	+	line 18158: RLI434B.bud_fb: 1 argument(s) transported (RLI434B_bud_fb__nat_eq_1)
 fin_transport_bitwise_bud_fb_over.log.out	-	the transport pass fails
 fin_transport_bitwise_bud_fb_over.log.out	+	Done!
-fin_transport_bitwise_bud_fb_stop.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 18533 steps
+fin_transport_bitwise_bud_fb_stop.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 18116 steps
 fin_transport_bitwise_bud_fb_stop.log.out	-	argument(s) transported
 fin_transport_bitwise_bud_fb_stop.log.out	-	the transport pass fails
 fin_transport_bitwise_bud_fb_stop.log.out	+	Done!
@@ -183,11 +183,11 @@ fin_transport_bitwise_const_only_part.log.out	+	Done!
 fin_transport_bitwise_const_only_over.log.out	+	line 19217: RLI434B.const_only: 1 argument(s) transported (RLI434B_const_only__nat_eq_1)
 fin_transport_bitwise_const_only_over.log.out	-	the transport pass fails
 fin_transport_bitwise_const_only_over.log.out	+	Done!
-fin_transport_bitwise_const_only_stop.log.out	+	line 19217: RLI434B.const_only: the transport pass stops: it needs more than 48935 steps
+fin_transport_bitwise_const_only_stop.log.out	+	line 19217: RLI434B.const_only: the transport pass stops: it needs more than 48954 steps
 fin_transport_bitwise_const_only_stop.log.out	-	argument(s) transported
 fin_transport_bitwise_const_only_stop.log.out	-	the transport pass fails
 fin_transport_bitwise_const_only_stop.log.out	+	Done!
-fin_transport_bitwise_bud_fb_whd.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 8027 steps
+fin_transport_bitwise_bud_fb_whd.log.out	+	line 18158: RLI434B.bud_fb: the transport pass stops: it needs more than 7610 steps
 fin_transport_bitwise_bud_fb_whd.log.out	-	argument(s) transported
 fin_transport_bitwise_bud_fb_whd.log.out	-	the transport pass fails
 fin_transport_bitwise_bud_fb_whd.log.out	+	Done!

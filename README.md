@@ -410,7 +410,8 @@ kernel reduces Lean's own `Nat.add`, `Nat.sub`, `Nat.mul` and `Nat.pow`
 on these unary terms one `Nat_succ` at a time, so a proof that Lean's
 kernel checks by computing with large numbers (`decide` on `Int`
 values near 2^33 or above, for example) does not end in Rocq in any
-useful time.
+useful time, unless the transport pass below proves the values it needs
+(literal arithmetic) for the proof arguments it casts.
 
 ## Transport of proof arguments across Nat literals
 
@@ -500,15 +501,60 @@ What it changes:
   lemma. Two such terms whose `Fin` values differ give no lemma either:
   they are left to the kernel as without the pass, and the other places
   of the same argument are still cast.
+- Literal arithmetic, when `src/Lean.v` registers its lemmas (a missing
+  one turns off this case alone). Two closed terms of a data type whose
+  heads differ (two constants, two constructors, or one of each), of a
+  type whose sort the pass reads (`Set` or `Type@{l}`, so not a function
+  type or a sort): the pass evaluates each side in rounds. A round
+  reduces the term to a normal form: it unfolds constants, beta, zeta
+  and casts, takes the branch of a `match`, unfolds a fixpoint once its
+  recursive argument is a constructor, and takes the field of a
+  constructor's projection. It holds each Lean `Nat.add`, `Nat.mul`,
+  `Nat.pow`, `Nat.sub`, `Nat.div` and `Nat.mod` with an operand or a
+  value of 65536 or more, or a held operand, and each closed `decide p`
+  whose `p` holds a `Nat` term of 65536 or more; below that it computes
+  the operation, as the kernel does. The next round puts each held
+  operation's value in its place, by a lemma of its own: `toN_sub` for
+  `-`, Lean's `Nat.div_eq_of_lt_le` with `Nat_le_of_toN` and `toN_of_eq`
+  for `/`, the certificates above for `+`, `*` and `^`, and Lean's
+  `decide_eq_true` for a `decide`, from a proof of `p`: `a ∣ b` by its
+  witness, `≤` and `=` at `Nat` by the certificates, `=` at another data
+  type by the same evaluation, and Lean's `Int.NonNeg`. When the two
+  normal forms are the same value, the lemma `<entry>__nat_eq_<k> : a =
+  d` at their type is proved through `sprop_transport_any` and the
+  argument cast along it (omega's `tidyConstraint` on `Int` literals near
+  2^32, `decide (256 ∣ 4294967296)` at Lean's `Bool`). The pair gets no
+  lemma when a `match`, fixpoint or projection meets anything but a
+  constructor or a held operation (a variable, an axiom, an opaque
+  constant, a stuck `match`), when one still waits on a held operation
+  after the last of 16 rounds of replacement, when an operation has an
+  operand of no value or a value of more than 1024 bits, at a held `%`
+  and at a closed `Nat.mod` with a value anywhere in a normal form, however
+  small (no lemma proves its value), at `Nat.beq` and `Nat.ble` on anything
+  but two literals below 65536 (which it computes), when the two values
+  differ (the other places of the argument are still cast), and when the
+  pair would need more than 200 000 steps, every nested evaluation and the
+  tree size of the proof's evaluated terms counted with it: the pass goes on
+  with the other places, evaluates no pair inside the declined one, and the
+  declined pair's steps stay charged to the argument's part. Two operations
+  of one function and values share a representative only when their form and
+  operands are the same term or unfold to the same literal, so the kernel
+  never converts `2^32` with `4294967296`; a small operation (below 65536)
+  in a parameter, proof or type is not held.
 
 What it does not change: an entry's declared type (its statement),
 the non-`SProp` arguments (the data, which stay Lean's terms, so that
 Lean's `rfl` lemmas about them still check), any kernel check, and
 the axioms: no imported entry becomes an axiom, the `toN` lemmas of
 `src/Lean.v` are closed under the global context, `Nat_eq_of_toN`
-and `sprop_transport` rely only on the definitional UIP of `eq` (as
+and `sprop_transport` (and literal arithmetic's `toN_of_eq` and
+`sprop_transport_any`) rely only on the definitional UIP of `eq` (as
 every entry that names `eq` does), and a generated lemma relies on no
-axiom (`Print Assumptions`). An entry where the pass casts nothing is
+axiom of its own (`Print Assumptions`): what it relies on is what the
+export's lemmas it names rely on, so a lemma that certifies a held
+division (literal arithmetic, through Lean's `Nat.div_eq_of_lt_le`)
+relies on that theorem's own `propext` (with the sort eliminations of
+`Iff`), as `Print Assumptions Nat_div_eq_of_lt_le` prints. An entry where the pass casts nothing is
 declared with Lean's own value; a cheap scan for the export's `Nat`
 operations and large literals in the entry and the types of the
 constants it names decides which entries are looked at, and it also
@@ -527,7 +573,10 @@ the kernel instead`) and submits Lean's value; if the kernel refuses
 that too, the entry fails with Lean's error, as without the pass. If
 the entry is accepted, the lemmas the pass declared stay declared, even
 if another place gets no lemma, the pass stops, or Lean's original
-value is used; if the entry is refused, they go with it.
+value is used; if the entry is refused, they go with it. A lemma the
+kernel refuses, a place's or one generated while the places are found
+(a held operation's, a `decide`'s), leaves its whole argument to Lean's
+term; no refusal is remembered, so a later argument generates it again.
 
 The pass is optional work, and all of it is charged before it runs
 (`tick` and `pay` of its charged term layer, `src/leanChargedTerm.ml`):
@@ -543,7 +592,8 @@ together against ten times that budget (at most OCaml's `max_int`,
 2^62 - 1 on 64-bit systems). One charge comes after its work: the
 importer's list of the export's constants of a Lean name, whose length
 is known only once the list is returned, is charged by that length
-then; the pass asks for 47 fixed names, once per entry. A reused
+then; the pass asks for 47 fixed names, once per entry, and 56 when
+the lemmas of literal arithmetic are registered. A reused
 certificate counts again at its full size because the kernel checks
 the proof tree. A substitution pays, before it is made, for each node
 it visits and, at each place it substitutes, for the size of the
@@ -595,8 +645,9 @@ function have as written: a `Nat` place is never found by unfolding a
 constant, and a Fin place only by the head reduction of the Fin case
 (at most 64 steps of each side in all). For a `Nat` place the
 operations are the six above; for a `Fin` value also `Nat.mod` and the
-seven of the Fin case; `Nat.sub` and `Nat.div` are not covered for a
-`Nat` place, nor `Nat.ble` and `Nat.beq` (`decide` on large numbers)
+seven of the Fin case; `Nat.sub` and `Nat.div` are covered only in the
+values literal arithmetic evaluates, not at a `Nat` place; `Nat.ble` and
+`Nat.beq` only on two literals below 65536; a `%` of 65536 or more not
 at all.
 Values are computed up to 1024 bits. `USize.size` (`2 ^
 System.Platform.numBits`) has no closed value.
@@ -874,7 +925,14 @@ budget does. Over a limit, the pass stops and the entry's original
 value goes to the kernel. The budget bounds the optional pass only:
 the kernel's checks of the generated lemmas and of the entry's value
 are not charged, and they run under `Lean Entry Timeout` and
-`Lean Entry Memory Limit` as for any entry.
+`Lean Entry Memory Limit` as for any entry. Inside one pair of literal
+arithmetic the pass also counts the pair's steps, every nested
+evaluation with them and the tree size of the evaluated terms its proof
+holds, against a cap of 200 000, which declines that pair: no pair inside
+it is evaluated again, its steps stay charged to the argument's part (so
+that enough declined pairs side by side stop the pass as a part over its
+budget does), and the pass goes on with the other places; there is no
+other option.
 
 ## Corpus import settings
 

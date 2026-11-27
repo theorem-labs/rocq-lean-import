@@ -78,7 +78,7 @@ fin_transport_shape_poly_body.log.out	-	the transport pass stops
 fin_transport_shape_poly_body.log.out	+	line 8862: RLI434SW.poly_body: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_poly_body.log.out	-	Error at line
 fin_transport_shape_binder_depth_deps.log.out	-	Error at line
-fin_transport_shape_binder_depth_closed.log.out	+	line 8969: RLI434SW.binder_depth: the transport pass stops: it needs more than 2403 steps
+fin_transport_shape_binder_depth_closed.log.out	+	line 8969: RLI434SW.binder_depth: the transport pass stops: it needs more than 2407 steps
 fin_transport_shape_binder_depth_closed.log.out	-	argument(s) transported
 fin_transport_shape_binder_depth_closed.log.out	+	Done!
 fin_transport_shape_binder_depth_closed.log.out	+	Skipping: Error at line 8969 (for RLI434SW.binder_depth)
@@ -89,7 +89,7 @@ fin_transport_shape_binder_depth.log.out	-	the transport pass stops
 fin_transport_shape_binder_depth.log.out	+	line 8969: RLI434SW.binder_depth: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
 fin_transport_shape_binder_depth.log.out	-	Error at line
 fin_transport_shape_parameters_equal_deps.log.out	-	Error at line
-fin_transport_shape_parameters_equal_parameters.log.out	+	line 9036: RLI434SW.parameters_equal: the transport pass stops: it needs more than 10177 steps
+fin_transport_shape_parameters_equal_parameters.log.out	+	line 9036: RLI434SW.parameters_equal: the transport pass stops: it needs more than 10169 steps
 fin_transport_shape_parameters_equal_parameters.log.out	-	argument(s) transported
 fin_transport_shape_parameters_equal_parameters.log.out	+	Done!
 fin_transport_shape_parameters_equal_parameters.log.out	-	Error at line

@@ -7,6 +7,8 @@ exception Out_of_budget
 
 exception Out_of_total
 
+exception Out_of_pair
+
 let max_depth = 10_000
 
 let check_depth depth = if depth > max_depth then raise Out_of_budget
@@ -160,36 +162,83 @@ let canonical_constant_table () = table canonical_constant_hash Constant.CanOrd.
 let ind_table () = table user_ind_hash Ind.UserOrd.equal
 let globref_table () = table user_globref_hash GlobRef.UserOrd.equal
 let id_table () = table Id.hash Id.equal
+let constructor_table () = table (fun (ind, j) -> hash_mix (user_ind_hash ind) j) Construct.UserOrd.equal
+
+(* An operation by its function's label and the values of its operands (literal arithmetic's held operations). *)
+let held_table () =
+  table
+    (fun (k, a, b) -> hash_mix (hash_mix (canonical_constant_hash k) (Z.hash a)) (Z.hash b))
+    (fun (k, a, b) (k', a', b') -> Constant.CanOrd.equal k k' && Z.equal a a' && Z.equal b b')
+
+(* Keyed by a closed Nat value (the literals the evaluator built, [nat_lit]). *)
+let value_table () = table Z.hash Z.equal
 
 type t = {
   genv : Environ.env;
   mutable steps : int;
   mutable total : int;
+  mutable pair : int;
+  mutable in_pair : bool;
   sizes : int option memo;
   free : int memo;
   normal : Constr.t memo;
 }
 
-let create genv ~steps ~total = { genv; steps; total; sizes = memo (); free = memo (); normal = memo () }
+let create genv ~steps ~total =
+  { genv; steps; total; pair = max_int; in_pair = false; sizes = memo (); free = memo (); normal = memo () }
 
-(* Both budgets are at most [max_int] and nonnegative before, so neither subtraction can overflow. *)
+(* The part, the total and the pair's counter are at most [max_int] and nonnegative before (outside a pair the
+   counter is [max_int] less the charges since the last pair, which the total bounds), so no subtraction can
+   overflow. They are tested in that order: a charge that takes the part (or the total) and the pair below zero
+   stops the pass, never the pair alone. *)
 let tick ch n =
   ch.steps <- ch.steps - n;
   ch.total <- ch.total - n;
+  ch.pair <- ch.pair - n;
   if ch.steps < 0 then raise Out_of_budget;
-  if ch.total < 0 then raise Out_of_total
+  if ch.total < 0 then raise Out_of_total;
+  if ch.pair < 0 then raise Out_of_pair
 
 let pay ch = function None -> raise Out_of_budget | Some n -> tick ch n
 
-let memo_get ch m c =
-  tick ch 1;
-  if Array.length m.slots = 0 then None
-  else match m.slots.(memo_slot c) with Some (k, v) when k == c -> Some v | Some _ | None -> None
+(* The one handler of the pair's cap: inside a pair [f ()] runs as it is (a nested evaluation counts with the
+   outer pair); else the pair starts with [cap] steps, and ends, on [f]'s result or on any exception, with the
+   counter back at [max_int]; [Out_of_pair] gives [None], any other exception is raised again. *)
+let with_pair ch cap f =
+  if ch.in_pair then Some (f ())
+  else begin
+    ch.in_pair <- true;
+    ch.pair <- cap;
+    match f () with
+    | r ->
+      ch.pair <- max_int;
+      ch.in_pair <- false;
+      Some r
+    | exception Out_of_pair ->
+      ch.pair <- max_int;
+      ch.in_pair <- false;
+      None
+    | exception e ->
+      let e = Exninfo.capture e in
+      ch.pair <- max_int;
+      ch.in_pair <- false;
+      Exninfo.iraise e
+  end
 
-let memo_put ch m c v =
+(* A read of [m] at [c]: [Hit] with the slot's result when the slot holds that very term, else [Miss] with the slot,
+   which the write of the result takes, so that a miss hashes [c] once. *)
+type 'a lookup = Hit of 'a | Miss of int
+
+let memo_find ch m c =
+  tick ch 1;
+  let i = memo_slot c in
+  if Array.length m.slots = 0 then Miss i
+  else match m.slots.(i) with Some (k, v) when k == c -> Hit v | Some _ | None -> Miss i
+
+let memo_set ch m i c v =
   tick ch 1;
   if Array.length m.slots = 0 then m.slots <- Array.make memo_slots None;
-  m.slots.(memo_slot c) <- Some (c, v)
+  m.slots.(i) <- Some (c, v)
 
 (* A lookup pays one step and one more for each entry of its bucket it compares; an addition pays one step,
    and, when the table holds twice as many entries as buckets, the copy of every entry into twice as many
@@ -280,9 +329,9 @@ let rec size ch depth c =
   if is_leaf c then Some (1 + universe_data c)
   else begin
     check_depth depth;
-    match memo_get ch ch.sizes c with
-    | Some s -> s
-    | None ->
+    match memo_find ch ch.sizes c with
+    | Hit s -> s
+    | Miss i ->
       let s =
         match unary_run ch c 0 0 with
         | b, j, u when j > 0 ->
@@ -295,7 +344,7 @@ let rec size ch depth c =
             (Some (1 + universe_data c))
             c
       in
-      memo_put ch ch.sizes c s;
+      memo_set ch ch.sizes i c s;
       s
   end
 
@@ -307,9 +356,9 @@ let rec free ch depth c =
   | _ when closed_leaf c -> 0
   | _ -> (
     check_depth depth;
-    match memo_get ch ch.free c with
-    | Some f -> f
-    | None ->
+    match memo_find ch ch.free c with
+    | Hit f -> f
+    | Miss i ->
       let f =
         match unary_run ch c 0 0 with
         | b, j, _ when j > 0 -> free ch (depth + 1) b
@@ -317,7 +366,7 @@ let rec free ch depth c =
           tick ch (node_steps c);
           Constr.fold_constr_with_binders succ (fun k acc c -> max acc (free ch (depth + 1) c - k)) 0 0 c
       in
-      memo_put ch ch.free c f;
+      memo_set ch ch.free i c f;
       f)
 
 let closed ch depth c = free ch depth c = 0
@@ -346,18 +395,13 @@ let lift_ch ch depth n c =
     Vars.lift n c
   end
 
-(* [c] under [k] binders that take [args.(lo)] to [args.(lo + k - 1)] (the last for [Rel 1]), with them
-   substituted ([Vars.substl] of that slice reversed), each node charged before it is read or copied, and the
-   [k] marks of the replacements already placed paid first. It goes only into the subterms with a free index
-   its substitution changes. A replacement substituted at more than one place duplicates itself: each place
-   after its first pays the size of the replacement as a tree, the work a later walk of the result will do
-   there, so a substitution that would build a term of more than [max_int] nodes stops before it is made; and
-   a replacement under binders pays its lift. *)
-let subst_walk ch depth args lo k c =
+(* [c] under [k] binders, each [Rel] of them replaced by [place depth n j] ([j] the binder's index from the outermost,
+   [n] the binders above the place), each node charged before it is read or copied, and the [k] marks paid first. It
+   goes only into the subterms with a free index its substitution changes. *)
+let subst_with ch depth k c place =
   if k = 0 then c
   else begin
     tick ch k;
-    let placed = Array.make k false in
     let rec go depth n c =
       if free ch depth c <= n then c
       else begin
@@ -367,15 +411,29 @@ let subst_walk ch depth args lo k c =
         | Constr.Rel i -> if i - n <= k then place depth n (k - (i - n)) else Constr.mkRel (i - k)
         | _ -> Constr.map_with_binders succ (go (depth + 1)) n c
       end
-    and place depth n j =
-      let v = args.(lo + j) in
-      if placed.(j) then pay ch (size ch depth v) else placed.(j) <- true;
-      lift_ch ch depth n v
     in
     go depth 0 c
   end
 
+(* [c] under [k] binders that take [args.(lo)] to [args.(lo + k - 1)] (the last for [Rel 1]), with them
+   substituted ([Vars.substl] of that slice reversed). A replacement substituted at more than one place duplicates
+   itself: each place after its first pays the size of the replacement as a tree, the work a later walk of the
+   result will do there, so a substitution that would build a term of more than [max_int] nodes stops before it is
+   made; and a replacement under binders pays its lift. *)
+let subst_walk ch depth args lo k c =
+  let placed = Array.make k false in
+  subst_with ch depth k c (fun depth n j ->
+      let v = args.(lo + j) in
+      if placed.(j) then pay ch (size ch depth v) else placed.(j) <- true;
+      lift_ch ch depth n v)
+
 let subst1_ch ch depth v c = subst_walk ch depth [| v |] 0 1 c
+
+(* [subst_walk] for closed replacements: the same walk and the same charges per node, but a replacement placed again
+   costs nothing more (no [placed] array, no [size] payment, no [lift_ch]: a closed term needs none). The
+   replacement is shared, never copied, so the result may hold far more nodes as a tree than the walk charged; the
+   caller's obligation is that every replacement is closed. *)
+let subst_closed ch depth args lo k c = subst_with ch depth k c (fun _ _ j -> args.(lo + j))
 
 (* [Constr.mkApp (f, args)]: a copy of both argument arrays when [f] is itself an application. *)
 let app_ch ch f args =
@@ -432,9 +490,10 @@ let def_body ch depth u cb =
 let max_head_steps = 64
 
 (* [f] applied to [args]: each leading lambda of [f] takes an argument, one step each, and the binder after [k]
-   taken ones only when [k < fits]; then one substitution of the [k] arguments taken, and the rest applied:
-   the term and [k], or [None] when a binder does not fit (nothing is substituted then). *)
-let apply_lambdas ch depth ~fits f args =
+   taken ones only when [k < fits]; then one substitution of the [k] arguments taken ([subst]: [subst_walk], or
+   [subst_closed] for closed arguments), and the rest applied: the term and [k], or [None] when a binder does not
+   fit (nothing is substituted then). *)
+let apply_with subst ch depth ~fits f args =
   let nargs = Array.length args in
   let rec peel f k =
     if k = nargs then Some (f, k)
@@ -451,9 +510,14 @@ let apply_lambdas ch depth ~fits f args =
   match peel f 0 with
   | None -> None
   | Some (body, k) ->
-    let c = subst_walk ch depth args 0 k body in
+    let c = subst ch depth args 0 k body in
     Some
       ((if k = nargs then c else if k = 0 then app_ch ch c args else app_ch ch c (sub_ch ch args k (nargs - k))), k)
+
+let apply_lambdas ch depth ~fits f args = apply_with subst_walk ch depth ~fits f args
+
+let beta_closed ch depth f args =
+  match apply_with subst_closed ch depth ~fits:max_int f args with Some (c, _) -> c | None -> assert false
 
 let never _ = false
 
@@ -535,9 +599,9 @@ let rec nf_beta ch depth c =
   if is_leaf c then c
   else begin
     check_depth depth;
-    match memo_get ch ch.normal c with
-    | Some r -> r
-    | None ->
+    match memo_find ch ch.normal c with
+    | Hit r -> r
+    | Miss i ->
       let r =
         match unary_run ch c 0 0 with
         | b, j, _ when j > 0 ->
@@ -569,8 +633,8 @@ let rec nf_beta ch depth c =
             | _ -> if f' == f && args' == args then c else app_ch ch f' args')
           | _ -> Constr.map (nf_beta ch (depth + 1)) c)
       in
-      memo_put ch ch.normal c r;
-      if r != c then memo_put ch ch.normal r r;
+      memo_set ch ch.normal i c r;
+      if r != c then memo_set ch ch.normal (memo_slot r) r r;
       r
   end
 
