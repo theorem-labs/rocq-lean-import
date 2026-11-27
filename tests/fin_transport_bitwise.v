@@ -93,8 +93,8 @@ Check RLI434B_gate_box.
 
 (* B-part: three runs of each budget entry, at its largest part (counters of this file at every part's default
    budget) - 1, at it and + 1, then the default. bud_and: its argument part
-   20,770 (its own part 1,614); bud_w: its argument part 74,768 (34,507); bud_fb: its argument part 18,117
-   (3,114); const_only: its own part 48,955 (its argument part 7,787) *)
+   20,770 (its own part 1,042); bud_w: its argument part 74,768 (23,914); bud_fb: its argument part 18,117
+   (751); const_only: its own part 48,987 (its argument part 7,787) *)
 Redirect "fin_transport_bitwise_bud_and_deps.log" Lean Import "../dumps/lean434/bitwise.ndjson" 17917 17928.
 Set Lean Transport Step Budget 20769.
 Redirect "fin_transport_bitwise_bud_and_stop.log" Succeed Lean Import "../dumps/lean434/bitwise.ndjson" 17928 17929.
@@ -131,11 +131,11 @@ Unset Lean Transport Step Budget.
 Redirect "fin_transport_bitwise_bud_fb.log" Lean Import "../dumps/lean434/bitwise.ndjson" 18158 18159.
 
 Redirect "fin_transport_bitwise_const_only_deps.log" Lean Import "../dumps/lean434/bitwise.ndjson" 18159 19217.
-Set Lean Transport Step Budget 48954.
+Set Lean Transport Step Budget 48986.
 Redirect "fin_transport_bitwise_const_only_stop.log" Succeed Lean Import "../dumps/lean434/bitwise.ndjson" 19217 19218.
-Set Lean Transport Step Budget 48955.
+Set Lean Transport Step Budget 48987.
 Redirect "fin_transport_bitwise_const_only_part.log" Succeed Lean Import "../dumps/lean434/bitwise.ndjson" 19217 19218.
-Set Lean Transport Step Budget 48956.
+Set Lean Transport Step Budget 48988.
 Redirect "fin_transport_bitwise_const_only_over.log" Succeed Lean Import "../dumps/lean434/bitwise.ndjson" 19217 19218.
 Unset Lean Transport Step Budget.
 Redirect "fin_transport_bitwise_const_only.log" Lean Import "../dumps/lean434/bitwise.ndjson" 19217 19218.

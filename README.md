@@ -634,8 +634,16 @@ no further: a type behind a `match` or a fixpoint, or any other term,
 gives no type, and an argument whose type the pass cannot read gets no
 cast; the kernel then checks it as without the pass. It reads no type
 for an application of `Nat_succ` or `Nat_double` to one argument, whose
-declarations it reads once per entry (one relevant `Nat` argument), and
-still walks the argument.
+declarations it reads once per entry (one relevant `Nat` argument). A
+literal holds no other node, so the walk of the entry's value takes it
+whole: a step for the node and one for the walk's own memo of literals
+(its own, so that the walk changes no charge of literal arithmetic or
+of an argument); at a miss (every unary literal of 10 or more has the
+same slot, since the hash reads only its first ten `Nat_succ`), a step
+for each of the 16 literals the walk met last that it compares, and
+only if it is none of them a step per `Nat_succ` and `Nat_double` of
+the literal. A run of `Nat_succ` that is no literal is walked in one
+loop to its base.
 
 Limits: only on the new path; only proof (`SProp`) positions. A
 mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size

@@ -1,14 +1,18 @@
 # Log file, polarity, literal substring (tab-separated).
 nat_transport_parts_base.log.out	-	Error at line
 nat_transport_parts_base.log.out	+	Done!
-nat_transport_parts_entry_80371.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
-nat_transport_parts_entry_80371.log.out	-	Error at line
-nat_transport_parts_entry_80370.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
-nat_transport_parts_entry_80370.log.out	-	Error at line
-nat_transport_parts_entry_80369.log.out	+	line 11238: Char.utf8Size_eq_one_iff: the transport pass stops: it needs more than 80369 steps or a nesting deeper than 10000; the value is left as Lean's
-nat_transport_parts_entry_80369.log.out	-	argument(s) transported
-nat_transport_parts_entry_80369.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
-nat_transport_parts_entry_80369.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+nat_transport_parts_entry_31046.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+nat_transport_parts_entry_31046.log.out	-	Error at line
+nat_transport_parts_entry_31045.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+nat_transport_parts_entry_31045.log.out	-	Error at line
+nat_transport_parts_entry_31044.log.out	+	line 11238: Char.utf8Size_eq_one_iff: the transport pass stops: it needs more than 310440 steps in total; the value is left as Lean's
+nat_transport_parts_entry_31044.log.out	-	argument(s) transported
+nat_transport_parts_entry_31044.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
+nat_transport_parts_entry_31044.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+nat_transport_parts_entry_29623.log.out	+	line 11238: Char.utf8Size_eq_one_iff: the transport pass stops: it needs more than 29623 steps or a nesting deeper than 10000; the value is left as Lean's
+nat_transport_parts_entry_29623.log.out	-	argument(s) transported
+nat_transport_parts_entry_29623.log.out	+	Skipping: Error at line 11238 (for Char.utf8Size_eq_one_iff)
+nat_transport_parts_entry_29623.log.out	+	Timed out after 10 s (Lean Entry Timeout)
 nat_transport_parts_arg_7450.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)
 nat_transport_parts_arg_7450.log.out	-	Error at line
 nat_transport_parts_arg_7449.log.out	+	line 11275: RLI434Fin.many127_1: 1 argument(s) transported (RLI434Fin_many127_1__nat_eq_1)

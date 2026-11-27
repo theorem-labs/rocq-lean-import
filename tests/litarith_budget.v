@@ -13,7 +13,7 @@ From LeanImport Require Import Lean.
      above, and the cast at the default. The kernel's check of Lean's value, after a stop, outlasts the 10 s limit.
    - X-lit: lit_5000 (a held 65536 - 60536, where the importer's literal changes form) at its argument part 5,170.
    - B-total: bud_total, thirty-three arguments each a pair of its own, next to an entry part smaller than one argument's:
-     all the parts together take 1,984,104 steps; at N = 198,411 (10 N above that) it casts, at N - 1 the pass stops
+     all the parts together take 1,921,226 steps; at N = 192,123 (10 N above that) it casts, at N - 1 the pass stops
      for the entry ("more than 10 (N - 1) steps in total"), as nat_transport_total.v does for the Nat case's.
    - E-loop (loop_head: Nat.repeat id 4294967296 0 on both sides, a fixpoint that does not end within the pair's
      cap), N-cap (nested_cap: the nested evaluation of a decide's proposition alone needs more than the cap), E-share
@@ -23,7 +23,7 @@ From LeanImport Require Import Lean.
    - B-order-pair, B-total-pair: order_pair (one pair of more than the cap, in the entry's own result) at
      N = D + 200000, D the part's debit when the pair starts, and order_total (nine arguments of pairs declined at the
      cap, then the same pair in the result; ten fixtures, order_total to order_total_j, whose last argument's literal adds
-     8 to S each, so that S + 200000 divides by 10: order_total_d) at N = (S + 200000) / 10, S the entry's total debit then: one charge takes
+     1 to S each (the entry's walk takes the literal whole), so that S + 200000 divides by 10: order_total_e) at N = (S + 200000) / 10, S the entry's total debit then: one charge takes
      the pair and the part (or the total) below zero together, and the part (or the total) is tested first, so the
      pass stops with its line.
    - E-cap, E-cap-next: the pair of a chain of constants (dl_1217 against dr_1217, behind a few applications of idl,
@@ -101,9 +101,9 @@ Redirect "litarith_budget_bud_hold_over.log" Succeed Lean Import "../dumps/lean4
 Unset Lean Transport Step Budget.
 Redirect "litarith_budget_bud_hold.log" Lean Import "../dumps/lean434/litarith.ndjson" 24804 24805.
 
-Set Lean Transport Step Budget 198410.
+Set Lean Transport Step Budget 192122.
 Redirect "litarith_budget_bud_total_stop.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 25339 25340.
-Set Lean Transport Step Budget 198411.
+Set Lean Transport Step Budget 192123.
 Redirect "litarith_budget_bud_total_part.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 25339 25340.
 Unset Lean Transport Step Budget.
 Redirect "litarith_budget_bud_total.log" Lean Import "../dumps/lean434/litarith.ndjson" 25339 25340.
@@ -117,8 +117,8 @@ Redirect "litarith_budget_order_pair.log" Succeed Lean Import "../dumps/lean434/
 Unset Lean Transport Step Budget.
 
 Redirect "litarith_budget_keep9.log" Lean Import "../dumps/lean434/litarith.ndjson" 25695 25696.
-Set Lean Transport Step Budget 202034.
-Redirect "litarith_budget_order_total.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 25908 25909.
+Set Lean Transport Step Budget 201327.
+Redirect "litarith_budget_order_total.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 25920 25921.
 Unset Lean Transport Step Budget.
 
 Redirect "litarith_budget_proof_size.log" Lean Import "../dumps/lean434/litarith.ndjson" 26146 26172.

@@ -183,7 +183,7 @@ fin_transport_bitwise_const_only_part.log.out	+	Done!
 fin_transport_bitwise_const_only_over.log.out	+	line 19217: RLI434B.const_only: 1 argument(s) transported (RLI434B_const_only__nat_eq_1)
 fin_transport_bitwise_const_only_over.log.out	-	the transport pass fails
 fin_transport_bitwise_const_only_over.log.out	+	Done!
-fin_transport_bitwise_const_only_stop.log.out	+	line 19217: RLI434B.const_only: the transport pass stops: it needs more than 48954 steps
+fin_transport_bitwise_const_only_stop.log.out	+	line 19217: RLI434B.const_only: the transport pass stops: it needs more than 48986 steps
 fin_transport_bitwise_const_only_stop.log.out	-	argument(s) transported
 fin_transport_bitwise_const_only_stop.log.out	-	the transport pass fails
 fin_transport_bitwise_const_only_stop.log.out	+	Done!

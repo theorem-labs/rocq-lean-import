@@ -1,11 +1,13 @@
 # Log file, polarity, literal substring (tab-separated).
-nat_transport_total.log.out	+	line 1127: RLI434D1.take_under: the transport pass stops: it needs more than 71224 steps or a nesting deeper than 10000; the value is left as Lean's
+nat_transport_total_take.log.out	+	line 1127: RLI434D1.take_under: the transport pass stops: it needs more than 58440 steps or a nesting deeper than 10000; the value is left as Lean's
+nat_transport_total_take.log.out	-	Error at line
+nat_transport_total_take.log.out	+	Done!
 nat_transport_total.log.out	+	line 1145: RLI434D1.under: 14 argument(s) transported (RLI434D1_under__nat_eq_1, 
 nat_transport_total.log.out	+	line 1266: RLI434D1.at: 14 argument(s) transported (RLI434D1_at__nat_eq_1, 
-nat_transport_total.log.out	+	line 1389: RLI434D1.over: the transport pass stops: it needs more than 712240 steps in total; the value is left as Lean's
+nat_transport_total.log.out	+	line 1389: RLI434D1.over: the transport pass stops: it needs more than 712230 steps in total; the value is left as Lean's
 nat_transport_total.log.out	-	RLI434D1.under: the transport pass stops
 nat_transport_total.log.out	-	RLI434D1.at: the transport pass stops
 nat_transport_total.log.out	-	transported (RLI434D1_over__nat_eq_1
-nat_transport_total.log.out	-	RLI434D1.over: the transport pass stops: it needs more than 71224 steps
+nat_transport_total.log.out	-	RLI434D1.over: the transport pass stops: it needs more than 71223 steps
 nat_transport_total.log.out	-	Error at line
 nat_transport_total.log.out	+	Done!

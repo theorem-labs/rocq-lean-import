@@ -116,7 +116,7 @@ litarith_budget_bud_hold.log.out	+	line 24804: RLI434L.bud_hold: 1 argument(s) t
 litarith_budget_bud_hold.log.out	-	the transport pass stops
 litarith_budget_bud_hold.log.out	-	(for RLI434L.bud_hold)
 litarith_budget_bud_hold.log.out	+	Done!
-litarith_budget_bud_total_stop.log.out	+	line 25339: RLI434L.bud_total: the transport pass stops: it needs more than 1984100 steps in total
+litarith_budget_bud_total_stop.log.out	+	line 25339: RLI434L.bud_total: the transport pass stops: it needs more than 1921220 steps in total
 litarith_budget_bud_total_stop.log.out	-	argument(s) transported
 litarith_budget_bud_total_stop.log.out	+	Done!
 litarith_budget_bud_total_stop.log.out	+	Skipping: Error at line 25339 (for RLI434L.bud_total)
@@ -145,7 +145,7 @@ litarith_budget_order_pair.log.out	+	line 25683: RLI434L.order_pair: the transpo
 litarith_budget_order_pair.log.out	-	argument(s) transported
 litarith_budget_order_pair.log.out	+	Done!
 litarith_budget_order_pair.log.out	-	Error at line
-litarith_budget_order_total.log.out	+	line 25908: RLI434L.order_total_d: the transport pass stops: it needs more than 2020340 steps in total
+litarith_budget_order_total.log.out	+	line 25920: RLI434L.order_total_e: the transport pass stops: it needs more than 2013270 steps in total
 litarith_budget_order_total.log.out	-	argument(s) transported
 litarith_budget_order_total.log.out	+	Done!
 litarith_budget_order_total.log.out	-	Error at line

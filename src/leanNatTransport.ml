@@ -544,6 +544,9 @@ type state = {
   param_reader : reader;  (** [param_value] *)
   nat_lits : (Z.t, Constr.t) C.table;  (** the literals [nat_lit] built, by value: one term per value and entry *)
   lit_memo : bool C.memo;  (** [is_literal], at the root of the term asked about *)
+  walk_memo : bool C.memo;  (** [walk_literal]'s answers, at the root of the term asked about *)
+  walk_lits : Constr.t array;  (** the literals [transport_walk] met last, the last met first ([walk_literal]) *)
+  mutable walk_lits_n : int;  (** how many of [walk_lits] hold a literal *)
   mutable next : int;  (** the number of the next lemma this entry generates *)
   mutable count : int;  (** arguments transported *)
   mutable lemmas : Id.t list;  (** the lemmas they use, last first *)
@@ -678,27 +681,83 @@ and compute st r depth c =
       let a, b = operands args in
       match (value a, value b) with Some x, Some y -> Some (nat_div x y) | _ -> None))
 
-(* Whether [c] is a literal of the importer's form: the walk down its [Nat_succ] and [Nat_double] applications
-   (one step each, besides [nat_form]'s), the answer kept at the root of the term asked about in the entry's memo,
-   so that a literal read again (as every operand of a held operation is, several times in a pair) costs a memo
-   step, whatever its length; the suffixes of a long literal are never put in the memo, where they would share
-   one slot and evict one another. *)
-let is_literal st depth c =
-  let rec walk depth c =
+(* The number of [Nat_succ] and [Nat_double] applications of [c] when it is a literal of the importer's form, read
+   from the term itself, and -1 when it is none: the walk down those applications, one step each besides
+   [nat_form]'s, the nesting checked at each. *)
+let literal_levels st depth c =
+  let rec walk depth n c =
     C.check_depth depth;
     match nat_form st st.nat depth c with
-    | Some Zero -> true
+    | Some Zero -> n
     | Some (Succ m | Double m) ->
       C.tick st.ch 1;
-      walk (depth + 1) m
-    | Some (Unfold _ | Op _ | Div _) | None -> false
+      walk (depth + 1) (n + 1) m
+    | Some (Unfold _ | Op _ | Div _) | None -> -1
   in
+  walk depth 0 c
+
+(* Whether [c] is a literal of the importer's form ([literal_levels]), the answer kept at the root of the term asked
+   about in the entry's memo, so that a literal read again (as every operand of a held operation is, several times
+   in a pair) costs a memo step, whatever its length; the suffixes of a long literal are never put in the memo,
+   where they would share one slot and evict one another. *)
+let is_literal st depth c =
   C.check_depth depth;
   match C.memo_find st.ch st.lit_memo c with
   | C.Hit b -> b
   | C.Miss slot ->
-    let b = walk depth c in
+    let b = literal_levels st depth c >= 0 in
     C.memo_set st.ch st.lit_memo slot c b;
+    b
+
+(* The most literals [walk_literal] keeps, and the fewest levels of a literal it keeps. *)
+let walk_lits_max = 16
+
+(* Whether [c], an application of [Nat_succ] or [Nat_double] that [transport_walk] meets, is a literal of the
+   importer's form: as [is_literal], with a memo of the walk's own ([walk_memo]), so that the walk leaves every memo
+   that literal arithmetic and the arguments' parts read as it was (and their charges with it). Every unary literal
+   of 10 or more has the same slot of such a memo (its hash reads at most ten [Nat_succ] of the term), so at a walk
+   through [1024] and [4096] in turn the slot holds the other one: at a miss the walk also reads the literals of
+   [walk_lits_max] levels or more it met last ([walk_lits], the last met first, at most [walk_lits_max]), one step
+   for each it compares (by physical identity), before [literal_levels]. A literal found there moves first; one of
+   [walk_lits_max] levels or more that [literal_levels] finds goes first, the last dropped when [walk_lits_max] are
+   kept, so that keeping it costs no more than its walk did: a step for it and for each literal moved one place
+   behind it. The memo's slot keeps the answer either way. *)
+let walk_literal st depth c =
+  C.check_depth depth;
+  match C.memo_find st.ch st.walk_memo c with
+  | C.Hit b -> b
+  | C.Miss slot ->
+    let lits = st.walk_lits and n = st.walk_lits_n in
+    (* [c] first, the [i] literals before it moved one place *)
+    let first i =
+      C.tick st.ch (i + 1);
+      Array.blit lits 0 lits 1 i;
+      lits.(0) <- c
+    in
+    let rec recent i =
+      if i = n then false
+      else begin
+        C.tick st.ch 1;
+        if lits.(i) == c then begin
+          first i;
+          true
+        end
+        else recent (i + 1)
+      end
+    in
+    let b =
+      recent 0
+      || begin
+           let levels = literal_levels st depth c in
+           if levels >= walk_lits_max then begin
+             let kept = min n (walk_lits_max - 1) in
+             first kept;
+             st.walk_lits_n <- kept + 1
+           end;
+           levels >= 0
+         end
+    in
+    C.memo_set st.ch st.walk_memo slot c b;
     b
 
 (* [h] (the head of a [Nat_succ] application) applied [j] times to [b], each application charged. *)
@@ -2475,7 +2534,7 @@ and transport_arg_in st env depth arg dom =
 
 (* Whether [f] applied to [args] is [Nat_succ] or [Nat_double] applied to one argument, whose declared types
    [setup] has read once to be one relevant Nat argument to Nat: such an application has no SProp argument, so
-   [transport_walk] reads no type for it and peels no product (it still walks the argument). *)
+   [transport_walk] reads no type for it and peels no product. *)
 let unary_nat_head st f args =
   Array.length args = 1
   && ((st.unary_succ && is_nat_succ st.refs f) || (st.unary_double && is_double_head st.refs f))
@@ -2512,16 +2571,27 @@ let transport_args st env depth f args =
   Option.iter (fun ty -> loop 0 0 ty) (C.type_of st.ch env depth f);
   !out
 
+(* [c] at the nesting [depth] under [env], each SProp argument of an application transported where it needs it
+   ([transport_args]), one step per node. An application of [Nat_succ] or [Nat_double] has none: a literal of the
+   importer's form holds no other node, so it is the same term after the walk and is returned as it is, for the
+   steps of [walk_literal] (one at a hit of its memo), not those of its chain at each place, whatever the binders
+   above it; a run of [Nat_succ] that is no literal is walked in one loop to its base ([map_succ_run]), so that no
+   suffix of the run is asked again whether it is a literal. *)
 let rec transport_walk st env depth c =
   C.tick st.ch 1;
   C.check_depth depth;
   let walk env = transport_walk st env (depth + 1) in
   let push d = Environ.push_rel d env in
   match Constr.kind c with
+  | Constr.App (f, args) when unary_nat_head st f args ->
+    if walk_literal st depth c then c
+    else if is_nat_succ st.refs f then map_succ_run st depth c f args.(0) (transport_walk st env)
+    else
+      let x = walk env args.(0) in
+      if x == args.(0) then c else C.app_ch st.ch f [| x |]
   | Constr.App (f, args) ->
     let f' = walk env f in
-    let args' = C.smart_map_ch st.ch (walk env) args in
-    let args' = if unary_nat_head st f' args' then args' else transport_args st env depth f' args' in
+    let args' = transport_args st env depth f' (C.smart_map_ch st.ch (walk env) args) in
     if f' == f && args' == args then c else C.app_ch st.ch f' args'
   | Constr.Lambda (na, t, b) ->
     let t' = walk env t in
@@ -2769,6 +2839,9 @@ let setup ctx refs lrefs ch entry =
       { ceiling = param_ceiling; divisor_by_value = false; rmemo = C.memo (); rconsts = C.constant_table () };
     nat_lits = C.value_table ();
     lit_memo = C.memo ();
+    walk_memo = C.memo ();
+    walk_lits = Array.make walk_lits_max Constr.mkProp;
+    walk_lits_n = 0;
     next = 0;
     count = 0;
     lemmas = [];
