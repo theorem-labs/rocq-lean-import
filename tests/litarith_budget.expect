@@ -157,3 +157,58 @@ litarith_budget_nest_capped.log.out	+	line 26219: RLI434L.nest_capped: 1 argumen
 litarith_budget_nest_capped.log.out	-	the transport pass stops
 litarith_budget_nest_capped.log.out	-	(for RLI434L.nest_capped)
 litarith_budget_nest_capped.log.out	+	Done!
+litarith_budget_chain_0.log.out	+	Done!
+litarith_budget_chain_0.log.out	-	Error at line
+litarith_budget_chain_1.log.out	+	Done!
+litarith_budget_chain_1.log.out	-	Error at line
+litarith_budget_chain_2.log.out	+	Done!
+litarith_budget_chain_2.log.out	-	Error at line
+litarith_budget_chain_3.log.out	+	Done!
+litarith_budget_chain_3.log.out	-	Error at line
+litarith_budget_chain_4.log.out	+	Done!
+litarith_budget_chain_4.log.out	-	Error at line
+litarith_budget_chain_5.log.out	+	line 26524: RLI434L.chain_8: 1 argument(s) transported (
+litarith_budget_chain_5.log.out	-	(for RLI434L.chain_8)
+litarith_budget_chain_5.log.out	+	line 26537: RLI434L.chain_9
+litarith_budget_chain_5.log.out	-	RLI434L.chain_9: 
+litarith_budget_chain_5.log.out	+	Skipping: Error at line 26537 (for RLI434L.chain_9)
+litarith_budget_chain_5.log.out	+	Done!
+litarith_budget_chain_6.log.out	+	Done!
+litarith_budget_chain_6.log.out	-	Error at line
+litarith_budget_chain_7.log.out	+	Done!
+litarith_budget_chain_7.log.out	-	Error at line
+litarith_budget_chain_8.log.out	+	Done!
+litarith_budget_chain_8.log.out	-	Error at line
+litarith_budget_chain_9.log.out	+	Done!
+litarith_budget_chain_9.log.out	-	Error at line
+litarith_budget_chain_10.log.out	+	Done!
+litarith_budget_chain_10.log.out	-	Error at line
+litarith_budget_chain_11.log.out	+	Done!
+litarith_budget_chain_11.log.out	-	Error at line
+litarith_budget_chain_12.log.out	+	Done!
+litarith_budget_chain_12.log.out	-	Error at line
+litarith_budget_chain_13.log.out	+	Done!
+litarith_budget_chain_13.log.out	-	Error at line
+litarith_budget_chain_14.log.out	+	line 26609: RLI434L.chain_refused
+litarith_budget_chain_14.log.out	-	RLI434L.chain_refused: 
+litarith_budget_chain_14.log.out	-	(for RLI434L.chain_refused)
+litarith_budget_chain_14.log.out	+	Done!
+litarith_budget_chain_15.log.out	+	Done!
+litarith_budget_chain_15.log.out	-	Error at line
+litarith_budget_chain_16.log.out	+	Done!
+litarith_budget_chain_16.log.out	-	Error at line
+litarith_budget_chain_fix_stop.log.out	+	line 26462: RLI434L.chain_fix: the transport pass stops: it needs more than 7909 steps or a nesting deeper than 10000
+litarith_budget_chain_fix_stop.log.out	-	argument(s) transported
+litarith_budget_chain_fix_stop.log.out	+	Done!
+litarith_budget_chain_fix_part.log.out	+	line 26462: RLI434L.chain_fix: 1 argument(s) transported (
+litarith_budget_chain_fix_part.log.out	-	the transport pass stops
+litarith_budget_chain_fix_part.log.out	-	(for RLI434L.chain_fix)
+litarith_budget_chain_fix_part.log.out	+	Done!
+litarith_budget_chain_fix_over.log.out	+	line 26462: RLI434L.chain_fix: 1 argument(s) transported (
+litarith_budget_chain_fix_over.log.out	-	the transport pass stops
+litarith_budget_chain_fix_over.log.out	-	(for RLI434L.chain_fix)
+litarith_budget_chain_fix_over.log.out	+	Done!
+litarith_budget_chain_fix.log.out	+	line 26462: RLI434L.chain_fix: 1 argument(s) transported (
+litarith_budget_chain_fix.log.out	-	the transport pass stops
+litarith_budget_chain_fix.log.out	-	(for RLI434L.chain_fix)
+litarith_budget_chain_fix.log.out	+	Done!

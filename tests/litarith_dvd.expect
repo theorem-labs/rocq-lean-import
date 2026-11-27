@@ -41,3 +41,43 @@ litarith_dvd_l.log.out	+	line 26043: RLI434L.nonneg_l: 1 argument(s) transported
 litarith_dvd_l.log.out	-	(for RLI434L.nonneg_l)
 litarith_dvd_l.log.out	+	Done!
 litarith_dvd_l.log.out	-	the transport pass fails
+litarith_dvd_chain_0.log.out	+	Done!
+litarith_dvd_chain_0.log.out	-	Error at line
+litarith_dvd_chain_1.log.out	+	Done!
+litarith_dvd_chain_1.log.out	-	Error at line
+litarith_dvd_chain_2.log.out	+	Done!
+litarith_dvd_chain_2.log.out	-	Error at line
+litarith_dvd_chain_3.log.out	+	Done!
+litarith_dvd_chain_3.log.out	-	Error at line
+litarith_dvd_chain_4.log.out	+	Done!
+litarith_dvd_chain_4.log.out	-	Error at line
+litarith_dvd_chain_5.log.out	+	Done!
+litarith_dvd_chain_5.log.out	-	Error at line
+litarith_dvd_chain_6.log.out	+	Done!
+litarith_dvd_chain_6.log.out	-	Error at line
+litarith_dvd_chain_7.log.out	+	Done!
+litarith_dvd_chain_7.log.out	-	Error at line
+litarith_dvd_chain_8.log.out	+	Done!
+litarith_dvd_chain_8.log.out	-	Error at line
+litarith_dvd_chain_9.log.out	+	Done!
+litarith_dvd_chain_9.log.out	-	Error at line
+litarith_dvd_chain_10.log.out	+	Done!
+litarith_dvd_chain_10.log.out	-	Error at line
+litarith_dvd_chain_11.log.out	+	Done!
+litarith_dvd_chain_11.log.out	-	Error at line
+litarith_dvd_chain_12.log.out	+	Done!
+litarith_dvd_chain_12.log.out	-	Error at line
+litarith_dvd_chain_13.log.out	+	Done!
+litarith_dvd_chain_13.log.out	-	Error at line
+litarith_dvd_chain_14.log.out	+	Done!
+litarith_dvd_chain_14.log.out	-	Error at line
+litarith_dvd_chain_15.log.out	+	line 26603: RLI434L.chain_nested: 1 argument(s) transported (
+litarith_dvd_chain_15.log.out	-	(for RLI434L.chain_nested)
+litarith_dvd_chain_15.log.out	+	Done!
+litarith_dvd_chain_15.log.out	-	the transport pass fails
+litarith_dvd_chain_16.log.out	+	Done!
+litarith_dvd_chain_16.log.out	-	Error at line
+litarith_dvd_chain_17.log.out	+	Done!
+litarith_dvd_chain_17.log.out	-	Error at line
+litarith_dvd_chain_18.log.out	+	Done!
+litarith_dvd_chain_18.log.out	-	Error at line

@@ -1,0 +1,7 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_chain_lib.log.out	+	Done!
+litarith_chain_lib.log.out	-	the transport pass fails
+litarith_chain.log.out	+	line 26488: RLI434L.chain_1: 1 argument(s) transported (
+litarith_chain.log.out	-	(for RLI434L.chain_1)
+litarith_chain.log.out	+	Done!
+litarith_chain.log.out	-	the transport pass fails

@@ -16,6 +16,11 @@ From LeanImport Require Import Lean.
    - eq_nat_l (26021) and nonneg_l (26043), after the lines of every other test: eq_nat's and nonneg's decide at
      2 ^ 33 (4294967296 * 2 = 2 * 4294967296, 0 ≤ Int.ofNat (4294967296 * 2)), whose sides the kernel cannot
      compute within the entry's limit: each proof must state its sides in the decide's own order.
+   - chain_nested (26603), after the lines of every other test: cond (decide (0 ≤ Int.ofNat 65536 - 1)) 1 0 in the
+     pair's first field: the held decide's proof evaluates Int.ofNat 65536 - 1 in a nested evaluation, where
+     Int.add's match waits on Int.subNatNat's fixpoint, which waits on the held 1 - 65536 (a chain of waits); the
+     nested round 1 gives Int.ofNat 65535, the decide gets true and the outer cond contracts in round 1. The src/ of
+     the fix's parent ends the nested proof at that chain (the third class), with no lemma and no line.
    No line, the entry declared:
    - dvd_zero (24578): a divisor 0, no proof; nonneg_neg (24634): 0 ≤ Int.negSucc 65536, no proof; fb12_65
      (24654): 65 head steps, no proof; nested_wait (24672): nested_stop's decide under a match that waits on it.
@@ -26,6 +31,30 @@ Set Lean Entry Timeout 10.
 Redirect "litarith_dvd_lib.log" Lean Import "../dumps/lean434/litarith.ndjson" 1 23879.
 Redirect "litarith_dvd.log" Lean Import "../dumps/lean434/litarith.ndjson" 24559 24673.
 Redirect "litarith_dvd_l.log" Lean Import "../dumps/lean434/litarith.ndjson" 25998 26044.
+
+(* A chain of waits: the lines 26220 to 26671 of dumps/lean434/litarith.ndjson, every line of them but the theorem
+   lines of the other tests (the definitions and chain_nested's line 26603), after every other range of this test.
+   They come before every Check, so that a lemma a change of the pass loses cannot stop the file before these logs
+   are made. *)
+Redirect "litarith_dvd_chain_0.log" Lean Import "../dumps/lean434/litarith.ndjson" 26220 26456.
+Redirect "litarith_dvd_chain_1.log" Lean Import "../dumps/lean434/litarith.ndjson" 26457 26462.
+Redirect "litarith_dvd_chain_2.log" Lean Import "../dumps/lean434/litarith.ndjson" 26463 26468.
+Redirect "litarith_dvd_chain_3.log" Lean Import "../dumps/lean434/litarith.ndjson" 26469 26488.
+Redirect "litarith_dvd_chain_4.log" Lean Import "../dumps/lean434/litarith.ndjson" 26489 26501.
+Redirect "litarith_dvd_chain_5.log" Lean Import "../dumps/lean434/litarith.ndjson" 26502 26524.
+Redirect "litarith_dvd_chain_6.log" Lean Import "../dumps/lean434/litarith.ndjson" 26525 26537.
+Redirect "litarith_dvd_chain_7.log" Lean Import "../dumps/lean434/litarith.ndjson" 26538 26545.
+Redirect "litarith_dvd_chain_8.log" Lean Import "../dumps/lean434/litarith.ndjson" 26546 26553.
+Redirect "litarith_dvd_chain_9.log" Lean Import "../dumps/lean434/litarith.ndjson" 26554 26561.
+Redirect "litarith_dvd_chain_10.log" Lean Import "../dumps/lean434/litarith.ndjson" 26562 26567.
+Redirect "litarith_dvd_chain_11.log" Lean Import "../dumps/lean434/litarith.ndjson" 26568 26573.
+Redirect "litarith_dvd_chain_12.log" Lean Import "../dumps/lean434/litarith.ndjson" 26574 26579.
+Redirect "litarith_dvd_chain_13.log" Lean Import "../dumps/lean434/litarith.ndjson" 26580 26589.
+Redirect "litarith_dvd_chain_14.log" Lean Import "../dumps/lean434/litarith.ndjson" 26590 26597.
+Redirect "litarith_dvd_chain_15.log" Lean Import "../dumps/lean434/litarith.ndjson" 26598 26609.
+Redirect "litarith_dvd_chain_16.log" Lean Import "../dumps/lean434/litarith.ndjson" 26610 26653.
+Redirect "litarith_dvd_chain_17.log" Lean Import "../dumps/lean434/litarith.ndjson" 26654 26659.
+Redirect "litarith_dvd_chain_18.log" Lean Import "../dumps/lean434/litarith.ndjson" 26660 26671.
 
 (* Every lemma a cast above uses exists; a lemma the kernel refused was not declared. *)
 Check RLI434L_dvd_256__nat_eq_2.
@@ -40,3 +69,6 @@ Check RLI434L_fb12_64__nat_eq_1.
 Check RLI434L_nested_stop__nat_eq_1.
 Check RLI434L_mpf_a__proof_1__nat_eq_1.
 Check RLI434L_mpf_a__proof_2__nat_eq_1.
+
+(* The lemma the cast of chain_nested uses exists. *)
+Check RLI434L_chain_nested__nat_eq_3.

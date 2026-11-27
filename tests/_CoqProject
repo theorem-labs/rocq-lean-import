@@ -70,6 +70,7 @@ litarith_refused.v
 litarith_budget.v
 litarith_absent.v
 litarith_nobool.v
+litarith_chain.v
 transport_work.v
 transport_walk.v
 entry_timeout.v

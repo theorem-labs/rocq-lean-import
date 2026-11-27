@@ -40,6 +40,17 @@ From LeanImport Require Import Lean.
    - A nest of declined pairs: nest_capped (nf1 (... (nf5 ncA)) against ng1 (... (ng5 100)), ncA's evaluation alone
      more than the cap, beside the Nat place 2 ^ 32 against 4294967296): the outermost pair is declined and no pair
      inside it is evaluated, so the Nat place casts (six declines would take the part past its budget).
+   - A chain of waits (the lines 26220 to 26671 of litarith.ndjson, after every other range of this file, chain_fix
+     last): chain_8 (26524), -(4096 * 117349959766017) + 1 + ... + 1 with 8 additions against its literal at Int,
+     9 replacement rounds: the pair needs 193,493 steps in this file's order (6,507 under the cap) and casts;
+     chain_9 (26537), 9 additions and 10 rounds: the pair reaches the cap (no lemma, no transported line), and the
+     kernel then does not end within the limit, so the entry is skipped (its reason, a stack overflow or the limit,
+     is not asserted); chain_refused (26609), (if (0 : Int) ≤ 256 * 256 - 1 then 1 else 0, 65536 - 31) with the 256s
+     written unary, a chain at the match of Decidable: a chain read at a match whose type has parameters is the
+     third class, so no lemma and no line (without that rule its proof's casts pass the cap).
+   - A-step: chain_fix (26462), cond (isz (65536 - 1)) 0 1 in the pair's first field, a match on a fixpoint that
+     waits on a held subtraction (one link, a step charged for it and for the base's test): its argument part is
+     7,910 steps in this file's order: the stop line at 7,909, the cast at 7,910 and at 7,911, and at the default.
    tests/litarith_budget.expect checks the logs. *)
 Set Warnings "+unknown-option".
 Set Lean Error Mode "Skip".
@@ -123,3 +134,32 @@ Unset Lean Transport Step Budget.
 
 Redirect "litarith_budget_proof_size.log" Lean Import "../dumps/lean434/litarith.ndjson" 26146 26172.
 Redirect "litarith_budget_nest_capped.log" Lean Import "../dumps/lean434/litarith.ndjson" 26172 26220.
+
+(* A chain of waits: the lines 26220 to 26671 of dumps/lean434/litarith.ndjson, every line of them but the theorem
+   lines of tests/litarith_eval.v and tests/litarith_dvd.v, then chain_fix (26462 to 26463) at its budgets. *)
+Redirect "litarith_budget_chain_0.log" Lean Import "../dumps/lean434/litarith.ndjson" 26220 26456.
+Redirect "litarith_budget_chain_1.log" Lean Import "../dumps/lean434/litarith.ndjson" 26457 26462.
+Redirect "litarith_budget_chain_2.log" Lean Import "../dumps/lean434/litarith.ndjson" 26463 26468.
+Redirect "litarith_budget_chain_3.log" Lean Import "../dumps/lean434/litarith.ndjson" 26469 26488.
+Redirect "litarith_budget_chain_4.log" Lean Import "../dumps/lean434/litarith.ndjson" 26489 26501.
+Redirect "litarith_budget_chain_5.log" Lean Import "../dumps/lean434/litarith.ndjson" 26502 26545.
+Redirect "litarith_budget_chain_6.log" Lean Import "../dumps/lean434/litarith.ndjson" 26546 26553.
+Redirect "litarith_budget_chain_7.log" Lean Import "../dumps/lean434/litarith.ndjson" 26554 26561.
+Redirect "litarith_budget_chain_8.log" Lean Import "../dumps/lean434/litarith.ndjson" 26562 26567.
+Redirect "litarith_budget_chain_9.log" Lean Import "../dumps/lean434/litarith.ndjson" 26568 26573.
+Redirect "litarith_budget_chain_10.log" Lean Import "../dumps/lean434/litarith.ndjson" 26574 26579.
+Redirect "litarith_budget_chain_11.log" Lean Import "../dumps/lean434/litarith.ndjson" 26580 26589.
+Redirect "litarith_budget_chain_12.log" Lean Import "../dumps/lean434/litarith.ndjson" 26590 26597.
+Redirect "litarith_budget_chain_13.log" Lean Import "../dumps/lean434/litarith.ndjson" 26598 26603.
+Redirect "litarith_budget_chain_14.log" Lean Import "../dumps/lean434/litarith.ndjson" 26604 26653.
+Redirect "litarith_budget_chain_15.log" Lean Import "../dumps/lean434/litarith.ndjson" 26654 26659.
+Redirect "litarith_budget_chain_16.log" Lean Import "../dumps/lean434/litarith.ndjson" 26660 26671.
+
+Set Lean Transport Step Budget 7909.
+Redirect "litarith_budget_chain_fix_stop.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 26462 26463.
+Set Lean Transport Step Budget 7910.
+Redirect "litarith_budget_chain_fix_part.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 26462 26463.
+Set Lean Transport Step Budget 7911.
+Redirect "litarith_budget_chain_fix_over.log" Succeed Lean Import "../dumps/lean434/litarith.ndjson" 26462 26463.
+Unset Lean Transport Step Budget.
+Redirect "litarith_budget_chain_fix.log" Lean Import "../dumps/lean434/litarith.ndjson" 26462 26463.

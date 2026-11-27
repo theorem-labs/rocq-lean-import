@@ -41,6 +41,35 @@ From LeanImport Require Import Lean.
    A refusal line, no transported line, the entry declared:
    - motive_proof (23988): the cast's motive abstracts the held 65536 + 1 inside the pair's type Fin (65536 + 1)
      and inside a proof by decide; the kernel refuses the pair's lemma and the argument keeps Lean's term.
+   A chain of waits (README, "Transport of proof arguments across Nat literals"): a match, a fixpoint applied past
+   its recursive index or a projection whose scrutinee, recursive argument or subject is itself one of these that
+   waits on a held operation waits on it too, and each link contracts in the round after the held operation is
+   replaced. The entries are the lines 26220 to 26671 of dumps/lean434/litarith.ndjson, imported after every
+   other range of this test (the new lines add to no entry's cache, lemma name or part). Cast:
+   - chain_case (26456): a match of Bool on a match of Bool on the held decide (256 ∣ 256 * 65536); chain_fix
+     (26462): a match on isz's fixpoint, which waits on the held 65536 - 1; chain_proj (26468): a match on a
+     projection whose subject is pb's fixpoint on the held 65536 - 1 (two links);
+   - chain_1 (26488) and chain_2 (26501): -(4096 * 117349959766017) + 1 (and + 1 + 1) against its literal at Int,
+     Int.add's match on Int.negOfNat's fixpoint, which waits on the held 4096 * 117349959766017, in two and three
+     replacement rounds; chain_1 is the own entry of tests/litarith_chain.v;
+   - chain_rounds_15 and chain_rounds_16 (26545, 26553): cz (gr 15 65536) and cz (gr 16 65536), cz's fixpoint on
+     rounds_15's and rounds_16's term: in each of 15 and 16 replacement rounds gr's fixpoint waits on a new held
+     x - 65536 and cz's on it (a chain of one link); the 16th round is max_rounds, and both places cast;
+     chain_rounds_17 (26561): 17 rounds, the replacement field's lemma alone. The three are imported on their own
+     at an Entry Timeout of 60 s;
+   - guard_fix (26589): a fixpoint whose motive holds Tag 65536, its recursive argument cz's fixpoint waiting on
+     the held 65536 - 1: a fixpoint is never guarded.
+   No line, the entry declared:
+   - guard_65535, guard_65536, guard_65537 (26567, 26573, 26579): the same chain of one link under a match of
+     Option (Tag v) for v = 65535, 65536, 65537: a chain read at a match whose type has parameters is the third
+     class, whatever v; chain_refused_small (26653): ite's match on Decidable (0 ≤ 5000 * 14 - 1) over Int.decLe's
+     chain on the held 5000 * 14; chain_motive (26659): K-motive's shape behind a chain at a match of Option Nat;
+   - chain_unheld (26597): (cond (isz axN) 0 1, 65536 - 31) against the same first field with 65505, a fixpoint on
+     an axiom: the inner call meets the axiom (the third class) before the outer link is read.
+   A refusal line, no transported line, the entry declared:
+   - chain_motive2 (26671): motive_proof's shape behind a chain at a match of Bool (no parameter): the chain waits,
+     the cast's motive abstracts the held 65536 + 1 inside Fin (65536 + 1) and inside a proof by decide; the kernel
+     refuses the pair's lemma and the argument keeps Lean's term.
    tests/litarith_eval.expect checks the logs. *)
 Set Warnings "+unknown-option".
 Set Lean Error Mode "Skip".
@@ -52,6 +81,18 @@ Redirect "litarith_eval_rounds.log" Lean Import "../dumps/lean434/litarith.ndjso
 Set Lean Entry Timeout 10.
 Redirect "litarith_eval_type_fun_held.log" Lean Import "../dumps/lean434/litarith.ndjson" 25981 25998.
 Redirect "litarith_eval_c_match_f.log" Lean Import "../dumps/lean434/litarith.ndjson" 26064 26077.
+
+(* A chain of waits: the lines 26220 to 26671 of dumps/lean434/litarith.ndjson, after every other range of this
+   test (every line of them but the theorem lines of tests/litarith_budget.v and tests/litarith_dvd.v). They come
+   before every Check, so that a lemma a change of the pass loses cannot stop the file before these logs are made. *)
+Redirect "litarith_eval_chain_0.log" Lean Import "../dumps/lean434/litarith.ndjson" 26220 26524.
+Redirect "litarith_eval_chain_1.log" Lean Import "../dumps/lean434/litarith.ndjson" 26525 26537.
+Set Lean Entry Timeout 60.
+Redirect "litarith_eval_chain_2.log" Lean Import "../dumps/lean434/litarith.ndjson" 26538 26562.
+Set Lean Entry Timeout 10.
+Redirect "litarith_eval_chain_3.log" Lean Import "../dumps/lean434/litarith.ndjson" 26562 26603.
+Redirect "litarith_eval_chain_4.log" Lean Import "../dumps/lean434/litarith.ndjson" 26604 26609.
+Redirect "litarith_eval_chain_5.log" Lean Import "../dumps/lean434/litarith.ndjson" 26610 26672.
 
 (* Every lemma a cast above uses exists; a lemma the kernel refused was not declared. *)
 Check RLI434L_tidy_big__nat_eq_2.
@@ -86,3 +127,14 @@ Definition litarith_uip_lemmas : unit := let _ := @toN_of_eq in let _ := @sprop_
 Redirect "litarith_eval_assumptions_uip.log" Print Assumptions litarith_uip_lemmas.
 Redirect "litarith_eval_assumptions_tidy.log" Print Assumptions RLI434L_tidy_big__nat_eq_2.
 Redirect "litarith_eval_assumptions_div.log" Print Assumptions Nat_div_eq_of_lt_le.
+
+(* Every lemma a cast of a chain uses exists; the lemma the kernel refused was not declared. *)
+Check RLI434L_chain_case__nat_eq_1.
+Check RLI434L_chain_fix__nat_eq_1.
+Check RLI434L_chain_proj__nat_eq_1.
+Check RLI434L_chain_1__nat_eq_4.
+Check RLI434L_chain_2__nat_eq_3.
+Check RLI434L_chain_rounds_15__nat_eq_1.
+Check RLI434L_chain_rounds_16__nat_eq_1.
+Check RLI434L_guard_fix__nat_eq_1.
+Fail Check RLI434L_chain_motive2__nat_eq_1.

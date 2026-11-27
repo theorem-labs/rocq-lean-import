@@ -484,4 +484,62 @@ def ng5 (x : Nat) : Nat := x
 theorem nest_capped (h : Q2 65536 (nf1 (nf2 (nf3 (nf4 (nf5 ncA))))) (2 ^ 32)) :
     Q2 65536 (ng1 (ng2 (ng3 (ng4 (ng5 100))))) 4294967296 := h
 
+-- A chain of waits (l-table-r8-A): a match, fixpoint or projection whose scrutinee, recursive argument or subject
+-- is a match, fixpoint or projection that waits on a held operation (tests/litarith_eval.v, tests/litarith_dvd.v,
+-- tests/litarith_budget.v)
+noncomputable def isz (n : Nat) : Bool := Nat.casesOn (motive := fun _ => Bool) n true (fun _ => false)
+noncomputable def pb (n : Nat) : Bool × Nat := Nat.casesOn (motive := fun _ => Bool × Nat) n (false, 0) (fun _ => (true, 0))
+noncomputable def cz (n : Nat) : Nat := Nat.casesOn (motive := fun _ => Nat) n 0 (fun _ => 1)
+noncomputable def ch_one : Nat × Nat := (1, 65505)
+noncomputable def ch_cc : Nat × Nat := (cond (cond (decide (256 ∣ 256 * 65536)) true false) 1 0, 65536 - 31)
+noncomputable def ch_cf : Nat × Nat := (cond (isz (65536 - 1)) 0 1, 65536 - 31)
+noncomputable def ch_cp : Nat × Nat := (cond (pb (65536 - 1)).1 1 0, 65536 - 31)
+noncomputable def ch_g0 : Nat × Nat :=
+  (Option.casesOn (motive := fun _ => Nat)
+    (Nat.casesOn (motive := fun _ => Option (Tag 65535)) (65536 - 1) none (fun _ => some ⟨0⟩)) 0 (fun _ => 1),
+   65536 - 31)
+noncomputable def ch_g1 : Nat × Nat :=
+  (Option.casesOn (motive := fun _ => Nat)
+    (Nat.casesOn (motive := fun _ => Option (Tag 65536)) (65536 - 1) none (fun _ => some ⟨0⟩)) 0 (fun _ => 1),
+   65536 - 31)
+noncomputable def ch_g2 : Nat × Nat :=
+  (Option.casesOn (motive := fun _ => Nat)
+    (Nat.casesOn (motive := fun _ => Option (Tag 65537)) (65536 - 1) none (fun _ => some ⟨0⟩)) 0 (fun _ => 1),
+   65536 - 31)
+noncomputable def ch_gf : Option (Tag 65536) × Nat :=
+  (Nat.casesOn (motive := fun _ => Option (Tag 65536)) (cz (65536 - 1)) none (fun _ => some ⟨0⟩), 65536 - 31)
+noncomputable def ch_gf' : Option (Tag 65536) × Nat := (some ⟨0⟩, 65505)
+noncomputable def ch_ax : Nat × Nat := (cond (isz axN) 0 1, 65536 - 31)
+noncomputable def ch_ax' : Nat × Nat := (cond (isz axN) 0 1, 65505)
+noncomputable def ch_ns : Nat × Nat := (cond (decide ((0 : Int) ≤ Int.ofNat 65536 - 1)) 1 0, 65536 - 31)
+noncomputable def ch_ks : Nat × Nat := (if (0 : Int) ≤ 256 * 256 - 1 then 1 else 0, 65536 - 31)
+theorem chain_case (h : Q 65536 ch_cc) : Q 65536 ch_one := h
+theorem chain_fix (h : Q 65536 ch_cf) : Q 65536 ch_one := h
+theorem chain_proj (h : Q 65536 ch_cp) : Q 65536 ch_one := h
+theorem chain_1 (h : Q 65536 (-(4096 * 117349959766017) + 1 : Int)) : Q 65536 (-480665435201605631 : Int) := h
+theorem chain_2 (h : Q 65536 (-(4096 * 117349959766017) + 1 + 1 : Int)) : Q 65536 (-480665435201605630 : Int) := h
+theorem chain_8 (h : Q 65536 (-(4096 * 117349959766017) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 : Int)) :
+    Q 65536 (-480665435201605624 : Int) := h
+theorem chain_9 (h : Q 65536 (-(4096 * 117349959766017) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 : Int)) :
+    Q 65536 (-480665435201605623 : Int) := h
+theorem chain_rounds_15 (h : Q 65536 (cz (gr 15 65536), 65536 - 31)) : Q 65536 ((1, 65505) : Nat × Nat) := h
+theorem chain_rounds_16 (h : Q 65536 (cz (gr 16 65536), 65536 - 31)) : Q 65536 ((1, 65505) : Nat × Nat) := h
+theorem chain_rounds_17 (h : Q 65536 (cz (gr 17 65536), 65536 - 31)) : Q 65536 ((1, 65505) : Nat × Nat) := h
+theorem guard_65535 (h : Q 65536 ch_g0) : Q 65536 ch_one := h
+theorem guard_65536 (h : Q 65536 ch_g1) : Q 65536 ch_one := h
+theorem guard_65537 (h : Q 65536 ch_g2) : Q 65536 ch_one := h
+theorem guard_fix (h : Q 65536 ch_gf) : Q 65536 ch_gf' := h
+theorem chain_unheld (h : Q 65536 ch_ax) : Q 65536 ch_ax' := h
+theorem chain_nested (h : Q 65536 ch_ns) : Q 65536 ch_one := h
+theorem chain_refused (h : Q 65536 ch_ks) : Q 65536 ch_one := h
+noncomputable def ch_ks2 : Nat × Nat := (if (0 : Int) ≤ 5000 * 14 - 1 then 1 else 0, 65536 - 31)
+noncomputable def ch_km : Fin (65536 + 1) :=
+  Option.casesOn (motive := fun _ => Fin (65536 + 1))
+    (Nat.casesOn (motive := fun _ => Option Nat) (65536 - 1) none (fun _ => some 0)) ⟨0, by decide⟩
+    (fun _ => ⟨1, by decide⟩)
+theorem chain_refused_small (h : Q 65536 ch_ks2) : Q 65536 ch_one := h
+theorem chain_motive (h : Q 65536 ch_km) : Q 65536 (⟨1, by decide⟩ : Fin (65536 + 1)) := h
+noncomputable def ch_km2 : Fin (65536 + 1) := cond (isz (65536 - 1)) ⟨0, by decide⟩ ⟨1, by decide⟩
+theorem chain_motive2 (h : Q 65536 ch_km2) : Q 65536 (⟨1, by decide⟩ : Fin (65536 + 1)) := h
+
 end RLI434L
