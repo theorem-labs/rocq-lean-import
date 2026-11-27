@@ -183,8 +183,8 @@ let parse_level ~lcnt state next json =
   in
   ({ state with univs = RRange.append state.univs level }, None)
 
-(* A natural literal ([LeanExpr.Nat]): a string of a number Zarith reads, or an integer; refused when negative.
-   Kept as [Z.to_string] of its value, so that ["007"], ["7"] and [7] are the same string. *)
+(* A natural literal ([LeanParseShared.nat_lit]): a string of a number Zarith reads, or an integer; refused when
+   negative. *)
 let parse_nat_lit ~lcnt json =
   let n =
     match json with
@@ -195,7 +195,7 @@ let parse_nat_lit ~lcnt json =
     | _ -> err ~lcnt "bad natural literal"
   in
   if Z.sign n < 0 then err ~lcnt "natural literal must be non-negative";
-  Z.to_string n
+  LeanParseShared.nat_lit n
 
 let parse_expr ~lcnt state next json =
   let placeholder () =
@@ -239,7 +239,7 @@ let parse_expr ~lcnt state next json =
             rest = expr_at p "body";
           }
       | "proj", p -> Proj (name_at p "typeName", int_at p "idx", expr_at p "struct")
-      | "natVal", n -> Nat (parse_nat_lit ~lcnt n)
+      | "natVal", n -> parse_nat_lit ~lcnt n
       | "strVal", `String s -> String s
       | "mdata", p -> expr_at p "expr"
       | _ -> err ~lcnt "bad expression record")

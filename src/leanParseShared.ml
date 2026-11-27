@@ -58,3 +58,5 @@ let fix_ctor ind nparams ty =
   replace_ind ind nparams ty
 
 let quot_name = N.append N.anon "Quot"
+
+let nat_lit z = Nat (Z.to_string z)

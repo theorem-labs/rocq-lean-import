@@ -20,14 +20,9 @@ type expr =
   | Pi of binder_kind * LeanName.t * expr * expr
   | Proj of LeanName.t * int * expr  (** Proj: name of ind, field, term *)
   | Nat of string
-      (** A natural number literal, as the canonical decimal string of its value: each parser validates the
-          literal as a Zarith number and keeps [Z.to_string] of it, so that equal values have equal strings;
-          the term builder converts it back with [Z.of_string]. Not a [Z.t]: [Lean Import] stores the
-          importer's state, these expressions included, in the .vo ([lean_obj] in lean.ml), and rocqchk's
-          reader of a .vo (checker/analyze.ml) reads no OCaml custom block, which a Zarith value of 2^62 or
-          more is. Job zchk-c83d7e3a-20261127t101628 ran the cut's rocqchk ([ci/build-9.2-cut.sh --check]) on
-          tests/core.vo and tests/lean434_bigint.vo built with a [Z.t] here: "Unhandled code 0018", an assert
-          at checker/analyze.ml line 420. Rocq's own number tokens (interp/numTok.mli) are strings too. *)
+      (** A natural number literal: the decimal string of its value that [LeanParseShared.nat_lit] writes, and
+          the term builder of lean.ml reads with [Z.of_string]; a string, not a [Z.t], for the reason stated at
+          [lean_obj] in lean.ml. *)
   | String of string
 
 type def = { name : LeanName.t; ty : expr; body : expr; univs : LeanName.t list; }

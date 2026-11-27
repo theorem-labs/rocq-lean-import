@@ -182,9 +182,8 @@ let numbered_payload state l = function
     and term = get_expr state term in
     { state with exprs = RRange.append state.exprs (Proj (ind, field, term)) }
   | [ "#ELN"; n ] ->
-    (* The canonical decimal string of the literal (LeanExpr.Nat). *)
-    let n = Z.to_string (Z.of_string n) in
-    { state with exprs = RRange.append state.exprs (Nat n) }
+    let n = LeanParseShared.nat_lit (Z.of_string n) in
+    { state with exprs = RRange.append state.exprs n }
   | "#ELS" :: bytes ->
     let s = Seq.map parse_char (List.to_seq bytes) in
     let s = String.of_seq s in

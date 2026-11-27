@@ -116,9 +116,10 @@ After it makes a test that its `ROCQCHK_TESTS` names, `tests/Makefile`
 runs `rocqchk` (the cut's, on CI) on the test's `.vo`, its output in
 `tests/<name>.rocqchk.log`; when rocqchk refuses the file, the make
 prints `ROCQCHK FAIL: tests/<name>.vo: ` and the first line of that log
-that is not blank, and fails. `Lean Import` stores the importer's state
-in the `.vo` (see "Natural number literals"), and this step shows that
-rocqchk reads it.
+that is not blank, and fails. When a make that passed left no `.vo` of
+such a test, it prints `ROCQCHK MISSING: tests/<name>.vo: ...` and
+fails. The step shows that rocqchk reads the importer's state that
+`Lean Import` stores in the `.vo` (see "Natural number literals").
 
 # How does it work?
 
@@ -414,13 +415,15 @@ up to 8 leading
 `Nat_succ`.
 
 Until it builds the term, the importer keeps a literal as the decimal
-string of its value (written by Zarith, so `007` and `7` are the same
-string), not as a Zarith number: `Lean Import` stores the importer's
-state in the `.vo` (the entries it read and, for an export of the old
-text format, every expression parsed so far), and `rocqchk` reads no
-OCaml custom block, which a Zarith number of 2^62 or more is (it stops
-with `Unhandled code 0018`). A `.vo` that an earlier importer wrote
-holds Zarith numbers there; compile it again.
+string of its value (Zarith's, so `007` and `7` are the same string),
+not as a Zarith number. `Lean Import` stores the importer's state in the
+`.vo` (the entries it read and, for an export of the old text format,
+every expression parsed so far). `rocqchk`'s reader of a `.vo` reads an
+OCaml custom block only when it is an `Int64`, and Zarith writes a
+number of 2^62 or more as a custom block with code 0x18
+(`CODE_CUSTOM_LEN`), which rocqchk refuses with `Unhandled code 0018`.
+A `.vo` that an earlier importer wrote holds Zarith numbers there;
+compile it again.
 
 Lean's kernel computes `Nat` arithmetic on literals with GMP. Rocq's
 kernel reduces Lean's own `Nat.add`, `Nat.sub`, `Nat.mul` and `Nat.pow`
@@ -992,10 +995,12 @@ line when it fails as its row says: at the row's own entry (`own_entry`,
 the fourth column) or, when that is `-`, at its base entry (`base_entry`,
 the third column, the first error at the base); an entry `option:NAME`
 is a failure at the test's `Set NAME` line, and `check:rocqchk` a
-failure of the rocqchk step of `tests/Makefile` on the test's `.vo` (its
-line `ROCQCHK FAIL: tests/<name>.vo: ...`; the test must be in
-`ROCQCHK_TESTS`). A test whose failure there is
-not its first `Error at line N (for X)` says what the failure is
+failure of the rocqchk step of `tests/Makefile` on the test's `.vo`: its
+line `ROCQCHK FAIL: tests/<name>.vo: ...`, which the verdict line then
+ends with (the test must be in `ROCQCHK_TESTS`; a line
+`ROCQCHK MISSING`, a `.vo` the make did not write, never meets it). A
+test whose failure there is not its first `Error at line N (for X)`
+says what the failure is
 in comment lines that start `(* r5 `: `r5 error: TEXT` (the Rocq error
 of the next command holds TEXT and names the entry), `r5 log: "LOG"
 TEXT` and `r5 log lacks: "LOG" TEXT` (the log of `Redirect "LOG"` has,
