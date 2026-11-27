@@ -40,3 +40,4 @@ tests/litarith_refused.v	litarith-refused	option:Lean Entry Timeout	RLI434L.refu
 tests/litarith_budget.v	litarith-budget	option:Lean Entry Timeout	RLI434L.bud_tidy	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
 tests/litarith_absent.v	litarith-absent	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
 tests/litarith_nobool.v	litarith-nobool	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/transport_walk.v	transport-walk-literal	option:Lean Entry Timeout	RLI434Wk.walk_lits	fixed	5b8b335940d35af8b89dfc6f353e923805a8f57c	-
