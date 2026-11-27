@@ -32,3 +32,10 @@ tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	
 tests/fin_transport_values_differ.v	fin-transport-values-differ	option:Lean Entry Timeout	RLI434V.values_differ	fixed	bc0d4888eadebdac4a9b8198aeb85d13c58d6649	-
 tests/fin_transport_bitwise.v	fin-transport-bitwise	option:Lean Entry Timeout	RLI434B.u32_and	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
 tests/fin_transport_bitwise_absent.v	fin-transport-bitwise-absent	option:Lean Entry Timeout	RLI434B.u32_lor	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
+tests/litarith_eval.v	litarith-eval	option:Lean Entry Timeout	RLI434L.tidy_big	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_hold.v	litarith-hold	option:Lean Entry Timeout	RLI434L.div_held_l	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_dvd.v	litarith-dvd	option:Lean Entry Timeout	RLI434L.dvd_256	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_refused.v	litarith-refused	option:Lean Entry Timeout	RLI434L.refused_hole	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_budget.v	litarith-budget	option:Lean Entry Timeout	RLI434L.bud_tidy	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_absent.v	litarith-absent	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_nobool.v	litarith-nobool	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
