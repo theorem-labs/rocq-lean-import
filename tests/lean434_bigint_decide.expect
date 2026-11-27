@@ -1,6 +1,7 @@
 # Log file, polarity, literal substring (tab-separated).
 lean434_bigint_decide.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal._proof_1)
-lean434_bigint_decide.log.out	+	Skipping: Error at line 75984 (for RLI434.window._proof_1)
+lean434_bigint_decide.log.out	+	line 75984: RLI434.window._proof_1: 1 argument(s) transported (
+lean434_bigint_decide.log.out	-	Skipping: Error at line 75984
 lean434_bigint_decide.log.out	+	Timed out after 5 s (Lean Entry Timeout)
 lean434_bigint_decide.log.out	+	Skipping: Error at line 2507 (for RLI434.boundedVal)
 lean434_bigint_decide.log.out	+	Done!

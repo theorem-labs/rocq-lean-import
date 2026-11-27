@@ -6,7 +6,10 @@ From LeanImport Require Import Lean.
    terms, one Nat_succ at a time; Lean's kernel computes it with GMP. Measured on Rocq 07e45e36: about 8.6
    microseconds a unit, so 2^33 units take about 20 hours. See README, "Natural number literals". When a change
    makes these entries import, this test fails: the feature is then fixed, and its row in
-   tests/lean434_features.txt moves to fixed. *)
+   tests/lean434_features.txt moves to fixed. RLI434.window._proof_1 (line 75984) now imports through the transport
+   pass's chained waits (README, "Transport of proof arguments across Nat literals"): its argument is cast, so the
+   expect file asserts the transported line. RLI434.boundedVal._proof_1 and RLI434.omega_big._proof_1_1 remain
+   skipped, and the row stays listed. *)
 Set Lean Error Mode "Skip".
 Set Warnings "+unknown-option".
 Set Lean Entry Timeout 5.

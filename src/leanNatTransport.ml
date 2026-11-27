@@ -1368,8 +1368,9 @@ let has_nat_from st bound depth c =
    [decide p inst] whose proposition holds a Nat term of [hold_min] or more is held as a whole, its value [true]
    proved by Lean's [decide_eq_true] from a proof of [p] ([prove_prop]). A match, a fixpoint or a projection whose
    scrutinee, recursive argument or subject is a constructor is contracted (the first class); one that waits on a
-   held operation is left as it is for that round (the second class), and gives the pair no lemma when it still
-   waits after the last round; anything else gives the pair no lemma at once (the third class, [Eval_stop]). The
+   held operation, or on a match, fixpoint or projection that waits (a chain), is left as it is for that round (the
+   second class), and gives the pair no lemma when it still waits after the last round; anything else gives the
+   pair no lemma at once (the third class, [Eval_stop]), a chain read at a match whose type has parameters too. The
    proof of [t = v] goes back through the rounds: [eq_refl v] is cast, along a lemma [l = s] for each held
    operation [s] of value [l], from [N[l]] to [N[s]]; the kernel converts [N[l]] with the next round's normal
    form, and [t] with the first one. Every step is charged before it, and an outer pair's charges, its nested
@@ -1569,17 +1570,38 @@ let is_held_decide st ls depth c =
 
 (* A match's scrutinee, a fixpoint's recursive argument or a projection's subject [t], evaluated, that is not a
    constructor: a held operation (the second class: a held function, a held [decide] or a representative of a
-   class function's form), which a later round may replace by its value (the round's wait records it), or
-   anything else (the third class): [Eval_stop]. Unlike [held_ops]'s, the test reads no arity: [t] is [ev_whnf]'s
-   result, whose held operations [hold_op] and [ev_head] built at the arities [held_ops] reads (two arguments for
-   a held function or [decide], six for a representative of a class function's form). *)
-let stuck st ls ev depth t =
-  let held =
-    match head_const t with
-    | Some k -> mem_const st k ls.held || is_held_decide st ls depth t || is_rep st ev t
-    | None -> false
+   class function's form), or a match, fixpoint or projection that [ev_head] left as it is because it waits on
+   one (the second class too: a chain of waits, each link a scrutinee, recursive argument or subject of the
+   second class, one step for each link), which a later round may replace by its value (the round's wait records
+   it; [ec_eval]'s [max_rounds] bounds the rounds a chain takes), or anything else (the third class): [Eval_stop].
+   [waits] reads again the links [ev_head] already accepted, only to charge one step for each and to check the
+   nesting one level deeper for each. A match whose type has parameters ([pms], not empty) waits on no chain (the
+   third class): its parameters stay as the source wrote them and only convert with those of its scrutinee's type,
+   so the motive of a cast that abstracts a held operation of the chain may be ill-typed, or its check may not end
+   ([Decidable (a ≤ b)]'s match on [Int.decLe a b], an [if] on an [Int] comparison); that is decided before
+   [waits], so a refused chain costs no step. A fixpoint and a projection pass no parameters and are never
+   guarded. Unlike [held_ops]'s, the test reads no arity: [t] is [ev_whnf]'s result, whose held operations
+   [hold_op] and [ev_head] built at the arities [held_ops] reads (two arguments for a held function or [decide],
+   six for a representative of a class function's form). *)
+let stuck ?(pms = [||]) st ls ev depth t =
+  let rec waits depth t =
+    let h, args = Constr.decompose_app t in
+    let link s =
+      C.tick st.ch 1;
+      C.check_depth (depth + 1);
+      waits (depth + 1) s
+    in
+    match Constr.kind h with
+    | Constr.Const (k, _) -> mem_const st k ls.held || is_held_decide st ls depth t || is_rep st ev t
+    | Constr.Case (_, _, _, _, _, s, _) -> link s
+    | Constr.Fix ((ri, i), _) when Array.length args > ri.(i) -> link args.(ri.(i))
+    | Constr.Proj (_, _, s) -> link s
+    | _ -> false
   in
-  if held then ev.ev_wait <- true else raise Eval_stop
+  let chain = Option.is_empty (head_const t) in
+  if chain && Array.length pms > 0 then raise Eval_stop
+  else if waits depth t then ev.ev_wait <- true
+  else raise Eval_stop
 
 (* [c], closed, in weak head normal form, a literal's [Nat_double] folded: the round's memo first (the nesting
    checked before it is read), then [ev_head], whose result the memo keeps at [c]. *)
@@ -1596,11 +1618,12 @@ let rec ev_whnf st ls ev depth c =
    before it: the unfolding of a transparent constant, beta, zeta, a cast;
    a match, a fixpoint applied to more arguments than its recursive index, or a projection, contracted once its
    scrutinee, recursive argument or subject, evaluated one level deeper ([ev_ctor]), is a constructor (the
-   first class), left as it is with the round's wait set when that is a held operation (the second class),
-   [Eval_stop] when it is anything else (the third class), and when a constructor's arguments are not as many as
-   the branch binds or a projection's index is past them. It stops at a constructor, a literal's [Nat_double],
-   a held operation ([held_arm], [class_arm]), a held [decide], an application whose head has no body, and any
-   other term with no head step. *)
+   first class), left as it is with the round's wait set when that is a held operation, or a match, fixpoint or
+   projection left as it is because it waits on one (the second class, [stuck]), [Eval_stop] when it is anything
+   else, or such a match, fixpoint or projection read at a match whose type has parameters (the third class), and
+   when a constructor's arguments are not as many as the branch binds or a projection's index is past them. It
+   stops at a constructor, a literal's [Nat_double], a held operation ([held_arm], [class_arm]), a held [decide],
+   an application whose head has no body, and any other term with no head step. *)
 and ev_head st ls ev depth c =
   C.tick st.ch 1;
   let h, args = Constr.decompose_app c in
@@ -1634,7 +1657,7 @@ and ev_head st ls ev depth c =
         ev_head st ls ev depth (C.app_ch st.ch (C.subst_closed st.ch depth sargs npar nreal body) args)
       end
     | None ->
-      stuck st ls ev depth s';
+      stuck ~pms st ls ev depth s';
       C.tick st.ch (C.node_steps h);
       C.app_ch st.ch (Constr.mkCase (ci, u, pms, p, iv, s', brs)) args)
   | Constr.Fix (((ri, i), _) as fix) when nargs > ri.(i) ->

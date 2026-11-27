@@ -545,10 +545,14 @@ What it changes:
   argument cast along it (omega's `tidyConstraint` on `Int` literals near
   2^32, `decide (256 ∣ 4294967296)` at Lean's `Bool`). The pair gets no
   lemma when a `match`, fixpoint or projection meets anything but a
-  constructor or a held operation (a variable, an axiom, an opaque
-  constant, a stuck `match`), when one still waits on a held operation
-  after the last of 16 rounds of replacement, when an operation has an
-  operand of no value or a value of more than 1024 bits, at a held `%`
+  constructor, a held operation, or a `match`, fixpoint or projection that
+  waits on one (a variable, an axiom, an opaque constant, or a `match`
+  stuck on one of those), when one still waits on a held operation,
+  directly or through other matches, fixpoints or projections that wait on
+  it, after the last of 16 rounds of
+  replacement, at such a chain under a `match` whose type has parameters
+  (an `if`, an `Option`), when an operation has an operand of no value or
+  a value of more than 1024 bits, at a held `%`
   and at a closed `Nat.mod` with a value anywhere in a normal form, however
   small (no lemma proves its value), at `Nat.beq` and `Nat.ble` on anything
   but two literals below 65536 (which it computes), when the two values
