@@ -1,0 +1,83 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_eval_lib.log.out	+	Done!
+litarith_eval_lib.log.out	-	the transport pass fails
+litarith_eval.log.out	+	line 23923: RLI434L.tidy_big: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.tidy_big)
+litarith_eval.log.out	+	line 23933: RLI434L.c_match: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.c_match)
+litarith_eval.log.out	+	line 23941: RLI434L.c_fix: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.c_fix)
+litarith_eval.log.out	+	line 23949: RLI434L.c_proj: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.c_proj)
+litarith_eval.log.out	+	line 23968: RLI434L.w_fix: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.w_fix)
+litarith_eval.log.out	+	line 23978: RLI434L.w_fix_dep: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.w_fix_dep)
+litarith_eval.log.out	+	line 23988: RLI434L.motive_proof: the generated lemma RLI434L_motive_proof__nat_eq_
+litarith_eval.log.out	-	RLI434L.motive_proof: 1 argument(s) transported
+litarith_eval.log.out	-	(for RLI434L.motive_proof)
+litarith_eval.log.out	-	RLI434L.motive_proof: the transport pass fails
+litarith_eval.log.out	+	line 23996: RLI434L.w_match: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.w_match)
+litarith_eval.log.out	+	line 24004: RLI434L.w_unresolved
+litarith_eval.log.out	-	RLI434L.w_unresolved: 
+litarith_eval.log.out	-	(for RLI434L.w_unresolved)
+litarith_eval.log.out	+	line 24014: RLI434L.e_memo
+litarith_eval.log.out	-	RLI434L.e_memo: 
+litarith_eval.log.out	-	(for RLI434L.e_memo)
+litarith_eval.log.out	+	line 24022: RLI434L.s_match
+litarith_eval.log.out	-	RLI434L.s_match: 
+litarith_eval.log.out	-	(for RLI434L.s_match)
+litarith_eval.log.out	+	line 24030: RLI434L.s_fix
+litarith_eval.log.out	-	RLI434L.s_fix: 
+litarith_eval.log.out	-	(for RLI434L.s_fix)
+litarith_eval.log.out	+	line 24038: RLI434L.s_proj
+litarith_eval.log.out	-	RLI434L.s_proj: 
+litarith_eval.log.out	-	(for RLI434L.s_proj)
+litarith_eval.log.out	+	line 24046: RLI434L.s_head: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.s_head)
+litarith_eval.log.out	+	line 24056: RLI434L.s_param: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.s_param)
+litarith_eval.log.out	+	line 24064: RLI434L.field_unvalued
+litarith_eval.log.out	-	RLI434L.field_unvalued: 
+litarith_eval.log.out	-	(for RLI434L.field_unvalued)
+litarith_eval.log.out	+	line 24074: RLI434L.nothing_held
+litarith_eval.log.out	-	RLI434L.nothing_held: 
+litarith_eval.log.out	-	(for RLI434L.nothing_held)
+litarith_eval.log.out	+	line 24086: RLI434L.unknown_param
+litarith_eval.log.out	-	RLI434L.unknown_param: 
+litarith_eval.log.out	-	(for RLI434L.unknown_param)
+litarith_eval.log.out	+	line 24113: RLI434L.values_differ_l: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.values_differ_l)
+litarith_eval.log.out	+	line 24121: RLI434L.same_heads: 1 argument(s) transported (
+litarith_eval.log.out	-	(for RLI434L.same_heads)
+litarith_eval.log.out	+	line 24132: RLI434L.open_pair_l: 1 argument(s) transported (RLI434L_same_heads__nat_eq_1)
+litarith_eval.log.out	-	(for RLI434L.open_pair_l)
+litarith_eval.log.out	+	line 24142: RLI434L.type_fun
+litarith_eval.log.out	-	RLI434L.type_fun: 
+litarith_eval.log.out	-	(for RLI434L.type_fun)
+litarith_eval.log.out	+	Done!
+litarith_eval.log.out	-	the transport pass fails
+litarith_eval_rounds.log.out	+	line 24160: RLI434L.rounds_15: 1 argument(s) transported (RLI434L_rounds_15__nat_eq_31, RLI434L_same_heads__nat_eq_1)
+litarith_eval_rounds.log.out	-	(for RLI434L.rounds_15)
+litarith_eval_rounds.log.out	+	line 24173: RLI434L.rounds_16: 1 argument(s) transported (RLI434L_rounds_16__nat_eq_4, RLI434L_same_heads__nat_eq_1)
+litarith_eval_rounds.log.out	-	(for RLI434L.rounds_16)
+litarith_eval_rounds.log.out	+	line 24190: RLI434L.rounds_17: 1 argument(s) transported (RLI434L_same_heads__nat_eq_1)
+litarith_eval_rounds.log.out	-	(for RLI434L.rounds_17)
+litarith_eval_rounds.log.out	+	Done!
+litarith_eval_rounds.log.out	-	the transport pass fails
+litarith_eval_type_fun_held.log.out	+	line 25997: RLI434L.type_fun_held
+litarith_eval_type_fun_held.log.out	-	RLI434L.type_fun_held: 
+litarith_eval_type_fun_held.log.out	-	(for RLI434L.type_fun_held)
+litarith_eval_type_fun_held.log.out	+	Done!
+litarith_eval_type_fun_held.log.out	-	the transport pass fails
+litarith_eval_c_match_f.log.out	+	line 26076: RLI434L.c_match_f: 1 argument(s) transported (
+litarith_eval_c_match_f.log.out	-	(for RLI434L.c_match_f)
+litarith_eval_c_match_f.log.out	+	Done!
+litarith_eval_c_match_f.log.out	-	the transport pass fails
+litarith_eval_assumptions_toN.log.out	+	Closed under the global context
+litarith_eval_assumptions_uip.log.out	+	relies on definitional UIP.
+litarith_eval_same_heads.log.out	+	RLI434L_same_heads__nat_eq_1
+litarith_eval_same_heads.log.out	-	Option
+litarith_eval_assumptions_tidy.log.out	=	Axioms:\neq_inst1 relies on definitional UIP.\neq relies on definitional UIP.\nTrue relies on definitional UIP.\nHEq_inst1 relies on definitional UIP.\nIff_intro relies on unchecked sort eliminations.\nIff relies on unchecked sort eliminations.\npropext : forall a b : SProp, Iff a b -> eq a b\n
+litarith_eval_assumptions_div.log.out	=	Axioms:\neq_inst1 relies on definitional UIP.\neq relies on definitional UIP.\nTrue relies on definitional UIP.\nHEq_inst1 relies on definitional UIP.\nIff_intro relies on unchecked sort eliminations.\nIff relies on unchecked sort eliminations.\npropext : forall a b : SProp, Iff a b -> eq a b\n

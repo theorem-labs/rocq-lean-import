@@ -1,0 +1,113 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_hold_lib.log.out	+	Done!
+litarith_hold_lib.log.out	-	the transport pass fails
+litarith_hold.log.out	+	line 24206: RLI434L.div_held_l: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.div_held_l)
+litarith_hold.log.out	+	line 24213: RLI434L.hmin_sub_op_65535: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_sub_op_65535)
+litarith_hold.log.out	+	line 24219: RLI434L.hmin_sub_op_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_sub_op_65536)
+litarith_hold.log.out	+	line 24225: RLI434L.hmin_sub_op_65537: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_sub_op_65537)
+litarith_hold.log.out	+	line 24234: RLI434L.hmin_div_op_65535: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_div_op_65535)
+litarith_hold.log.out	+	line 24243: RLI434L.hmin_div_op_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_div_op_65536)
+litarith_hold.log.out	+	line 24249: RLI434L.hmin_div_op_65537: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_div_op_65537)
+litarith_hold.log.out	+	line 24258: RLI434L.hmin_mul_op_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_mul_op_65536)
+litarith_hold.log.out	+	line 24266: RLI434L.hmin_add_val_65535: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_add_val_65535)
+litarith_hold.log.out	+	line 24272: RLI434L.hmin_add_val_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_add_val_65536)
+litarith_hold.log.out	+	line 24281: RLI434L.hmin_add_val_65537: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_add_val_65537)
+litarith_hold.log.out	+	line 24287: RLI434L.hmin_mul_val_65535: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_mul_val_65535)
+litarith_hold.log.out	+	line 24293: RLI434L.hmin_mul_val_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_mul_val_65536)
+litarith_hold.log.out	+	line 24299: RLI434L.hmin_pow_val_65536: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.hmin_pow_val_65536)
+litarith_hold.log.out	+	line 24307: RLI434L.h_operand: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.h_operand)
+litarith_hold.log.out	+	line 24315: RLI434L.unvalued_head
+litarith_hold.log.out	-	RLI434L.unvalued_head: 
+litarith_hold.log.out	-	(for RLI434L.unvalued_head)
+litarith_hold.log.out	+	line 24326: RLI434L.lit_4999: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.lit_4999)
+litarith_hold.log.out	+	line 24337: RLI434L.lit_5000: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.lit_5000)
+litarith_hold.log.out	+	line 24352: RLI434L.lit_5001: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.lit_5001)
+litarith_hold.log.out	+	line 24360: RLI434L.mod_65535: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.mod_65535)
+litarith_hold.log.out	+	line 24368: RLI434L.mod_65536
+litarith_hold.log.out	-	RLI434L.mod_65536: 
+litarith_hold.log.out	-	(for RLI434L.mod_65536)
+litarith_hold.log.out	+	line 24378: RLI434L.mod_in_form
+litarith_hold.log.out	-	RLI434L.mod_in_form: 
+litarith_hold.log.out	-	(for RLI434L.mod_in_form)
+litarith_hold.log.out	+	line 24388: RLI434L.mod_in_form_cls: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.mod_in_form_cls)
+litarith_hold.log.out	+	line 24395: RLI434L.beq_small_t: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.beq_small_t)
+litarith_hold.log.out	+	line 24406: RLI434L.beq_small_f: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.beq_small_f)
+litarith_hold.log.out	+	line 24412: RLI434L.ble_small: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.ble_small)
+litarith_hold.log.out	+	line 24418: RLI434L.beq_big
+litarith_hold.log.out	-	RLI434L.beq_big: 
+litarith_hold.log.out	-	(for RLI434L.beq_big)
+litarith_hold.log.out	+	line 24424: RLI434L.beq_big1
+litarith_hold.log.out	-	RLI434L.beq_big1: 
+litarith_hold.log.out	-	(for RLI434L.beq_big1)
+litarith_hold.log.out	+	line 24430: RLI434L.ble_big
+litarith_hold.log.out	-	RLI434L.ble_big: 
+litarith_hold.log.out	-	(for RLI434L.ble_big)
+litarith_hold.log.out	+	line 24436: RLI434L.beq_held
+litarith_hold.log.out	-	RLI434L.beq_held: 
+litarith_hold.log.out	-	(for RLI434L.beq_held)
+litarith_hold.log.out	+	line 24441: RLI434L.sub_held: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.sub_held)
+litarith_hold.log.out	+	line 24452: RLI434L.sub_held_l: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.sub_held_l)
+litarith_hold.log.out	+	line 24460: RLI434L.sub_trunc: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.sub_trunc)
+litarith_hold.log.out	+	line 24467: RLI434L.div_held: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.div_held)
+litarith_hold.log.out	+	line 24480: RLI434L.two_pairs_subfail: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.two_pairs_subfail)
+litarith_hold.log.out	+	line 24491: RLI434L.z_ord: 1 argument(s) transported (
+litarith_hold.log.out	-	(for RLI434L.z_ord)
+litarith_hold.log.out	+	line 24506: RLI434L.bits_1025
+litarith_hold.log.out	-	RLI434L.bits_1025: 
+litarith_hold.log.out	+	(for RLI434L.bits_1025)
+litarith_hold.log.out	+	line 24514: RLI434L.pow_1025b
+litarith_hold.log.out	-	RLI434L.pow_1025b: 
+litarith_hold.log.out	-	(for RLI434L.pow_1025b)
+litarith_hold.log.out	+	Done!
+litarith_hold.log.out	-	the transport pass fails
+litarith_hold_bits.log.out	+	line 24526: RLI434L.bits_1023: 1 argument(s) transported (
+litarith_hold_bits.log.out	-	(for RLI434L.bits_1023)
+litarith_hold_bits.log.out	+	line 24538: RLI434L.bits_1024: 1 argument(s) transported (
+litarith_hold_bits.log.out	-	(for RLI434L.bits_1024)
+litarith_hold_bits.log.out	+	line 24544: RLI434L.lbits_1023: 1 argument(s) transported (
+litarith_hold_bits.log.out	-	(for RLI434L.lbits_1023)
+litarith_hold_bits.log.out	+	line 24550: RLI434L.lbits_1024: 1 argument(s) transported (
+litarith_hold_bits.log.out	-	(for RLI434L.lbits_1024)
+litarith_hold_bits.log.out	+	line 24558: RLI434L.pow_1024b: 1 argument(s) transported (
+litarith_hold_bits.log.out	-	(for RLI434L.pow_1024b)
+litarith_hold_bits.log.out	+	Done!
+litarith_hold_bits.log.out	-	the transport pass fails
+litarith_hold_d.log.out	+	line 26050: RLI434L.div_held_d: 1 argument(s) transported (
+litarith_hold_d.log.out	-	(for RLI434L.div_held_d)
+litarith_hold_d.log.out	+	Done!
+litarith_hold_d.log.out	-	the transport pass fails
+litarith_hold_rep.log.out	+	line 26099: RLI434L.held_rep_ops: 1 argument(s) transported (
+litarith_hold_rep.log.out	-	(for RLI434L.held_rep_ops)
+litarith_hold_rep.log.out	+	line 26145: RLI434L.held_small_param: 1 argument(s) transported (RLI434L_held_small_param__nat_eq_1, RLI434L_z_ord__nat_eq_1)
+litarith_hold_rep.log.out	-	RLI434L.held_small_param: the generated lemma
+litarith_hold_rep.log.out	-	(for RLI434L.held_small_param)
+litarith_hold_rep.log.out	+	Done!
+litarith_hold_rep.log.out	-	the transport pass fails

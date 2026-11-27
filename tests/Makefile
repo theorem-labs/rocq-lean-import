@@ -13,6 +13,7 @@ EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bit
   fin_transport_ceiling fin_transport_charge fin_transport_lemma_refused fin_transport_nest fin_transport_refused \
   fin_transport_shape fin_transport_share \
   fin_transport_values fin_transport_values_differ lean434_bigint_decide lean434_string_length lean434_strings \
+  litarith_absent litarith_budget litarith_dvd litarith_eval litarith_hold litarith_nobool litarith_refused \
   nat_transport nat_transport_budget nat_transport_parts nat_transport_step_budget \
   nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \
   parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload parse_wrong_payload_prefix path_choice \

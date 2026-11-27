@@ -1,0 +1,24 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_refused_lib.log.out	+	Done!
+litarith_refused_lib.log.out	-	the transport pass fails
+litarith_refused.log.out	+	line 24685: RLI434L.refused_hole: the generated lemma RLI434L_refused_hole__nat_eq_
+litarith_refused.log.out	-	RLI434L.refused_hole: 1 argument(s) transported
+litarith_refused.log.out	+	(for RLI434L.refused_hole)
+litarith_refused.log.out	-	RLI434L.refused_hole: the generated lemma RLI434L_refused_hole__nat_eq_3
+litarith_refused.log.out	+	line 24696: RLI434L.refused_sub: the generated lemma RLI434L_refused_sub__nat_eq_
+litarith_refused.log.out	-	RLI434L.refused_sub: 1 argument(s) transported
+litarith_refused.log.out	-	(for RLI434L.refused_sub)
+litarith_refused.log.out	+	line 24709: RLI434L.refused_twice: the generated lemma RLI434L_refused_twice__nat_eq_
+litarith_refused.log.out	-	RLI434L.refused_twice: 1 argument(s) transported
+litarith_refused.log.out	+	(for RLI434L.refused_twice)
+litarith_refused.log.out	+	line 24713: RLI434L.refused_again: the generated lemma RLI434L_refused_again__nat_eq_
+litarith_refused.log.out	-	RLI434L.refused_again: 1 argument(s) transported
+litarith_refused.log.out	+	(for RLI434L.refused_again)
+litarith_refused.log.out	+	Done!
+litarith_refused.log.out	-	the transport pass fails
+litarith_refused_shared.log.out	+	line 26063: RLI434L.refused_shared: the generated lemma RLI434L_refused_shared__nat_eq_2 : RLI434L_mk_k1 = RLI434L_kd1 is refused by the kernel
+litarith_refused_shared.log.out	+	line 26063: RLI434L.refused_shared: the generated lemma RLI434L_refused_shared__nat_eq_3 : RLI434L_mk_k1 = RLI434L_kd1 is refused by the kernel
+litarith_refused_shared.log.out	-	RLI434L.refused_shared: 1 argument(s) transported
+litarith_refused_shared.log.out	+	(for RLI434L.refused_shared)
+litarith_refused_shared.log.out	+	Done!
+litarith_refused_shared.log.out	-	the transport pass fails
