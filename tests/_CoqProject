@@ -66,6 +66,7 @@ litarith_budget.v
 litarith_absent.v
 litarith_nobool.v
 transport_work.v
+transport_walk.v
 entry_timeout.v
 entry_timeout_parse.v
 parse_untagged.v

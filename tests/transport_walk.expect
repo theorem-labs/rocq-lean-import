@@ -1,0 +1,29 @@
+# Log file, polarity, literal substring (tab-separated).
+transport_walk_lib.log.out	+	Done!
+transport_walk_lib.log.out	-	Error at line
+transport_walk_lits.log.out	+	line 767: RLI434Wk.walk_lits: 1 argument(s) transported (RLI434Wk_walk_lits__nat_eq_1)
+transport_walk_lits.log.out	-	the transport pass stops
+transport_walk_lits.log.out	-	Error at line
+transport_walk_lits.log.out	+	Done!
+transport_walk_limit_stop.log.out	+	line 796: RLI434Wk.walk_limit: the transport pass stops: it needs more than 16837 steps or a nesting deeper than 10000
+transport_walk_limit_stop.log.out	-	argument(s) transported
+transport_walk_limit_stop.log.out	+	Skipping: Error at line 796 (for RLI434Wk.walk_limit)
+transport_walk_limit_stop.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+transport_walk_limit_stop.log.out	+	Done!
+transport_walk_limit_part.log.out	+	line 796: RLI434Wk.walk_limit: 1 argument(s) transported (
+transport_walk_limit_part.log.out	-	the transport pass stops
+transport_walk_limit_part.log.out	-	Error at line
+transport_walk_limit_part.log.out	+	Done!
+transport_walk_open_stop.log.out	+	line 1403: RLI434Wk.walk_open: the transport pass stops: it needs more than 6090 steps or a nesting deeper than 10000
+transport_walk_open_stop.log.out	-	argument(s) transported
+transport_walk_open_stop.log.out	+	Skipping: Error at line 1403 (for RLI434Wk.walk_open)
+transport_walk_open_stop.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+transport_walk_open_stop.log.out	+	Done!
+transport_walk_open_part.log.out	+	line 1403: RLI434Wk.walk_open: 1 argument(s) transported (
+transport_walk_open_part.log.out	-	the transport pass stops
+transport_walk_open_part.log.out	-	Error at line
+transport_walk_open_part.log.out	+	Done!
+transport_walk_open.log.out	+	line 1403: RLI434Wk.walk_open: 1 argument(s) transported (
+transport_walk_open.log.out	-	the transport pass stops
+transport_walk_open.log.out	-	Error at line
+transport_walk_open.log.out	+	Done!

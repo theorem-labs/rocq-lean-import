@@ -19,7 +19,7 @@ EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bit
   nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \
   parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload parse_wrong_payload_prefix path_choice \
   path_deferred_legacy path_deferred_reload path_deferred_string predeclared string_literal_mk uint32_legacy_only \
-  transport_work uint32_transport_ofnatlt uint32_transport_shiftleft univ_undeclared \
+  transport_walk transport_work uint32_transport_ofnatlt uint32_transport_shiftleft univ_undeclared \
   utf8size_transport_one utf8size_transport_two
 EXPECTS = $(addsuffix .expect,$(if $(or $(filter all,$(MAKECMDGOALS)),$(if $(MAKECMDGOALS),,all)),\
   $(EXPECT_TESTS),\
