@@ -1,4 +1,5 @@
 # file	features	base_entry	own_entry	status	commits	stack
+# base_entry and own_entry: the Lean entry the test fails at, option:<option name> (its Set line fails), or check:rocqchk (tests/Makefile's rocqchk step refuses the test's .vo; the test is in ROCQCHK_TESTS)
 tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c	-
 tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c	-
 tests/lean434_char.v	char-ofnataux	BitVec.ofNatLT	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
@@ -41,3 +42,6 @@ tests/litarith_budget.v	litarith-budget	option:Lean Entry Timeout	RLI434L.bud_ti
 tests/litarith_absent.v	litarith-absent	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
 tests/litarith_nobool.v	litarith-nobool	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
 tests/transport_walk.v	transport-walk-literal	option:Lean Entry Timeout	RLI434Wk.walk_lits	fixed	5b8b335940d35af8b89dfc6f353e923805a8f57c	-
+tests/rocqchk_literal.v	rocqchk-nat-literal-2pow62	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
+tests/rocqchk_literal_over.v	rocqchk-nat-literal-2pow62-plus1	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
+tests/rocqchk_literal_text.v	rocqchk-text-literal-unused	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
