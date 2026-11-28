@@ -1,0 +1,15 @@
+# Log file, polarity, literal substring (tab-separated).
+relcast_absent_lib.log.out	+	Done!
+relcast_absent_lib.log.out	-	Error at line
+relcast_absent_theorem.log.out	+	(for RLI434RC.theorem_closed)
+relcast_absent_theorem.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_absent_theorem.log.out	-	relevant
+relcast_absent_theorem.log.out	+	Done!
+relcast_absent_rel_arg.log.out	+	RLI434RC.rel_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_absent_rel_arg.log.out	-	relevant
+relcast_absent_rel_arg.log.out	-	Error at line
+relcast_absent_rel_arg.log.out	+	Done!
+relcast_absent_h_pair.log.out	+	RLI434RC.h_pair: the transported value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead
+relcast_absent_h_pair.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_absent_h_pair.log.out	-	relevant
+relcast_absent_h_pair.log.out	+	Done!

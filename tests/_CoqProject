@@ -73,6 +73,10 @@ litarith_nobool.v
 litarith_chain.v
 transport_work.v
 transport_walk.v
+relcast.v
+relcast_absent.v
+relcast_refused.v
+relcast_lemma.v
 entry_timeout.v
 entry_timeout_parse.v
 parse_untagged.v

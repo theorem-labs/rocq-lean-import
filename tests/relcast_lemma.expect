@@ -1,0 +1,2 @@
+# rel_transport relies on the definitional UIP of Lean's eq and on nothing else: Print Assumptions gives exactly this.
+relcast_lemma_assumptions.log.out	=	Axioms:\neq relies on definitional UIP.\n

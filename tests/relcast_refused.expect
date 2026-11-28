@@ -1,0 +1,51 @@
+# Log file, polarity, literal substring (tab-separated).
+relcast_refused_lib.log.out	+	Done!
+relcast_refused_lib.log.out	-	Error at line
+relcast_refused_mod.log.out	+	RLI434RC.refused_mod: the generated lemma RLI434RC_refused_mod__rel_eq_1
+relcast_refused_mod.log.out	+	is refused by the kernel
+relcast_refused_mod.log.out	+	RLI434RC.refused_mod: the relevant pass's value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead
+relcast_refused_mod.log.out	+	Skipping: Error at line 16254 (for RLI434RC.refused_mod)
+relcast_refused_mod.log.out	-	relevant argument(s) cast
+relcast_refused_mod.log.out	+	Done!
+relcast_refused_mod_sprop.log.out	+	RLI434RC.refused_mod_sprop: the generated lemma RLI434RC_refused_mod_sprop__rel_eq_1
+relcast_refused_mod_sprop.log.out	+	RLI434RC.refused_mod_sprop: the relevant pass's value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed); the SProp pass's value goes to the kernel instead
+relcast_refused_mod_sprop.log.out	+	RLI434RC.refused_mod_sprop: the transported value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead
+relcast_refused_mod_sprop.log.out	+	Skipping: Error at line 16283 (for RLI434RC.refused_mod_sprop)
+relcast_refused_mod_sprop.log.out	-	argument(s) transported
+relcast_refused_mod_sprop.log.out	+	Done!
+relcast_refused_255.log.out	+	RLI434RC.refused_255: the relevant pass's value is refused (
+relcast_refused_255.log.out	+	); Lean's value goes to the kernel instead
+relcast_refused_255.log.out	-	it has more than 256 nodes
+relcast_refused_255.log.out	+	Skipping: Error at line 16318 (for RLI434RC.refused_255)
+relcast_refused_255.log.out	-	argument(s) transported
+relcast_refused_255.log.out	+	Done!
+relcast_refused_256.log.out	+	RLI434RC.refused_256: the relevant pass's value is refused (
+relcast_refused_256.log.out	+	); Lean's value goes to the kernel instead
+relcast_refused_256.log.out	-	it has more than 256 nodes
+relcast_refused_256.log.out	+	Skipping: Error at line 16325 (for RLI434RC.refused_256)
+relcast_refused_256.log.out	-	argument(s) transported
+relcast_refused_256.log.out	+	Done!
+relcast_refused_257.log.out	+	RLI434RC.refused_257: the relevant pass's value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead
+relcast_refused_257.log.out	+	Skipping: Error at line 16331 (for RLI434RC.refused_257)
+relcast_refused_257.log.out	-	argument(s) transported
+relcast_refused_257.log.out	+	Done!
+relcast_after_refused.log.out	+	RLI434RC.after_refused: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_after_refused__rel_eq_1)
+relcast_after_refused.log.out	-	Error at line
+relcast_after_refused.log.out	+	Done!
+relcast_refused_theorem.log.out	+	RLI434RC.theorem_closed: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_after_refused__rel_eq_1)
+relcast_refused_theorem.log.out	-	Error at line
+relcast_refused_theorem.log.out	+	Done!
+relcast_refused_total.log.out	+	RLI434RC.rel_total_hi: the relevant pass stops: it needs more than 1500000 steps in total; no relevant argument is cast
+relcast_refused_total.log.out	+	RLI434RC.rel_total_hi: 1 argument(s) transported (RLI434RC_rel_total_hi__nat_eq_1)
+relcast_refused_total.log.out	-	relevant argument(s) cast
+relcast_refused_total.log.out	-	Error at line
+relcast_refused_total.log.out	+	Done!
+relcast_refused_cache_head.log.out	+	RLI434RC.cache_after: 1 argument(s) transported (RLI434RC_cache_after__nat_eq_1)
+relcast_refused_cache_head.log.out	-	the transport pass stops
+relcast_refused_cache_head.log.out	-	Error at line
+relcast_refused_cache_head.log.out	+	Done!
+relcast_refused_cache.log.out	+	RLI434RC.cache_after: 1 argument(s) transported (RLI434RC_cache_after__nat_eq_1)
+relcast_refused_cache.log.out	-	Error at line
+relcast_refused_cache.log.out	+	Done!
+relcast_refused_pa_after.log.out	+	Axioms:
+relcast_refused_pa_after.log.out	+	eq relies on definitional UIP.

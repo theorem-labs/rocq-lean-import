@@ -18,7 +18,8 @@ EXPECT_TESTS := entry_memory entry_timeout entry_timeout_parse fin_transport_bit
   nat_transport nat_transport_budget nat_transport_parts nat_transport_step_budget \
   nat_transport_total negative_controls parse_text_numbering parse_text_recovery parse_text_recovery_prefix \
   parse_unclear_id parse_untagged parse_untagged_prefix parse_wrong_payload parse_wrong_payload_prefix path_choice \
-  path_deferred_legacy path_deferred_reload path_deferred_string predeclared rocqchk_literal_below \
+  path_deferred_legacy path_deferred_reload path_deferred_string predeclared relcast relcast_absent relcast_lemma \
+  relcast_refused rocqchk_literal_below \
   rocqchk_literal_text string_literal_mk uint32_legacy_only \
   transport_walk transport_work uint32_transport_ofnatlt uint32_transport_shiftleft univ_undeclared \
   utf8size_transport_one utf8size_transport_two
