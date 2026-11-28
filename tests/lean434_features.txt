@@ -43,6 +43,7 @@ tests/litarith_absent.v	litarith-absent	option:Lean Entry Timeout	RLI434L.own_mu
 tests/litarith_nobool.v	litarith-nobool	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
 tests/litarith_chain.v	litarith-chain	option:Lean Entry Timeout	RLI434L.chain_1	fixed	749063125b2a8f71220d7495611e0444c53c00c7	-
 tests/transport_walk.v	transport-walk-literal	option:Lean Entry Timeout	RLI434Wk.walk_lits	fixed	5b8b335940d35af8b89dfc6f353e923805a8f57c	-
+tests/relcast.v	relcast-relevant-position	option:Lean Entry Timeout	RLI434RC.theorem_closed	fixed	4e2aac38f2e69bf8f491a4dc43afb60cc9fdd60a	-
 tests/rocqchk_literal.v	rocqchk-nat-literal-2pow62	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
 tests/rocqchk_literal_over.v	rocqchk-nat-literal-2pow62-plus1	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
 tests/rocqchk_literal_text.v	rocqchk-text-literal-unused	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
