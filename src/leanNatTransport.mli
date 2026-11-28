@@ -15,18 +15,25 @@ type context = {
   log : Pp.t -> unit;  (** Print a line of the import's output about the entry. *)
 }
 
+(** The counts and lemmas below fill the line the import prints for an entry whose value the kernel accepts
+    (README, "Transport of proof arguments across Nat literals"): [<k> argument(s) transported (<lemmas>)], then
+    [; <r> relevant argument(s) cast (<relevant lemmas>)] when [<r>] is not 0. *)
 type sprop_value = {
   sprop_value : Constr.t;  (** the SProp pass's value, its SProp arguments transported *)
-  sprop_count : int;  (** how many arguments it transports (K of its line) *)
-  sprop_lemmas : Names.Id.t list;  (** the lemmas they use, in order (IDS of its line) *)
+  sprop_count : int;  (** how many arguments it transports: the line's [<k>] *)
+  sprop_lemmas : Names.Id.t list;  (** the lemmas they use, in order: the line's [<lemmas>] *)
 }
 
 type transported = {
   value : Constr.t;  (** the value to try first: the candidate when [relevant > 0], else the SProp pass's value *)
-  count : int;  (** K: how many SProp arguments [value] transports *)
-  lemmas : Names.Id.t list;  (** IDS: the SProp pass's lemmas, then those of extra SProp sites (L-ids) *)
-  relevant : int;  (** R: how many relevant arguments [value] casts; 0 when [value] is the SProp pass's *)
-  relevant_lemmas : Names.Id.t list;  (** RIDS: every other lemma [value] uses, first use first, each once *)
+  count : int;  (** how many SProp arguments [value] transports: the line's [<k>] *)
+  lemmas : Names.Id.t list;
+      (** the lemmas of those SProp casts, the line's [<lemmas>]: the SProp pass's, then those of the SProp casts
+          [value] places where that pass placed none *)
+  relevant : int;
+      (** how many relevant arguments [value] casts, the line's [<r>]; 0 when [value] is the SProp pass's *)
+  relevant_lemmas : Names.Id.t list;
+      (** every other lemma [value] uses, first use first, each once: the line's [<relevant lemmas>] *)
   saved : sprop_value option;
       (** when [relevant > 0]: the SProp pass's value, tried if the kernel refuses [value]; [None] when that
           pass changed nothing (then Lean's value is tried) *)

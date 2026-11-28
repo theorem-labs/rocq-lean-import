@@ -77,6 +77,7 @@ relcast.v
 relcast_absent.v
 relcast_refused.v
 relcast_lemma.v
+relcast_depth.v
 entry_timeout.v
 entry_timeout_parse.v
 parse_untagged.v

@@ -15,10 +15,9 @@ From LeanImport Require Import Lean.
      pass runs and Lean's value goes to the kernel.
    - The declared types of theorem_closed and declared_B (the kernel checks a candidate at Lean's type), of the axiom
      kind_axiom and of the inductive KindInd (no value, so the pass never sees them) are printed and pinned.
-   Two planted checks are not in this suite: a candidate replaced by a term of the wrong type needs a patched
-   plugin (the kernel refuses it; the SProp pass's value, else Lean's, goes to the kernel), and nests of @id W of
-   9989 to 9991 levels around a relevant argument, planted into a copy of this export, make a file too large to
-   commit (the nesting limit 10000 of the detector and of the relevant pass).
+   One planted check is not in this suite: a candidate replaced by a term of the wrong type needs a patched plugin,
+   so it runs only in a Job (the kernel refuses it; the SProp pass's value, else Lean's, goes to the kernel).
+   tests/relcast_depth.v checks the nesting limit 10000 of the detector and of the relevant pass.
    tests/relcast.expect checks the logs. *)
 Set Warnings "+unknown-option".
 Set Lean Error Mode "Skip".

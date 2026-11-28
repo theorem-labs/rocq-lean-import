@@ -12,12 +12,13 @@
    The pass is optional work: every step of it is charged to a budget before the step or allocation it pays
    for (the charged term layer, LeanChargedTerm), but for one: the export's constants of a Lean name, which the
    importer lists ([consts]), are charged by the length of the list once it is returned, since that length is
-   not known before; [setup] asks for 47 fixed names, once per entry, and 56 when literal arithmetic's lemmas
-   are registered ([l_refs]). The pass asks Rocq for no unbounded reduction or retyping. It reads types and
-   exposes products and sorts by its own charged head reduction (unfolding of a transparent constant, beta,
-   zeta, cast, projection of a constructor: LeanChargedTerm's [whd]); a type it cannot read that way is no
-   type, and the argument gets no cast. When it stops, Lean's own value goes to the kernel, which checks it as
-   without the pass.
+   not known before; for each entry [setup] runs once for the SProp pass, and once each for the detector and the
+   relevant pass when they run, and asks for 47 fixed names, 56 when literal arithmetic's lemmas are registered
+   ([l_refs]), but always 47 for the detector, which runs without literal arithmetic. The pass asks Rocq for no
+   unbounded reduction or retyping. It reads types and exposes products and sorts by its own charged head
+   reduction (unfolding of a transparent constant, beta, zeta, cast, projection of a constructor:
+   LeanChargedTerm's [whd]); a type it cannot read that way is no type, and the argument gets no cast. When it
+   stops, Lean's own value goes to the kernel, which checks it as without the pass.
 
    In the value of an entry whose type is a proposition, a relevant argument whose declared domain is an
    inductive type (or one applied) and whose type differs from that domain only at Fin places of closed values
@@ -600,6 +601,11 @@ type state = {
    relevant pass, [transport_rel_arg]). *)
 and rel_mode = Rel_off | Rel_detect of state | Rel_found | Rel_cast
 
+(* Whether [st] is the relevant pass ([Rel_cast]): only that pass finds Rel holes ([nat_diff]), casts them
+   ([cast_holes]), declares its lemmas into [rel_lemma_cache] ([eq_lemma_at]) and keeps them in its trace, not in
+   [st.lemmas] ([transport_arg_in]). *)
+let in_relevant_pass st = match st.rel_mode with Rel_cast -> true | Rel_off | Rel_detect _ | Rel_found -> false
+
 let mem_const st c l =
   List.exists
     (fun c' ->
@@ -1134,7 +1140,7 @@ let lemma_terms_ok st depth x y =
    not pass [lemma_terms_ok] or [proof ()] is [None]; [Refused] when the kernel refuses it. The relevant pass
    ([Rel_cast]) reads [lemma_cache], then [rel_lemma_cache], and declares into [rel_lemma_cache] only. *)
 let eq_lemma_at st depth ty level x y proof =
-  let rel = match st.rel_mode with Rel_cast -> true | Rel_off | Rel_detect _ | Rel_found -> false in
+  let rel = in_relevant_pass st in
   match find_cached st depth lemma_cache x y with
   | Some c -> Some c
   | None -> (
@@ -2374,7 +2380,7 @@ let rel_cast_parts st c =
    there are found as before. With [~lit:false] (the relevant path, which casts Fin holes only) [ec_hole] is not
    asked. *)
 let nat_diff ?(lit = true) st depth a d =
-  let rel = match st.rel_mode with Rel_cast -> true | Rel_off | Rel_detect _ | Rel_found -> false in
+  let rel = in_relevant_pass st in
   let pairs = ref [] and count = ref 0 in
   let add depth h =
     let x, y = hole_terms h in
@@ -2405,7 +2411,7 @@ let nat_diff ?(lit = true) st depth a d =
         | _ -> Some (add depth (Nat_hole (a, d)))
   in
   (* A Rel hole: exactly one side is a cast of the relevant path, whose cast term is the other side (lifted once,
-     compared, charged); a pair of two casts is none (H-neither). The test of each side's head is no step. *)
+     compared, charged); a pair of two casts is no Rel hole. The test of each side's head is no step. *)
   let rel_pair depth a d =
     match (rel_cast_parts st a, rel_cast_parts st d) with
     | Some (parts, body), None ->
@@ -2683,9 +2689,9 @@ let lemma_labels lemmas = Array.fold_right (fun c acc -> Constant.label (Option.
    when a [Rel_hole] has no [Fin_hole] to go with ([rel_masters]: only the relevant pass finds a [Rel_hole]), or
    when a lemma is refused or not generated. *)
 let cast_holes st depth dom shape holes fin_head arg =
-  match
-    match st.rel_mode with Rel_cast -> rel_masters st depth holes | Rel_off | Rel_detect _ | Rel_found -> Some [||]
-  with
+  (* Outside the relevant pass [nat_diff] finds no Rel hole, and [masters], read only at a Rel hole, stays
+     empty. *)
+  match if in_relevant_pass st then rel_masters st depth holes else Some [||] with
   | None -> None
   | Some masters -> (
     match Array.map (hole_lemma st depth) holes with
@@ -2812,10 +2818,8 @@ let transport_arg_in st env depth arg dom =
       | None -> None
       | Some (_, lemmas) as r ->
         st.count <- st.count + 1;
-        (match st.rel_mode with
-        | Rel_cast -> ()
-        | Rel_off | Rel_detect _ | Rel_found ->
-          Array.iter (fun c -> add_lemma_id st (Constant.label (Option.get c))) lemmas);
+        if not (in_relevant_pass st) then
+          Array.iter (fun c -> add_lemma_id st (Constant.label (Option.get c))) lemmas;
         r)
 
 let transport_arg st env depth arg dom = in_part transport_arg_in st env depth arg dom
@@ -3066,7 +3070,9 @@ let may_apply st ty body =
 
 (* The export's constants of the Lean name [path]: one step for the call and one per constant of the list the
    importer returns, charged once it is returned (its length is not known before). [setup] asks for 47 fixed
-   names, once per entry; the importer builds each list from the instances it declared of that one name. *)
+   names once per entry for the SProp pass and for the relevant pass, 56 with literal arithmetic ([setup_l]), and
+   always 47 for the detector, which runs without it; the importer builds each list from the instances it declared
+   of that one name. *)
 let consts ctx ch path =
   let l = ctx.consts path in
   C.tick ch (1 + List.length l);
