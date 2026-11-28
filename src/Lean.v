@@ -598,6 +598,18 @@ Section literal_arithmetic.
   Proof. destruct e; exact p. Defined.
 End literal_arithmetic.
 
+(* The cast at a relevant position (README, "Transport of proof arguments across Nat literals", the item on
+   relevant positions): a term of [P x] taken to [P y] along Lean's [eq] at Nat, which this file puts in SProp;
+   with the definitional UIP of [eq] it is a term of any universe [u]. The transport pass uses it only in the value
+   of an entry whose type is a proposition, for a closed value of records of one field down to a [Fin] (the Fin
+   case's pair). *)
+Section relevant_transport.
+  Local Set Universe Polymorphism.
+
+  Definition rel_transport@{u} (P : Nat -> Type@{u}) {x y : Nat} (e : @eq@{Set} Nat x y) (p : P x) : P y.
+  Proof. destruct e; exact p. Defined.
+End relevant_transport.
+
 Register toN_succ_step as lean.toN_succ_step.
 Register toN_double_step as lean.toN_double_step.
 Register toN_unfold_step as lean.toN_unfold_step.
@@ -612,3 +624,4 @@ Register toN_pred as lean.toN_pred.
 Register toN_sub as lean.toN_sub.
 Register Nat_le_of_toN as lean.Nat_le_of_toN.
 Register toN_of_eq as lean.toN_of_eq.
+Register rel_transport as lean.rel_transport.

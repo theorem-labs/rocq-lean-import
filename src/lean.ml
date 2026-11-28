@@ -1476,36 +1476,62 @@ and declare_def ({ name = n; ty; body; univs; } as def) i =
                      ty);
           Exninfo.iraise e
       in
-      (* The transported value, when the pass changes it, is declared first. A value the kernel refuses
-         is logged at once, and Lean's own value goes to the kernel instead: when that is refused too, the
-         entry fails with Lean's error, as without the pass. The kernel's error about the transported value
-         is printed only when that value has at most [LeanChargedTerm.print_bound] nodes. *)
+      (* The transported value, when the pass changes it, is declared first. A value the kernel refuses is logged
+         at once, and the next value goes to the kernel instead: after a value with relevant casts, the SProp
+         pass's value when that pass changed the value, else Lean's own value; after the SProp pass's value,
+         Lean's own value. When that is refused too, the entry fails with Lean's error, as without the pass. Only
+         a refusal is caught: a limit of the entry (the Lean Entry Timeout, the Lean Entry Memory Limit) is a
+         critical exception that ends the entry. The kernel's error about a refused value is printed only when that
+         value has at most [LeanChargedTerm.print_bound] nodes. *)
+      let log_accepted count lemmas relevant relevant_lemmas =
+        let ids l = Pp.(prlist_with_sep (fun () -> str ", ") Id.print l) in
+        line_msg n
+          ~msg:
+            Pp.(
+              int count ++ str " argument(s) transported (" ++ ids lemmas ++ str ")"
+              ++ (if relevant > 0 then
+                    str "; " ++ int relevant ++ str " relevant argument(s) cast (" ++ ids relevant_lemmas ++ str ")"
+                  else mt ()))
+      in
+      let log_refused what value next e =
+        line_msg n
+          ~msg:
+            (if LeanChargedTerm.printable [ value ] then
+               Pp.(
+                 str what ++ str " is refused (" ++ CErrors.print e ++ str "); " ++ str next
+                 ++ str " goes to the kernel instead")
+             else
+               Pp.(
+                 str what ++ str " is refused by the kernel (it has more than " ++ int LeanChargedTerm.print_bound
+                 ++ str " nodes: the kernel's error is not printed); " ++ str next ++ str " goes to the kernel instead"))
+      in
+      (* The SProp pass's value [value], then Lean's. *)
+      let try_sprop value count lemmas =
+        match quickdef ~name:id ~types:(Some ty) ~univs value with
+        | ref ->
+          log_accepted count lemmas 0 [];
+          ref
+        | exception e when CErrors.noncritical e ->
+          log_refused "the transported value" value "Lean's value" e;
+          declare body
+      in
       let ref =
         match transported with
         | None -> declare body
-        | Some { LeanNatTransport.value; count; lemmas } -> (
+        | Some { LeanNatTransport.value; count; lemmas; relevant = 0; _ } -> try_sprop value count lemmas
+        | Some { LeanNatTransport.value; count; lemmas; relevant; relevant_lemmas; saved } -> (
           match quickdef ~name:id ~types:(Some ty) ~univs value with
           | ref ->
-            line_msg n
-              ~msg:
-                Pp.(
-                  int count ++ str " argument(s) transported ("
-                  ++ prlist_with_sep (fun () -> str ", ") Id.print lemmas
-                  ++ str ")");
+            log_accepted count lemmas relevant relevant_lemmas;
             ref
-          | exception e when CErrors.noncritical e ->
-            line_msg n
-              ~msg:
-                (if LeanChargedTerm.printable [ value ] then
-                   Pp.(
-                     str "the transported value is refused (" ++ CErrors.print e
-                     ++ str "); Lean's value goes to the kernel instead")
-                 else
-                   Pp.(
-                     str "the transported value is refused by the kernel (it has more than "
-                     ++ int LeanChargedTerm.print_bound
-                     ++ str " nodes: the kernel's error is not printed); Lean's value goes to the kernel instead"));
-            declare body)
+          | exception e when CErrors.noncritical e -> (
+            match saved with
+            | Some { LeanNatTransport.sprop_value; sprop_count; sprop_lemmas } ->
+              log_refused "the relevant pass's value" value "the SProp pass's value" e;
+              try_sprop sprop_value sprop_count sprop_lemmas
+            | None ->
+              log_refused "the relevant pass's value" value "Lean's value" e;
+              declare body))
       in
       (ref, algs)
   in

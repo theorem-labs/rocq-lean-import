@@ -15,10 +15,21 @@ type context = {
   log : Pp.t -> unit;  (** Print a line of the import's output about the entry. *)
 }
 
+type sprop_value = {
+  sprop_value : Constr.t;  (** the SProp pass's value, its SProp arguments transported *)
+  sprop_count : int;  (** how many arguments it transports (K of its line) *)
+  sprop_lemmas : Names.Id.t list;  (** the lemmas they use, in order (IDS of its line) *)
+}
+
 type transported = {
-  value : Constr.t;  (** the value, its SProp arguments transported *)
-  count : int;  (** how many arguments it transports *)
-  lemmas : Names.Id.t list;  (** the lemmas they use, in order *)
+  value : Constr.t;  (** the value to try first: the candidate when [relevant > 0], else the SProp pass's value *)
+  count : int;  (** K: how many SProp arguments [value] transports *)
+  lemmas : Names.Id.t list;  (** IDS: the SProp pass's lemmas, then those of extra SProp sites (L-ids) *)
+  relevant : int;  (** R: how many relevant arguments [value] casts; 0 when [value] is the SProp pass's *)
+  relevant_lemmas : Names.Id.t list;  (** RIDS: every other lemma [value] uses, first use first, each once *)
+  saved : sprop_value option;
+      (** when [relevant > 0]: the SProp pass's value, tried if the kernel refuses [value]; [None] when that
+          pass changed nothing (then Lean's value is tried) *)
 }
 
 val declare_positive_int_option : key:string list -> unit:string -> int option ref -> unit
@@ -42,14 +53,25 @@ val transport : context -> Environ.env -> entry:Names.Id.t -> Constr.types -> Co
     that reduce to the same [Fin] of equal values (the Fin case), or at closed terms of a data type with
     different heads that its bounded evaluation proves equal (literal arithmetic, when the lemmas of src/Lean.v
     it needs are registered), under the conditions of README, "Transport of proof arguments across Nat
-    literals", cast along the lemmas [<entry>__nat_eq_<k>]; [None] when it changes nothing. The non-SProp
-    arguments stay as they are. Every step of the pass, its type reads, substitutions, comparisons and memo
-    lookups included, is charged before it runs (LeanChargedTerm) to the step budget of a part of the entry, to
-    ten times that budget (at most [max_int]) for all its parts, and, inside one pair of literal arithmetic, to
-    the pair's cap; but for the lists of [consts]: their length is known only once [consts] returns, and each
-    is charged by its length then ([consts] is asked for 47 fixed names, once per entry, and 56 with literal
-    arithmetic). It calls no unbounded reduction or retyping of Rocq, and an argument whose type it cannot read
-    by its own bounded head reduction gets no cast. It logs a generated lemma the kernel refuses (its terms only
-    up to [LeanChargedTerm.print_bound] nodes), which leaves the whole argument as it is, and the reason when it
-    stops (a budget) or fails (a fixed text); the value is then left as it is. The lemmas it declares stay
-    declared whatever becomes of the value. *)
+    literals", cast along the lemmas [<entry>__nat_eq_<k>]; [None] when it changes nothing. A relevant argument
+    is cast, along a lemma [<entry>__rel_eq_<k>] and [rel_transport], only in the value of an entry whose type is
+    a proposition, only where its declared domain is an inductive type or one applied, and only at Fin places of
+    closed values (README, "Transport of proof arguments across Nat literals", the item on relevant positions);
+    this is done by a second pass, only after a detector found an argument that passes the gate of that path
+    and only when the SProp pass neither stopped nor failed; such an argument is no promise of a cast (the
+    second pass may get no lemma for it, stop or fail). Every other non-SProp argument stays as it is. Every step
+    of the pass, its type reads, substitutions, comparisons and memo lookups included, is charged before it runs
+    (LeanChargedTerm) to the step budget of a part of the entry and to ten times that budget (at most [max_int])
+    for all its parts, separately for the SProp pass, the detector and the relevant pass, and, inside one pair of
+    literal arithmetic, to the pair's cap; but for the lists of [consts]: their length is known only once [consts]
+    returns, and each is charged by its length then ([consts] is asked, once per entry and on each one's own
+    budget, for 47 fixed names by the SProp pass and by the relevant pass when it runs, and 56 when literal
+    arithmetic is on, and for the 47 only by the detector). It
+    calls no unbounded reduction or retyping of Rocq, and an argument whose type it cannot read by its own bounded
+    head reduction gets no cast. It logs a generated lemma the kernel refuses (its terms only up to
+    [LeanChargedTerm.print_bound] nodes), which leaves the whole argument as it is, and the reason when it stops (a
+    budget) or fails (a fixed text); the value is then left as it is. The lemmas it declares stay declared
+    whatever becomes of the value. A stop or failure of the detector is not logged and leaves the SProp pass's
+    result; a stop or failure of the relevant pass, or its value missing a cast place of the SProp pass, is logged
+    ([the relevant pass stops: ...], [the relevant pass fails (E); ...], [the relevant pass keeps J of ...]) and
+    leaves the SProp pass's result. *)

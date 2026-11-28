@@ -122,6 +122,10 @@ val equal : t -> int -> Constr.t -> Constr.t -> bool
 val lift_ch : t -> int -> int -> Constr.t -> Constr.t
 (** [lift_ch ch depth n c]: [Vars.lift n c], its size paid first unless [c] is closed. *)
 
+val liftn_ch : t -> int -> int -> int -> Constr.t -> Constr.t
+(** [liftn_ch ch depth n k c]: [Vars.liftn n k c] (the indices from [k] on lifted by [n]), its size paid first
+    unless [c] is closed. *)
+
 val subst_walk : t -> int -> Constr.t array -> int -> int -> Constr.t -> Constr.t
 (** [subst_walk ch depth args lo k c]: [c], under [k] binders that take [args.(lo)] to [args.(lo + k - 1)] (the
     last for [Rel 1]), with them substituted. [k] steps first, then each node it reads or copies, and at each

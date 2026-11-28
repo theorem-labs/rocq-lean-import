@@ -17,7 +17,18 @@
    exposes products and sorts by its own charged head reduction (unfolding of a transparent constant, beta,
    zeta, cast, projection of a constructor: LeanChargedTerm's [whd]); a type it cannot read that way is no
    type, and the argument gets no cast. When it stops, Lean's own value goes to the kernel, which checks it as
-   without the pass. *)
+   without the pass.
+
+   In the value of an entry whose type is a proposition, a relevant argument whose declared domain is an
+   inductive type (or one applied) and whose type differs from that domain only at Fin places of closed values
+   is cast too, by [rel_transport] (src/Lean.v), along the Fin case's lemma ([transport_rel_in]). That work never
+   touches the SProp pass's budget, memos, lemma cache or log: while the SProp pass walks the value, a detector
+   with a ledger of its own looks for one argument that passes the relevant path's gate ([rel_gate], [detect_rel]);
+   only after it found one, and only when the SProp pass neither stopped nor failed, a second pass walks Lean's
+   value again on a third ledger with both kinds of casts ([relevant_pass]). A place the detector finds is no
+   promise of a cast: the second pass may get no lemma for it, stop or fail. Its value counts only when it casts a
+   relevant argument and keeps each cast place of the SProp pass; its lemmas go to a cache of their own
+   ([rel_lemma_cache]). *)
 
 open Names
 
@@ -29,7 +40,16 @@ type context = {
   log : Pp.t -> unit;
 }
 
-type transported = { value : Constr.t; count : int; lemmas : Id.t list }
+type sprop_value = { sprop_value : Constr.t; sprop_count : int; sprop_lemmas : Id.t list }
+
+type transported = {
+  value : Constr.t;
+  count : int;
+  lemmas : Id.t list;
+  relevant : int;
+  relevant_lemmas : Id.t list;
+  saved : sprop_value option;
+}
 
 (* The smallest value worth a lemma: the kernel compares smaller ones unit by unit quickly enough. *)
 let transport_min = Z.of_int 4096
@@ -111,6 +131,9 @@ type refs = {
   nt_op_step : Constr.t;
   nt_nat_eq : Constr.t;
   nt_transport : Constr.t;
+  nt_rel : Constant.t option;
+      (** [rel_transport@{u}], the cast at a relevant position; [None] when src/Lean.v does not register it as a
+          constant, and then no relevant argument gets a cast *)
 }
 
 let lib_ref s = match Rocqlib.lib_ref_opt s with Some r -> r | None -> raise Not_found
@@ -140,6 +163,8 @@ let refs () =
           nt_op_step = lib_term "lean.toN_op_step";
           nt_nat_eq = lib_term "lean.Nat_eq_of_toN";
           nt_transport = lib_term "lean.sprop_transport";
+          nt_rel =
+            (match Rocqlib.lib_ref_opt "lean.rel_transport" with Some (GlobRef.ConstRef k) -> Some k | _ -> None);
         }
     | _ -> None
   with Not_found -> None
@@ -518,6 +543,15 @@ type lstate = {
   ctors : (constructor, int * bool array) C.table;  (** [ctor_info], per constructor *)
 }
 
+(* The place of a cast the walk placed: the ordinal of the application in the walk's order, applications
+   numbered when their arguments are transported (after the subterms they hold), and the argument's index; or
+   the whole value ([transport_result]). Both passes walk Lean's value through the same nodes in the same order,
+   so one place has one key in both. *)
+type site = Arg of int * int | Result
+
+(* One cast the pass placed: its place, whether it is a relevant cast, and the lemmas it uses. *)
+type cast_cell = { site : site; relevant_cast : bool; cell_lemmas : Id.t list }
+
 (* The pass at one entry: the budget of its parts and the memos of the charged term layer ([ch]), the entry's
    view of the export, which [setup] reads once, and the memos and results of the pass. *)
 type state = {
@@ -551,7 +585,20 @@ type state = {
   mutable count : int;  (** arguments transported *)
   mutable lemmas : Id.t list;  (** the lemmas they use, last first *)
   lemma_ids : (Id.t, unit) C.table;  (** the same, as a set *)
+  mutable apps : int;  (** the applications whose arguments the walk has transported ([site]) *)
+  mutable cells : cast_cell list;
+      (** the casts placed, last first, while a detector looks or after it found a place (uncharged, the lemmas
+          not kept) and in the relevant pass (one step each when written) *)
+  mutable rel_mode : rel_mode;
 }
+
+(* What the walk does at a relevant argument whose declared domain is [ind_headed] ([transport_args]): nothing
+   ([Rel_off]: the SProp pass with no detector, or with a detector that stopped at a limit of its own or a
+   failure); ask the relevant path's gate on the detector's state [d], whose ledger and memos are its own, so that
+   the SProp pass's charges, memos and result are those it has without the relevant path ([Rel_detect d],
+   [detect_rel]); nothing more once the detector found an argument ([Rel_found]); cast it ([Rel_cast], the
+   relevant pass, [transport_rel_arg]). *)
+and rel_mode = Rel_off | Rel_detect of state | Rel_found | Rel_cast
 
 let mem_const st c l =
   List.exists
@@ -1011,6 +1058,12 @@ and certify_div st r dv depth t v a b =
    cache lasts as long as the Rocq file (document) that runs the imports. *)
 let lemma_cache : ((Constr.t * Constr.t) * Constant.t) list ref = Summary.ref ~name:"lean-nat-eq-lemmas" []
 
+(* The lemmas the relevant pass declares ([relevant_pass]), kept apart: that pass reads [lemma_cache] first and
+   this one second, and writes this one only, so that [lemma_cache] holds the cells it holds without relevant casts
+   and a later entry's SProp pass costs and names what it would without them. Like [lemma_cache], a [Summary.ref]:
+   when an entry is refused, its cells go with the constants the entry declared. *)
+let rel_lemma_cache : ((Constr.t * Constr.t) * Constant.t) list ref = Summary.ref ~name:"lean-rel-eq-lemmas" []
+
 (* The line about a generated lemma [id : x = y] the kernel refuses with [e]: the statement only when it is
    small enough to print, and the kernel's error only when the proof is too. *)
 let refused_lemma_msg id x y proof e =
@@ -1032,14 +1085,17 @@ let refused_lemma_msg id x y proof e =
 exception Refused
 
 (* Declare [proof] as the lemma [x = y] at the type [ty] of level [level] (src/Lean.v's [eq@{level}]), named
-   [<entry>__nat_eq_<k>] or, when that name is taken, the next free one as [Namegen] counts them (each name it
-   tries charged), and keep it for a later place with the same two terms. A lemma the kernel refuses is logged,
-   and [Refused] raised. *)
-let declare_eq_at st ty level x y proof =
+   [<entry><infix><k>] or, when that name is taken, the next free one as [Namegen] counts them (each name it
+   tries charged), and keep it in [cache] for a later place with the same two terms. A lemma the kernel refuses is
+   logged, and [Refused] raised. The SProp pass's lemmas are [<entry>__nat_eq_<k>] in [lemma_cache]; the relevant
+   pass's [<entry>__rel_eq_<k>] in [rel_lemma_cache], [k] counted by that pass's own state: no name with this
+   infix is an SProp pass's name, so that pass's choice of names and the steps of its tries are those it has
+   without relevant casts. *)
+let declare_lemma st infix cache ty level x y proof =
   let nt = st.refs in
   let lemma_ty = app (Constr.mkIndU (nt.nt_eq, inst1 level)) [| ty; x; y |] in
   st.next <- st.next + 1;
-  let id = Id.of_string (Id.to_string st.entry ^ "__nat_eq_" ^ string_of_int st.next) in
+  let id = Id.of_string (Id.to_string st.entry ^ infix ^ string_of_int st.next) in
   let taken id =
     C.tick st.ch 1;
     Global.exists_objlabel id
@@ -1047,22 +1103,22 @@ let declare_eq_at st ty level x y proof =
   let id = if taken id then Namegen.next_ident_away_from id taken else id in
   match st.ctx.declare id lemma_ty proof with
   | GlobRef.ConstRef c ->
-    lemma_cache := ((x, y), c) :: !lemma_cache;
+    cache := ((x, y), c) :: !cache;
     c
   | GlobRef.VarRef _ | GlobRef.IndRef _ | GlobRef.ConstructRef _ -> assert false
   | exception e when CErrors.noncritical e ->
     st.ctx.log (refused_lemma_msg id x y proof e);
     raise Refused
 
-(* The lemma of the file's cache for [x] and [y], each entry looked at charged. *)
-let cached_nat_eq st depth x y =
+(* The lemma of [cache] for [x] and [y], each entry looked at charged. *)
+let find_cached st depth cache x y =
   let rec find = function
     | [] -> None
     | ((x', y'), c) :: rest ->
       C.tick st.ch 1;
       if C.equal st.ch depth x x' && C.equal st.ch depth y y' then Some c else find rest
   in
-  find !lemma_cache
+  find !cache
 
 (* Whether [x] and [y] are closed and use only declared universes; Rocq's walk of both for their universes is
    paid first. *)
@@ -1075,13 +1131,22 @@ let lemma_terms_ok st depth x y =
 
 (* The lemma [x = y] at [ty] of level [level] for two closed terms, at the nesting [depth] of the place that needs
    it: the file's cached one, or one declared on first use with the proof [proof ()]; [None] when the terms do
-   not pass [lemma_terms_ok] or [proof ()] is [None]; [Refused] when the kernel refuses it. *)
+   not pass [lemma_terms_ok] or [proof ()] is [None]; [Refused] when the kernel refuses it. The relevant pass
+   ([Rel_cast]) reads [lemma_cache], then [rel_lemma_cache], and declares into [rel_lemma_cache] only. *)
 let eq_lemma_at st depth ty level x y proof =
-  match cached_nat_eq st depth x y with
+  let rel = match st.rel_mode with Rel_cast -> true | Rel_off | Rel_detect _ | Rel_found -> false in
+  match find_cached st depth lemma_cache x y with
   | Some c -> Some c
   | None -> (
-    if not (lemma_terms_ok st depth x y) then None
-    else match proof () with Some p -> Some (declare_eq_at st ty level x y p) | None -> None)
+    match if rel then find_cached st depth rel_lemma_cache x y else None with
+    | Some c -> Some c
+    | None -> (
+      if not (lemma_terms_ok st depth x y) then None
+      else
+        match proof () with
+        | Some p when rel -> Some (declare_lemma st "__rel_eq_" rel_lemma_cache ty level x y p)
+        | Some p -> Some (declare_lemma st "__nat_eq_" lemma_cache ty level x y p)
+        | None -> None))
 
 (* The same at Nat. *)
 let eq_lemma st depth x y proof = eq_lemma_at st depth (nat_type st.refs) Univ.Level.set x y proof
@@ -1132,11 +1197,17 @@ type fin_side = {
   fprf : Constr.t;
 }
 
+(* The parts of a cast of the relevant path ([transport_rel_in]): [rhead rmotive rx ry re rlam prf], [rhead] being
+   [rel_transport@{u}] and [rlam] the lambda [fun hz => t] around the cast term [t]. *)
+type rel_parts = { rhead : Constr.t; rmotive : Constr.t; rx : Constr.t; ry : Constr.t; re : Constr.t; rlam : Constr.t }
+
 (* A place of an argument's type [a] and its expected type [d]: two closed Nat terms of equal value ([Nat_hole]),
    two closed terms that reduce to the same constructors down to a [Fin] whose values are closed Nat terms of
-   equal value [fv] ([Fin_hole]), or (literal arithmetic, [ec_hole]) two closed terms of the closed type [vty], of
+   equal value [fv] ([Fin_hole]), (literal arithmetic, [ec_hole]) two closed terms of the closed type [vty], of
    level [vlevel], that the evaluation proves equal by [vproof], cast by [vcast] ([sprop_transport_any] at
-   [vlevel]) ([Val_hole]). *)
+   [vlevel]) ([Val_hole]), or a cast of the relevant path against the very term it casts ([Rel_hole]: [ra] in [a],
+   [rd] in [d], the cast on [a]'s side when [on_a], its parts [parts]); a [Rel_hole] is cast together with the
+   [Fin_hole] of its values ([rel_masters]). *)
 type hole =
   | Nat_hole of Constr.t * Constr.t
   | Fin_hole of { fa : Constr.t; fd : Constr.t; sa : fin_side; sd : fin_side; fv : Z.t }
@@ -1148,11 +1219,13 @@ type hole =
       vproof : Constr.t;
       vcast : Constr.t;
     }
+  | Rel_hole of { ra : Constr.t; rd : Constr.t; on_a : bool; parts : rel_parts }
 
 let hole_terms = function
   | Nat_hole (x, y) -> (x, y)
   | Fin_hole { fa; fd; _ } -> (fa, fd)
   | Val_hole { va; vd; _ } -> (va, vd)
+  | Rel_hole { ra; rd; _ } -> (ra, rd)
 
 (* Two closed Nat terms of different values: the types cannot be converted, the argument is left as is. *)
 exception Other_values
@@ -1866,17 +1939,24 @@ and canon_held st ls ev depth c z fa fb =
     | _ -> None)
   | _ -> None
 
-(* The universe level of the closed type [ty], its sort read by the bounded query ([C.type_of], then
-   [C.expose_sort]): [Set], or the level of [Type@{l}]; [None] for any other sort, an algebraic universe, and a
-   type whose sort the query does not read (a product, a sort). *)
-let type_level st depth ty =
-  match C.type_of st.ch st.ch.C.genv depth ty with
+(* The universe level of the type [ty] under [env], [ty] open or closed, its sort read by the bounded query
+   ([C.type_of], then [C.expose_sort]): [Set], or the level of [Type@{l}]; [None] for any other sort, an algebraic
+   universe, and a type whose sort the query does not read (a product, a sort). The importer gives every sort of
+   a declaration one of the forms [SProp], [Set] and [Type@{l}] for one level [l] (src/lean.ml, [to_univ_level']
+   and [sort_of_level]: a Lean universe expression, a maximum included, becomes one level of its own, and no
+   [Prop] or [QSort] is made), so [Prop], [QSort] and an algebraic universe reach this test only through a sort
+   that Rocq computes (a product's). *)
+let type_level_in st env depth ty =
+  match C.type_of st.ch env depth ty with
   | None -> None
   | Some s -> (
-    match C.expose_sort st.ch st.ch.C.genv depth s with
+    match C.expose_sort st.ch env depth s with
     | Some Sorts.Set -> Some Univ.Level.set
     | Some (Sorts.Type u) -> Univ.Universe.level u
     | Some (Sorts.SProp | Sorts.Prop | Sorts.QSort _) | None -> None)
+
+(* The same for a closed type. *)
+let type_level st depth ty = type_level_in st st.ch.C.genv depth ty
 
 (* Whether two normal forms are the same value: [`Same] for the same term, two Nat literals of the same value
    (the ordinary reader), or the same constructor with the same parameters and the same relevant arguments
@@ -2271,13 +2351,30 @@ type nat_shape =
 
 let is_keep = function Keep -> true | _ -> false
 
+(* The parts of [c] and the term it casts (under the binder [hz] of its lambda) when [c] is a cast of the relevant
+   path: [rel_transport@{u}] applied to six arguments, the fifth a lambda. A test of [c]'s head and arity, no walk,
+   no step. Only the relevant pass asks it ([nat_diff]): Lean's value holds no such term. *)
+let rel_cast_parts st c =
+  match (st.refs.nt_rel, Constr.kind c) with
+  | Some k, Constr.App (h, [| m; x; y; e; lam; _ |]) -> (
+    match (Constr.kind h, Constr.kind lam) with
+    | Constr.Const (k', _), Constr.Lambda (_, _, body) when Constant.CanOrd.equal k k' ->
+      Some ({ rhead = h; rmotive = m; rx = x; ry = y; re = e; rlam = lam }, body)
+    | _ -> None)
+  | _ -> None
+
 (* The shape of the differences of [a] (the argument's type) and [d] (the expected type), and its holes: pairs
    [(x, y)] of closed Nat terms ([x] in [a], [y] in [d]) of equal value from [transport_min] on, [y] not the
-   same literal as [x], and the places of [fin_hole] and [ec_hole]. [depth] is the nesting of the place the types
-   come from. A hole equal to an earlier one is that one; each earlier hole compared is charged. Below a pair that
-   [ec_hole] declined at the cap no node pair is evaluated (each evaluation would read again subterms the declined
-   pair's evaluation read, at up to [pair_cap] steps each); the Nat and Fin holes there are found as before. *)
-let nat_diff st depth a d =
+   same literal as [x], the places of [fin_hole] and [ec_hole], and, in the relevant pass, each place where one
+   side is a cast of the relevant path of the other side's term ([Rel_hole]: the term lifted once and compared,
+   charged). [depth] is the nesting of the place the types come from. A hole equal to an earlier one is that one
+   (but a [Rel_hole], which may be open, is a hole of its own at each place); each earlier hole compared is
+   charged. Below a pair that [ec_hole] declined at the cap no node pair is evaluated (each evaluation would read
+   again subterms the declined pair's evaluation read, at up to [pair_cap] steps each); the Nat and Fin holes
+   there are found as before. With [~lit:false] (the relevant path, which casts Fin holes only) [ec_hole] is not
+   asked. *)
+let nat_diff ?(lit = true) st depth a d =
+  let rel = match st.rel_mode with Rel_cast -> true | Rel_off | Rel_detect _ | Rel_found -> false in
   let pairs = ref [] and count = ref 0 in
   let add depth h =
     let x, y = hole_terms h in
@@ -2288,7 +2385,7 @@ let nat_diff st depth a d =
         let x', y' = hole_terms h' in
         if C.equal st.ch depth x x' && C.equal st.ch depth y y' then Some k else find rest
     in
-    match find !pairs with
+    match (match h with Rel_hole _ -> None | Nat_hole _ | Fin_hole _ | Val_hole _ -> find !pairs) with
     | Some k -> Hole k
     | None ->
       let k = !count in
@@ -2307,18 +2404,35 @@ let nat_diff st depth a d =
         | Some la, Some ld when C.equal st.ch depth la ld -> Some Keep
         | _ -> Some (add depth (Nat_hole (a, d)))
   in
+  (* A Rel hole: exactly one side is a cast of the relevant path, whose cast term is the other side (lifted once,
+     compared, charged); a pair of two casts is none (H-neither). The test of each side's head is no step. *)
+  let rel_pair depth a d =
+    match (rel_cast_parts st a, rel_cast_parts st d) with
+    | Some (parts, body), None ->
+      if C.equal st.ch depth body (C.lift_ch st.ch depth 1 d) then
+        Some (add depth (Rel_hole { ra = a; rd = d; on_a = true; parts }))
+      else None
+    | None, Some (parts, body) ->
+      if C.equal st.ch depth body (C.lift_ch st.ch depth 1 a) then
+        Some (add depth (Rel_hole { ra = a; rd = d; on_a = false; parts }))
+      else None
+    | None, None | Some _, Some _ -> None
+  in
   let rec go depth capped a d =
     C.tick st.ch 1;
     C.check_depth depth;
     if a == d then Keep
     else
+      match if rel then rel_pair depth a d else None with
+      | Some s -> s
+      | None ->
       match nat_pair depth a d with
       | Some s -> s
       | None ->
       match fin_hole st depth a d with
       | Some h -> add depth h
       | None ->
-      match (match st.l with Some ls when not capped -> ec_hole st ls depth a d | Some _ | None -> `No_hole) with
+      match (match st.l with Some ls when lit && not capped -> ec_hole st ls depth a d | Some _ | None -> `No_hole) with
       | `Hole h -> add depth h
       | (`Capped | `No_hole) as r ->
         let go = go (depth + 1) (capped || r = `Capped) in
@@ -2428,20 +2542,25 @@ let ofnat_at st accepts args =
   && match Constr.kind (fst (Constr.decompose_app args.(0))) with Constr.Ind (ind, _) -> accepts st ind | _ -> false
 
 (* The gate of the Fin case: whether [c], at the nesting [depth], has a closed application of a constant whose
-   type ends in a record of one field, or [OfNat.ofNat] at such a record. The Nat case's is [has_nat_from]. *)
-let has_fin_site st depth c =
+   type ends in a record of one field, or [OfNat.ofNat] at such a record. The Nat case's is [has_nat_from]. With
+   [~prune:true] (the gate of the relevant path, [rel_gate]) an application of [Nat_succ] or [Nat_double] to one
+   argument is one node, not walked: a literal of the importer's form holds no other node, so a domain that holds
+   a literal ([OfNat α 224]) costs one step for it, and a Fin place under a run of [Nat_succ] is not looked for. *)
+let has_fin_site ?(prune = false) st depth c =
+  let nt = st.refs in
   let rec scan depth c =
     C.tick st.ch 1;
     C.check_depth depth;
-    (match Constr.kind c with
-    | Constr.App (h, args) -> (
-      match Constr.kind h with
+    match Constr.kind c with
+    | Constr.App (h, [| _ |]) when prune && (is_nat_succ nt h || is_double_head nt h) -> ()
+    | Constr.App (h, args) ->
+      (match Constr.kind h with
       | Constr.Const (k, _) ->
         let site = if mem_const st k st.of_nat then ofnat_at st one_field_record args else fin_typed_const st k in
         if site && C.closed st.ch depth c then raise_notrace Found
-      | _ -> ())
-    | _ -> ());
-    Constr.iter (scan (depth + 1)) c
+      | _ -> ());
+      Constr.iter (scan (depth + 1)) c
+    | _ -> Constr.iter (scan (depth + 1)) c
   in
   try
     scan depth c;
@@ -2450,6 +2569,16 @@ let has_fin_site st depth c =
 
 let is_irrelevant_binder na =
   match Context.binder_relevance na with Sorts.Irrelevant -> true | Sorts.Relevant | Sorts.RelevanceVar _ -> false
+
+(* Whether the type [ty] at the nesting [depth] is a proposition: the relevance of its sort as [C.type_relevance]
+   reads it on the ledger [ch], each step charged there; [false] when it is not read. The SProp pass asks it of a
+   value's result ([transport_result]), and every mechanism that may change a value only in an entry whose type
+   is a proposition asks it of the entry's declared type at depth 0 ([start_detection]). A limit of [ch] goes to
+   the caller. *)
+let is_proposition ch env depth ty =
+  match C.type_relevance ch env depth ty with
+  | Some r -> Sorts.relevance_equal Sorts.Irrelevant r
+  | None -> false
 
 (* The type of the proof field of [side]'s [Fin_mk] at the value [z], from the constructor's declared type. *)
 let fin_proof_type st depth side z =
@@ -2474,18 +2603,204 @@ let add_lemma_id st id =
     st.lemmas <- id :: st.lemmas
   end
 
-(* [arg], whose expected type is the SProp type [dom], at the nesting [depth], cast along the lemmas of its
-   holes, or [None] when its type differs from [dom] at no hole. *)
-let rec transport_arg st env depth arg dom =
-  (* Each argument it looks at has a budget of its own, which [C.Out_of_budget] ends like the entry's; its steps
-     count toward the entry's total too. An exception ends the pass, which then reads no budget. *)
+(* [sd]'s constructors down to its [Fin_mk] around the value [v] and the proof [prf]: the term a Fin cast's motive
+   puts at its hole, each application charged. *)
+let fin_mk st sd v prf =
+  List.fold_right
+    (fun (c, params) inner ->
+      C.tick st.ch (Array.length params + 1);
+      app c (Array.append params [| inner |]))
+    sd.spine
+    (app sd.fin_mk [| sd.bound; v; prf |])
+
+(* For each [Rel_hole] of [holes], the index of the [Fin_hole] it is cast with (-1 for the other holes): the first
+   whose two values are the cast's [ry] (on the cast's side) and [rx] (on the other side). [None] when a [Rel_hole]
+   has no such [Fin_hole], or when two [Rel_hole]s of one [Fin_hole] have their casts on different sides. Each
+   comparison charged; with no [Rel_hole], no step. *)
+let rel_masters st depth holes =
+  let n = Array.length holes in
+  let masters = Array.make n (-1) in
+  let ok = ref true in
+  Array.iteri
+    (fun j h ->
+      match h with
+      | Rel_hole { on_a; parts; _ } ->
+        let rec find f =
+          if f = n then None
+          else begin
+            C.tick st.ch 1;
+            match holes.(f) with
+            | Fin_hole { sa; sd; _ } ->
+              let cast_side, other = if on_a then (sa, sd) else (sd, sa) in
+              if C.equal st.ch depth parts.ry cast_side.fval && C.equal st.ch depth parts.rx other.fval then Some f
+              else find (f + 1)
+            | Nat_hole _ | Val_hole _ | Rel_hole _ -> find (f + 1)
+          end
+        in
+        (match find 0 with Some f -> masters.(j) <- f | None -> ok := false)
+      | Nat_hole _ | Fin_hole _ | Val_hole _ -> ())
+    holes;
+  Array.iteri
+    (fun j h ->
+      match h with
+      | Rel_hole { on_a; _ } ->
+        Array.iteri
+          (fun j' h' ->
+            match h' with
+            | Rel_hole { on_a = on_a'; _ } when j' > j && masters.(j') = masters.(j) ->
+              C.tick st.ch 1;
+              if on_a <> on_a' then ok := false
+            | Nat_hole _ | Fin_hole _ | Val_hole _ | Rel_hole _ -> ())
+          holes
+      | Nat_hole _ | Fin_hole _ | Val_hole _ -> ())
+    holes;
+  if !ok then Some masters else None
+
+(* The first [Rel_hole] of [holes] from the index [j] on that is cast with the [Fin_hole] [k] ([masters]): the side
+   of its cast, and the cast's parts. No step. *)
+let rec rel_slave holes masters k j =
+  if j = Array.length masters then None
+  else
+    match holes.(j) with
+    | Rel_hole { on_a; parts; _ } when masters.(j) = k -> Some (on_a, parts)
+    | Nat_hole _ | Fin_hole _ | Val_hole _ | Rel_hole _ -> rel_slave holes masters k (j + 1)
+
+(* The lemma of a hole: of its two closed Nat terms, of the values of its two Fin terms, of literal arithmetic's
+   pair, or the lemma of a relevant cast itself; [None] when it is not generated; [Refused] when the kernel refuses
+   it. *)
+let hole_lemma st depth = function
+  | Nat_hole (x, y) -> eq_lemma st depth x y (nat_eq_proof st st.nat depth x y)
+  | Fin_hole { sa; sd; fv; _ } -> eq_lemma st depth sa.fval sd.fval (fin_eq_proof st sa.fval sd.fval fv)
+  | Val_hole { va; vd; vty; vlevel; vproof; _ } -> eq_lemma_at st depth vty vlevel va vd (fun () -> Some vproof)
+  | Rel_hole { parts; _ } -> ( match Constr.kind parts.re with Constr.Const (c, _) -> Some c | _ -> None)
+
+(* The labels of the lemmas of a cast, in the order of its holes. *)
+let lemma_labels lemmas = Array.fold_right (fun c acc -> Constant.label (Option.get c) :: acc) lemmas []
+
+(* [arg], whose type differs from its expected type [dom] at the nesting [depth] at the holes [holes] of the shape
+   [shape] ([nat_diff]), cast at each hole along its lemma, the Fin case's cast by [fin_head] ([sprop_transport] at
+   an SProp argument, [rel_transport@{u}] at a relevant one), with its lemmas in the order of its holes; [None]
+   when a [Rel_hole] has no [Fin_hole] to go with ([rel_masters]: only the relevant pass finds a [Rel_hole]), or
+   when a lemma is refused or not generated. *)
+let cast_holes st depth dom shape holes fin_head arg =
+  match
+    match st.rel_mode with Rel_cast -> rel_masters st depth holes | Rel_off | Rel_detect _ | Rel_found -> Some [||]
+  with
+  | None -> None
+  | Some masters -> (
+    match Array.map (hole_lemma st depth) holes with
+    | exception Refused -> None
+    | lemmas ->
+      if Array.exists Option.is_empty lemmas then None
+      else begin
+        let nt = st.refs in
+        (* [dom] under the motive's one, two or three binders, lifted once each for all the holes. *)
+        let dom1 = lazy (C.lift_ch st.ch depth 1 dom)
+        and dom2 = lazy (C.lift_ch st.ch depth 2 dom)
+        and dom3 = lazy (C.lift_ch st.ch depth 3 dom) in
+        (* The term at the hole [j] of the motive of the hole [k], under the motive's [n] binders, at the binder
+           depth [bd] of [dom]: the expected type's once [j] is cast (before [k]), the argument's type's until then;
+           a [Rel_hole]'s follows its [Fin_hole] and, open, is lifted over the [n] binders. *)
+        let side n k j bd =
+          match holes.(j) with
+          | Rel_hole { ra; rd; _ } -> C.liftn_ch st.ch depth n (bd + 1) (if masters.(j) < k then rd else ra)
+          | (Nat_hole _ | Fin_hole _ | Val_hole _) as h -> if j < k then snd (hole_terms h) else fst (hole_terms h)
+        in
+        let hz = Context.make_annot (Name (Id.of_string "hz")) Sorts.Irrelevant in
+        let z = Context.nameR (Id.of_string "z") in
+        let cast p k hole =
+          C.tick st.ch 1;
+          let lemma = Constr.mkConstU (Option.get lemmas.(k), UVars.Instance.empty) in
+          (* the cast [head pre motive x y lemma p], the motive over [bty] *)
+          let along head pre bty x y =
+            let body =
+              nat_fill st shape (Lazy.force dom1) 0 (fun j bd -> if j = k then Constr.mkRel (bd + 1) else side 1 k j bd)
+            in
+            app head (Array.append pre [| Constr.mkLambda (Context.anonR, bty, body); x; y; lemma; p |])
+          in
+          match hole with
+          | Nat_hole (x, y) -> along nt.nt_transport [||] (nat_type nt) x y
+          | Val_hole { va; vd; vty; vcast; _ } -> along vcast [| vty |] vty va vd
+          | Rel_hole _ -> p (* cast with its Fin_hole *)
+          | Fin_hole { sa; sd; _ } -> (
+            match rel_slave holes masters k 0 with
+            | None ->
+              (* [fin_head (fun z => forall hz, D[mk z hz]) va vd lemma (fun hz => p) proof]: [mk] is [d]'s
+                 constructors down to its [Fin_mk], [proof] the proof of [d]'s [Fin]. *)
+              let body =
+                nat_fill st shape (Lazy.force dom2) 0 (fun j bd ->
+                    if j = k then fin_mk st sd (Constr.mkRel (bd + 2)) (Constr.mkRel (bd + 1)) else side 2 k j bd)
+              in
+              let motive =
+                Constr.mkLambda (z, nat_type nt, Constr.mkProd (hz, fin_proof_type st depth sd (Constr.mkRel 1), body))
+              in
+              let lam = Constr.mkLambda (hz, fin_proof_type st depth sd sa.fval, C.lift_ch st.ch depth 1 p) in
+              app (app fin_head [| motive; sa.fval; sd.fval; lemma; lam |]) [| sd.fprf |]
+            | Some (on_a, parts) ->
+              (* [fin_head (fun z => forall (e : x = z) hz, D[mk z hz, R z e hz]) va vd lemma (fun e hz => p) e_d
+                 proof], [R z e hz] at each Rel hole of this one being [rel_transport@{u} M x z e f hz] for that
+                 hole's cast [rel_transport@{u} M x y _ f _]: the very cast at [z = y] (but for its proofs) and its
+                 term [f hz] at [z = x], by the definitional UIP of [eq]. [x] and [y] are the two values of this
+                 hole; [e_d : x = vd] is [eq_refl x] when [vd] is [x] (the cast in [a]), the cast's own lemma when
+                 [vd] is [y] (the cast in [d]). *)
+              let x = parts.rx in
+              let e = Context.make_annot (Name (Id.of_string "e")) Sorts.Irrelevant in
+              let body =
+                nat_fill st shape (Lazy.force dom3) 0 (fun j bd ->
+                    if j = k then fin_mk st sd (Constr.mkRel (bd + 3)) (Constr.mkRel (bd + 1))
+                    else
+                      match holes.(j) with
+                      | Rel_hole { parts = pj; _ } when masters.(j) = k ->
+                        C.tick st.ch 6;
+                        app pj.rhead
+                          [|
+                            C.liftn_ch st.ch depth 3 (bd + 1) pj.rmotive;
+                            x;
+                            Constr.mkRel (bd + 3);
+                            Constr.mkRel (bd + 2);
+                            C.liftn_ch st.ch depth 3 (bd + 1) pj.rlam;
+                            Constr.mkRel (bd + 1);
+                          |]
+                      | Nat_hole _ | Fin_hole _ | Val_hole _ | Rel_hole _ -> side 3 k j bd)
+              in
+              let motive =
+                Constr.mkLambda
+                  ( z,
+                    nat_type nt,
+                    Constr.mkProd
+                      (e, eq_nat nt x (Constr.mkRel 1), Constr.mkProd (hz, fin_proof_type st depth sd (Constr.mkRel 2), body))
+                  )
+              in
+              let lam =
+                Constr.mkLambda
+                  ( e,
+                    eq_nat nt x sa.fval,
+                    Constr.mkLambda (hz, fin_proof_type st depth sd sa.fval, C.lift_ch st.ch depth 2 p) )
+              in
+              let e_d =
+                if on_a then app (Constr.mkConstructU ((nt.nt_eq, 1), eq_inst)) [| nat_type nt; x |] else parts.re
+              in
+              app (app fin_head [| motive; sa.fval; sd.fval; lemma; lam |]) [| e_d; sd.fprf |])
+        in
+        let p = ref arg in
+        Array.iteri (fun k h -> p := cast !p k h) holes;
+        Some (!p, lemmas)
+      end)
+
+(* [f st env depth arg dom] on a part of [st]'s ledger of its own: each argument the pass looks at has a budget of
+   its own, which [C.Out_of_budget] ends like the entry's; its steps count toward the entry's total too. An
+   exception ends the pass, which then reads no budget. *)
+let in_part f st env depth arg dom =
   let entry_steps = st.ch.C.steps in
   st.ch.C.steps <- budget ();
-  let r = transport_arg_in st env depth arg dom in
+  let r = f st env depth arg dom in
   st.ch.C.steps <- entry_steps;
   r
 
-and transport_arg_in st env depth arg dom =
+(* [arg], whose expected type is the SProp type [dom], at the nesting [depth], cast along the lemmas of its
+   holes, with the lemmas it uses; or [None] when its type differs from [dom] at no hole. The SProp pass keeps
+   its list of lemmas ([add_lemma_id]); the relevant pass names its lemmas from its trace ([lemma_lists]). *)
+let transport_arg_in st env depth arg dom =
   let dom = C.beta st.ch depth dom in
   if not (has_nat_from st transport_min depth dom || has_fin_site st depth dom) then None
   else
@@ -2493,67 +2808,57 @@ and transport_arg_in st env depth arg dom =
     | exception (Other_values | Refused) -> None
     | None | Some (_, [||]) -> None
     | Some (shape, holes) -> (
-      match
-        Array.map
-          (function
-            | Nat_hole (x, y) -> eq_lemma st depth x y (nat_eq_proof st st.nat depth x y)
-            | Fin_hole { sa; sd; fv; _ } -> eq_lemma st depth sa.fval sd.fval (fin_eq_proof st sa.fval sd.fval fv)
-            | Val_hole { va; vd; vty; vlevel; vproof; _ } ->
-              eq_lemma_at st depth vty vlevel va vd (fun () -> Some vproof))
-          holes
-      with
-      | exception Refused -> None
-      | lemmas ->
-      if Array.exists Option.is_empty lemmas then None
-      else begin
-        let nt = st.refs in
-        (* [dom] under the motive's one or two binders, lifted once each for all the holes. *)
-        let dom1 = lazy (C.lift_ch st.ch depth 1 dom) and dom2 = lazy (C.lift_ch st.ch depth 2 dom) in
-        let side k j = if j < k then snd (hole_terms holes.(j)) else fst (hole_terms holes.(j)) in
-        let cast p k hole =
-          C.tick st.ch 1;
-          let lemma = Constr.mkConstU (Option.get lemmas.(k), UVars.Instance.empty) in
-          (* the cast [head pre motive x y lemma p], the motive over [bty] *)
-          let along head pre bty x y =
-            let body =
-              nat_fill st shape (Lazy.force dom1) 0 (fun j depth -> if j = k then Constr.mkRel (depth + 1) else side k j)
-            in
-            app head (Array.append pre [| Constr.mkLambda (Context.anonR, bty, body); x; y; lemma; p |])
-          in
-          match hole with
-          | Nat_hole (x, y) -> along nt.nt_transport [||] (nat_type nt) x y
-          | Val_hole { va; vd; vty; vcast; _ } -> along vcast [| vty |] vty va vd
-          | Fin_hole { sa; sd; _ } ->
-            (* [sprop_transport (fun z => forall hz, D[mk z hz]) va vd lemma (fun hz => p) proof]: [mk] is [d]'s
-               constructors down to its [Fin_mk], [proof] the proof of [d]'s [Fin]. *)
-            let mk v prf =
-              List.fold_right
-                (fun (c, params) inner ->
-                  C.tick st.ch (Array.length params + 1);
-                  app c (Array.append params [| inner |]))
-                sd.spine
-                (app sd.fin_mk [| sd.bound; v; prf |])
-            in
-            let body =
-              nat_fill st shape (Lazy.force dom2) 0 (fun j depth ->
-                  if j = k then mk (Constr.mkRel (depth + 2)) (Constr.mkRel (depth + 1)) else side k j)
-            in
-            let hz = Context.make_annot (Name (Id.of_string "hz")) Sorts.Irrelevant in
-            let motive =
-              Constr.mkLambda
-                ( Context.nameR (Id.of_string "z"),
-                  nat_type nt,
-                  Constr.mkProd (hz, fin_proof_type st depth sd (Constr.mkRel 1), body) )
-            in
-            let lam = Constr.mkLambda (hz, fin_proof_type st depth sd sa.fval, C.lift_ch st.ch depth 1 p) in
-            app (app nt.nt_transport [| motive; sa.fval; sd.fval; lemma; lam |]) [| sd.fprf |]
-        in
-        let p = ref arg in
-        Array.iteri (fun k h -> p := cast !p k h) holes;
+      match cast_holes st depth dom shape holes st.refs.nt_transport arg with
+      | None -> None
+      | Some (_, lemmas) as r ->
         st.count <- st.count + 1;
-        Array.iter (fun c -> add_lemma_id st (Constant.label (Option.get c))) lemmas;
-        Some !p
-      end)
+        (match st.rel_mode with
+        | Rel_cast -> ()
+        | Rel_off | Rel_detect _ | Rel_found ->
+          Array.iter (fun c -> add_lemma_id st (Constant.label (Option.get c))) lemmas);
+        r)
+
+let transport_arg st env depth arg dom = in_part transport_arg_in st env depth arg dom
+
+(* The gate of the relevant path at [arg], whose expected type [dom] is relevant, at the nesting [depth]: when
+   src/Lean.v registers [rel_transport], [dom] holds a closed Fin place outside every run of [Nat_succ] and
+   [Nat_double] ([has_fin_site ~prune:true], asked of [dom] as it is, before any beta reduction), [arg]'s type
+   differs from [dom] at Fin holes only (two closed values of records of one field down to a [Fin]: the Fin case;
+   no literal arithmetic), and [dom]'s sort is read ([type_level_in]): the constant [rel_transport], [dom] beta
+   reduced, the shape and holes of the differences and the level of [dom]'s sort; else [None]. The detector asks
+   this only ([detect_rel]); the relevant pass then asks for the lemmas of the holes ([transport_rel_in]), which
+   may be refused or not generated: an argument that passes the gate may still get no cast. *)
+let rel_gate st env depth arg dom =
+  match st.refs.nt_rel with
+  | None -> None
+  | Some rel -> (
+    if not (has_fin_site ~prune:true st depth dom) then None
+    else
+      let dom = C.beta st.ch depth dom in
+      match C.type_of st.ch env depth arg with
+      | None -> None
+      | Some ty -> (
+        match nat_diff ~lit:false st depth (C.beta st.ch depth ty) dom with
+        | exception (Other_values | Refused) -> None
+        | _, [||] -> None
+        | shape, holes -> (
+          if not (Array.for_all (function Fin_hole _ -> true | Nat_hole _ | Val_hole _ | Rel_hole _ -> false) holes)
+          then None
+          else
+            match type_level_in st env depth dom with
+            | None -> None
+            | Some level -> Some (rel, dom, shape, holes, level))))
+
+(* [arg], whose expected type [dom] is relevant, at the nesting [depth], in the relevant pass ([Rel_cast]): when
+   it passes [rel_gate], cast by [rel_transport@{u}] ([u] the level of [dom]'s sort) along the lemma of each of its
+   holes, the motive built as the Fin case's at an SProp argument ([cast_holes]), with the lemmas it uses; [None]
+   when it does not pass the gate, or when a lemma is refused or not generated. *)
+let transport_rel_in st env depth arg dom =
+  match rel_gate st env depth arg dom with
+  | None -> None
+  | Some (rel, dom, shape, holes, level) -> cast_holes st depth dom shape holes (Constr.mkConstU (rel, inst1 level)) arg
+
+let transport_rel_arg st env depth arg dom = in_part transport_rel_in st env depth arg dom
 
 (* Whether [f] applied to [args] is [Nat_succ] or [Nat_double] applied to one argument, whose declared types
    [setup] has read once to be one relevant Nat argument to Nat: such an application has no SProp argument, so
@@ -2562,10 +2867,42 @@ let unary_nat_head st f args =
   Array.length args = 1
   && ((st.unary_succ && is_nat_succ st.refs f) || (st.unary_double && is_double_head st.refs f))
 
-(* [args], the arguments of [f] at the nesting [depth], each SProp argument transported where it needs it.
-   [f]'s type is read by [C.type_of]; each product it goes through is charged, and the arguments before it are
-   substituted into a domain only for an SProp binder, and into the rest where a product must be exposed. *)
-let transport_args st env depth f args =
+(* Whether [dom], a binder's domain in a declared type, is an inductive type or one applied ([Decidable c],
+   [Fin n]): the domains the relevant path looks at (a test of [dom]'s head as declared, no walk, no step). *)
+let ind_headed dom =
+  match Constr.kind dom with Constr.Ind _ -> true | Constr.App (h, _) -> Constr.isInd h | _ -> false
+
+(* In the SProp pass with a detector ([Rel_detect d]), at the relevant argument [k] of [args] (its declared domain
+   [dom] under the binders of [args.(lo)] to [args.(k - 1)]): ask [rel_gate] on the detector's state [d], whose
+   ledger (a fresh part of [budget ()] for each argument it looks at, a total of its own) and memos are its own, so
+   that the SProp pass's charges, memos and result are those it has without the relevant path. An argument that
+   passes the gate ends the detection ([Rel_found]); so does a limit of the detector's (a part, the total, the
+   nesting) or a failure, silently, never the SProp pass ([Rel_off]). It asks for no lemma and writes no cache. *)
+let detect_rel st d env depth args lo k dom =
+  d.ch.C.steps <- budget ();
+  match rel_gate d env depth args.(k) (C.subst_walk d.ch depth args lo (k - lo) dom) with
+  | Some _ -> st.rel_mode <- Rel_found
+  | None -> ()
+  | exception (C.Out_of_budget | C.Out_of_total) -> st.rel_mode <- Rel_off
+  | exception e when CErrors.noncritical e -> st.rel_mode <- Rel_off
+
+(* Keep the place [site] of a cast the pass placed in its trace: with no detector, nothing; while a detector looks
+   or after it found an argument, the place only, no step (the relevant pass pays one step per cell when it
+   starts); in the relevant pass, the place with the lemmas [lemmas] of the cast, one step. *)
+let record st site relevant_cast lemmas =
+  match st.rel_mode with
+  | Rel_off -> ()
+  | Rel_detect _ | Rel_found -> st.cells <- { site; relevant_cast; cell_lemmas = [] } :: st.cells
+  | Rel_cast ->
+    C.tick st.ch 1;
+    st.cells <- { site; relevant_cast; cell_lemmas = lemma_labels lemmas } :: st.cells
+
+(* [args], the arguments of [f] at the nesting [depth], the application [ord] of the walk ([site]), each SProp
+   argument transported where it needs it, and, at each relevant argument whose declared domain is [ind_headed],
+   the relevant mode's work ([rel_mode]). [f]'s type is read by [C.type_of]; each product it goes through is
+   charged, and the arguments before it are substituted into a domain only for an SProp binder or such a relevant
+   one (on the detector's ledger when detecting), and into the rest where a product must be exposed. *)
+let transport_args st env depth ord f args =
   let n = Array.length args in
   let out = ref args in
   let set k a =
@@ -2575,6 +2912,10 @@ let transport_args st env depth f args =
     end;
     !out.(k) <- a
   in
+  let place k relevant_cast (a, ids) =
+    set k a;
+    record st (Arg (ord, k)) relevant_cast ids
+  in
   (* [ty] is the type of [f] applied to the arguments before [k], under the binders that take [!out.(lo)] to
      [!out.(k - 1)]. *)
   let rec loop k lo ty =
@@ -2583,7 +2924,16 @@ let transport_args st env depth f args =
       match Constr.kind ty with
       | Constr.Prod (na, dom, codom) ->
         if is_irrelevant_binder na then
-          Option.iter (set k) (transport_arg st env depth !out.(k) (C.subst_walk st.ch depth !out lo (k - lo) dom));
+          Option.iter (place k false)
+            (transport_arg st env depth !out.(k) (C.subst_walk st.ch depth !out lo (k - lo) dom))
+        else if ind_headed dom then begin
+          match st.rel_mode with
+          | Rel_cast ->
+            Option.iter (place k true)
+              (transport_rel_arg st env depth !out.(k) (C.subst_walk st.ch depth !out lo (k - lo) dom))
+          | Rel_detect d -> detect_rel st d env depth !out lo k dom
+          | Rel_off | Rel_found -> ()
+        end;
         loop (k + 1) lo codom
       | _ -> (
         match C.expose_prod st.ch env depth (C.subst_walk st.ch depth !out lo (k - lo) ty) with
@@ -2614,7 +2964,10 @@ let rec transport_walk st env depth c =
       if x == args.(0) then c else C.app_ch st.ch f [| x |]
   | Constr.App (f, args) ->
     let f' = walk env f in
-    let args' = transport_args st env depth f' (C.smart_map_ch st.ch (walk env) args) in
+    let walked = C.smart_map_ch st.ch (walk env) args in
+    let ord = st.apps in
+    st.apps <- ord + 1;
+    let args' = transport_args st env depth ord f' walked in
     if f' == f && args' == args then c else C.app_ch st.ch f' args'
   | Constr.Lambda (na, t, b) ->
     let t' = walk env t in
@@ -2645,14 +2998,14 @@ let rec transport_result st env depth body ty =
     let b' = transport_result st env (depth + 1) b tb in
     if b' == b then body else Constr.mkLambda (na, t, b')
   | _ ->
-    let irrelevant =
-      (has_nat_from st transport_min depth ty || has_fin_site st depth ty)
-      &&
-      match C.type_relevance st.ch env depth ty with
-      | Some r -> Sorts.relevance_equal Sorts.Irrelevant r
-      | None -> false
-    in
-    if irrelevant then Option.default body (transport_arg st env depth body ty) else body
+    if not ((has_nat_from st transport_min depth ty || has_fin_site st depth ty) && is_proposition st.ch env depth ty)
+    then body
+    else
+      match transport_arg st env depth body ty with
+      | Some (b, lemmas) ->
+        record st Result false lemmas;
+        b
+      | None -> body
 
 (* The declared type of a global as its declaration holds it (no instance: the scan below looks for constants
    only). *)
@@ -2869,7 +3222,123 @@ let setup ctx refs lrefs ch entry =
     count = 0;
     lemmas = [];
     lemma_ids = C.id_table ();
+    apps = 0;
+    cells = [];
+    rel_mode = Rel_off;
   }
+
+(* The detector of the SProp pass [st] of an entry of type [ty], when src/Lean.v registers [rel_transport]: on a
+   ledger of its own, its own part reads whether [ty] is a proposition ([is_proposition] at depth 0) and sets up a
+   state of its own (literal arithmetic off: the 47 fixed names only); when [ty] is one, [st] detects
+   ([Rel_detect]). A limit or a failure of that part leaves [st] as it is ([Rel_off]), and nothing is logged. *)
+let start_detection ctx refs env entry ty st =
+  match refs.nt_rel with
+  | None -> ()
+  | Some _ -> (
+    let ch = C.create env ~steps:(budget ()) ~total:(total_budget ()) in
+    match if is_proposition ch env 0 ty then Some (setup ctx refs None ch entry) else None with
+    | Some d -> st.rel_mode <- Rel_detect d
+    | None -> ()
+    | exception e when CErrors.noncritical e -> ())
+
+(* The order of the walk on the places of casts ([site]): the applications by their ordinals, the arguments of one
+   application by their index, the whole value last. *)
+let site_order a b =
+  match (a, b) with
+  | Result, Result -> 0
+  | Result, Arg _ -> 1
+  | Arg _, Result -> -1
+  | Arg (o, k), Arg (o', k') -> if o <> o' then compare o o' else compare k k'
+
+(* How many of the places of [base] (the SProp pass's casts, in the walk's order) [cells] (the relevant pass's
+   casts, in the same order) casts too, the cells of [cells] that cast an SProp argument at no place of [base]
+   (extra places), and how many cells of [cells] are relevant casts, one step on [ch] for each cell of either
+   list. *)
+let merge_sites ch base cells =
+  let rec go kept extra relevant base cells =
+    match (base, cells) with
+    | [], [] -> (kept, List.rev extra, relevant)
+    | _ :: base, [] ->
+      C.tick ch 1;
+      go kept extra relevant base []
+    | _, c :: cells when c.relevant_cast ->
+      C.tick ch 1;
+      go kept extra (relevant + 1) base cells
+    | [], c :: cells ->
+      C.tick ch 1;
+      go kept (c :: extra) relevant [] cells
+    | b :: base', c :: cells' ->
+      let o = site_order b.site c.site in
+      if o = 0 then begin
+        C.tick ch 2;
+        go (kept + 1) extra relevant base' cells'
+      end
+      else if o < 0 then begin
+        C.tick ch 1;
+        go kept extra relevant base' cells
+      end
+      else begin
+        C.tick ch 1;
+        go kept (c :: extra) relevant base cells'
+      end
+  in
+  go 0 [] 0 base cells
+
+(* The two lemma lists of an accepted relevant pass's line: [base_ids] (the SProp pass's, as its own line prints
+   them) followed by the lemmas of the [extra] SProp casts it does not name; then every other lemma of [cells], in
+   the order of first use, each once. Each lemma looked at charged on [ch]. *)
+let lemma_lists ch base_ids extra cells =
+  let seen = C.id_table () in
+  let add acc id =
+    if Option.is_empty (C.table_find ch seen id) then begin
+      C.table_add ch seen id ();
+      id :: acc
+    end
+    else acc
+  in
+  let add_cells acc cs = List.fold_left (fun acc c -> List.fold_left add acc c.cell_lemmas) acc cs in
+  let ids = add_cells (List.fold_left add [] base_ids) extra in
+  let rids = add_cells [] cells in
+  (List.rev ids, List.rev rids)
+
+(* The relevant pass of the entry [entry] (the detector found an argument, and the SProp pass, whose casts are
+   [base] with the lemmas [base_ids] and whose value is [saved], neither stopped nor failed): Lean's value walked
+   again with the relevant casts and the SProp casts ([Rel_cast]), on a ledger of its own (the same part and total
+   budgets) and with fresh memos. It pays first one step for each cell of [base]. Its value is kept when it casts
+   at least one relevant argument and casts an SProp argument at each place of [base]; it may cast more.
+   Otherwise ([None]) the SProp pass's result stands: silently when no relevant argument is cast; with a line when
+   the pass stops (a part, the nesting, the total), fails or misses a place of [base]. *)
+let relevant_pass ctx refs lrefs env entry ty body base base_ids saved =
+  let k0 = List.length base in
+  let ch = C.create env ~steps:(budget ()) ~total:(total_budget ()) in
+  let stop msg =
+    ctx.log Pp.(str "the relevant pass " ++ msg ++ str "; no relevant argument is cast");
+    None
+  in
+  match
+    let st = setup ctx refs lrefs ch entry in
+    st.rel_mode <- Rel_cast;
+    C.tick ch k0;
+    let value = transport_result st env 0 (transport_walk st env 0 body) ty in
+    let cells = List.rev st.cells in
+    let kept, extra, relevant = merge_sites ch base cells in
+    if relevant = 0 then `No_cast
+    else if kept < k0 then `Keeps kept
+    else
+      let lemmas, relevant_lemmas = lemma_lists ch base_ids extra cells in
+      `Value { value; count = st.count; lemmas; relevant; relevant_lemmas; saved }
+  with
+  | `No_cast -> None
+  | `Value t -> Some t
+  | `Keeps kept -> stop Pp.(str "keeps " ++ int kept ++ str " of the SProp pass's " ++ int k0 ++ str " cast sites")
+  | exception C.Out_of_budget ->
+    stop
+      Pp.(
+        str "stops: it needs more than " ++ int (budget ()) ++ str " steps or a nesting deeper than " ++ int C.max_depth)
+  | exception C.Out_of_total -> stop Pp.(str "stops: it needs more than " ++ int (total_budget ()) ++ str " steps in total")
+  | exception e when CErrors.noncritical e ->
+    (* A fixed text and the exception's name, as for the SProp pass. *)
+    stop Pp.(str "fails (" ++ str (Printexc.exn_slot_name e) ++ str ")")
 
 let transport ctx env ~entry ty body =
   match refs () with
@@ -2879,12 +3348,30 @@ let transport ctx env ~entry ty body =
     match
       let st = setup ctx refs lrefs ch entry in
       if not (may_apply st ty body) then None
-      else
-        let body' = transport_result st env 0 (transport_walk st env 0 body) ty in
-        (* The list of lemmas has one element per charged insertion of [add_lemma_id]. *)
-        if st.count = 0 then None else Some { value = body'; count = st.count; lemmas = List.rev st.lemmas }
+      else begin
+        start_detection ctx refs env entry ty st;
+        Some (st, transport_result st env 0 (transport_walk st env 0 body) ty)
+      end
     with
-    | r -> r
+    | None -> None
+    | Some (st, body') -> (
+      (* The list of lemmas has one element per charged insertion of [add_lemma_id]. *)
+      let lemmas = List.rev st.lemmas in
+      let sprop =
+        if st.count = 0 then None else Some { sprop_value = body'; sprop_count = st.count; sprop_lemmas = lemmas }
+      in
+      match
+        match st.rel_mode with
+        | Rel_found -> relevant_pass ctx refs lrefs env entry ty body (List.rev st.cells) lemmas sprop
+        | Rel_off | Rel_detect _ | Rel_cast -> None
+      with
+      | Some _ as t -> t
+      | None ->
+        Option.map
+          (fun s ->
+            { value = s.sprop_value; count = s.sprop_count; lemmas = s.sprop_lemmas; relevant = 0;
+              relevant_lemmas = []; saved = None })
+          sprop)
     | exception C.Out_of_budget ->
       ctx.log
         Pp.(

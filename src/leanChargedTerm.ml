@@ -386,14 +386,18 @@ let rec equal ch depth a b =
      (fun _ a b -> equal ch (depth + 1) a b)
      0 a b)
 
-(* [Vars.lift n c], paid before: Rocq's lift walks and may copy the whole tree of [c] (theorem-labs/rocq at
-   07e45e36, kernel/constr.ml [exliftn]: [map_with_binders]), which a closed [c] does not need. *)
-let lift_ch ch depth n c =
+(* [Vars.liftn n k c] (the indices of [c] from [k] on lifted by [n]), paid before: Rocq's lift walks and may copy
+   the whole tree of [c] (theorem-labs/rocq at 07e45e36, kernel/constr.ml [exliftn]: [map_with_binders]), which a
+   closed [c] does not need. *)
+let liftn_ch ch depth n k c =
   if n = 0 || closed ch depth c then c
   else begin
     pay ch (size ch depth c);
-    Vars.lift n c
+    Vars.liftn n k c
   end
+
+(* [Vars.lift n c], which is [Vars.liftn n 1 c] (kernel/constr.ml). *)
+let lift_ch ch depth n c = liftn_ch ch depth n 1 c
 
 (* [c] under [k] binders, each [Rel] of them replaced by [place depth n j] ([j] the binder's index from the outermost,
    [n] the binders above the place), each node charged before it is read or copied, and the [k] marks paid first. It

@@ -482,9 +482,12 @@ What it changes:
   about 60 exceeds: its proof holds the unary literal twice), else
   `line N: NAME: the generated lemma ID is refused by the kernel (its
   statement has more than 256 nodes and is not printed)`.
-- The import's output has one line per entry whose value changes,
-  printed once the kernel has accepted that value:
-  `line N: NAME: <k> argument(s) transported (<lemmas>)`.
+- The import's output has one line per entry whose value changes, printed once the kernel has accepted that value:
+  `line N: NAME: <k> argument(s) transported (<lemmas>)`, and, when the value holds casts at relevant positions
+  (below), `line N: NAME: <k> argument(s) transported (<lemmas>); <r> relevant argument(s) cast (<relevant
+  lemmas>)`. `<k>` counts the proof (`SProp`) casts and `<lemmas>` names their lemmas, as the line without relevant
+  casts would; `<r>` counts the relevant arguments cast and `<relevant lemmas>` names the other lemmas the value
+  uses. `<k>` is 0 and `<lemmas>` empty when the value holds no proof cast.
 - The Fin case. Two closed terms whose head constants differ, which
   both reduce (at most 64 steps each side in all, counting every step
   of its head reductions: of the term, of the subject of a projection,
@@ -521,6 +524,41 @@ What it changes:
   lemma. Two such terms whose `Fin` values differ give no lemma either:
   they are left to the kernel as without the pass, and the other places
   of the same argument are still cast.
+- A cast at a relevant position, only in the value of an entry whose type is a proposition (`SProp`: a theorem, or
+  an auxiliary definition whose type the pass reads as a proposition; never in a data definition, an inductive type,
+  an axiom or a quotient, and never in a declared type). A relevant argument whose declared domain is an inductive
+  type or one applied (`Decidable p`, `Fin n`), and whose type differs from that domain only at closed values that
+  the Fin case proves equal, becomes `rel_transport@{u} M x y e (fun hz => t) p` (`src/Lean.v`). Here `t` is the
+  argument as the walk returns it (with the proof casts the walk placed inside it), `x` and `y` are the two `Fin`
+  values, `p` is the proof of `y`'s bound, `e : x = y` is the Fin case's
+  lemma, named `<entry>__rel_eq_<k>`, `M := fun z => forall hz, D[mk z hz]` is the domain with the place abstracted,
+  and `u` is the level of the domain's sort (`Set` or a `Type` of one level). The importer gives every sort of a
+  declaration the form `SProp`, `Set` or `Type@{l}` for one level `l` (a Lean universe expression, a maximum
+  included, becomes a level of its own; no `Prop` and no other sort quality is made), so a domain's sort goes
+  unread only when the pass's bounded head reduction does not reach it (a type alias of a sort that takes more
+  unfoldings than that reduction allows). Lean v4.34.0's
+  `String.length_utf8EncodeChar` passes `UInt32.decLe c.val (UInt32.ofNatLT 65535 _)` where `ite` expects a
+  `Decidable (c.val ≤ 65535)`; without the cast, Rocq's kernel computes on the unary `Nat` the remainder that
+  `65535 : UInt32` unfolds to. A value is closed when no variable bound outside it occurs in it (the export gives no
+  other kind of free variable). An open value, a `Nat` literal alone, two values the Fin case does not prove equal,
+  a domain whose sort the pass does not read, and a type that differs at anything but such Fin places get no cast.
+  The pass looks at a domain only when it holds a closed Fin place outside every run of `Nat_succ` and `Nat_double`
+  (a literal is one node to it), and computes no literal arithmetic there. A proof argument whose type holds a
+  relevant cast where the expected type holds Lean's argument is cast with both places in one motive that binds
+  `e : x = z`. Its abstracted argument is `rel_transport M x z e (fun hz => t) hz`, which is `t` itself at
+  `z = x` and the relevant cast at `z = y`, up to proofs, by `eq`'s definitional UIP.
+
+  The relevant casts come after the proof casts and never replace them. The pass first runs exactly as without them:
+  the same budget, memos, lemmas and log lines. While it walks the value, a detector with a budget of its own looks
+  at the relevant arguments until it finds one that passes the tests above that come before a lemma is asked for
+  (the Fin place, the Fin holes only, the domain's sort). Such an argument is no promise of a cast: the second pass
+  may get no lemma for it, or stop or fail. Only after the detector found one, and only when the first pass neither
+  stopped nor failed, a second pass walks Lean's value again on a third budget, with both kinds of casts. Its value
+  counts only when it casts at least one relevant argument and keeps each proof cast of the first pass at the same
+  place. The kernel is given that value first. If it refuses, the first pass's value goes to the kernel (when the
+  first pass changed the value), and then Lean's. The second pass's lemmas are kept apart from the first pass's: it
+  reads the first pass's lemmas but adds its own only to a cache of its own, so a later entry's first pass costs and
+  names what it would without relevant casts.
 - Literal arithmetic, when `src/Lean.v` registers its lemmas (a missing
   one turns off this case alone). Two closed terms of a data type whose
   heads differ (two constants, two constructors, or one of each), of a
@@ -566,14 +604,13 @@ What it changes:
   never converts `2^32` with `4294967296`; a small operation (below 65536)
   in a parameter, proof or type is not held.
 
-What it does not change: an entry's declared type (its statement),
-the non-`SProp` arguments (the data, which stay Lean's terms, so that
-Lean's `rfl` lemmas about them still check), any kernel check, and
-the axioms: no imported entry becomes an axiom, the `toN` lemmas of
-`src/Lean.v` are closed under the global context, `Nat_eq_of_toN`
-and `sprop_transport` (and literal arithmetic's `toN_of_eq` and
-`sprop_transport_any`) rely only on the definitional UIP of `eq` (as
-every entry that names `eq` does), and a generated lemma relies on no
+What it does not change: an entry's declared type (its statement); the relevant (data) arguments of a data
+definition, and of a proposition entry except at the places described above, so that Lean's `rfl` lemmas about data
+still check (a relevant cast stands only inside a proof, whose terms nothing computes with); any kernel check; and
+the axioms: no imported entry becomes an axiom, the `toN` lemmas of `src/Lean.v` are closed under the global
+context, `Nat_eq_of_toN`, `sprop_transport` and `rel_transport` (and literal arithmetic's `toN_of_eq` and
+`sprop_transport_any`) rely only on the definitional UIP of `eq` (as every entry that names `eq` does),
+and a generated lemma relies on no
 axiom of its own (`Print Assumptions`): what it relies on is what the
 export's lemmas it names rely on, so a lemma that certifies a held
 division (literal arithmetic, through Lean's `Nat.div_eq_of_lt_le`)
@@ -586,38 +623,38 @@ passes on an entry that holds itself `OfNat.ofNat T` or a constant
 whose declared type ends in `T`, for `T` a record of one relevant
 field of an inductive type (`UInt8`, `BitVec w`). Two closed
 `Nat` terms of different values give no lemma, and the argument that
-holds them no cast: the kernel refuses the entry as before. If the
-kernel refuses a transported value, the import logs `line N: NAME:
-the transported value is refused (...); Lean's
-value goes to the kernel instead` (the kernel's error in the
-parentheses only when the transported value has at most 256 nodes;
-else `the transported value is refused by the kernel (it has more than
-256 nodes: the kernel's error is not printed); Lean's value goes to
-the kernel instead`) and submits Lean's value; if the kernel refuses
-that too, the entry fails with Lean's error, as without the pass. If
-the entry is accepted, the lemmas the pass declared stay declared, even
-if another place gets no lemma, the pass stops, or Lean's original
-value is used; if the entry is refused, they go with it. A lemma the
+holds them no cast: the kernel refuses the entry as before. If the kernel refuses a value with relevant casts, the
+import logs `line N: NAME: the relevant pass's value is refused (...); the SProp pass's value goes to the kernel
+instead` and submits the first pass's value; when the first pass changed nothing, it logs `line N: NAME: the
+relevant pass's value is refused (...); Lean's value goes to the kernel instead` and submits Lean's value. The
+kernel's error is in the parentheses only when the refused value has at most 256 nodes; else the line reads `the
+relevant pass's value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed);
+...`. If the kernel refuses a transported value of the first pass, the import logs `line N: NAME: the transported
+value is refused (...); Lean's value goes to the kernel instead` (the kernel's error in the parentheses only when
+the transported value has at most 256 nodes; else `the transported value is refused by the kernel (it has more
+than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead`) and submits Lean's
+value; if the kernel refuses that too, the entry fails with Lean's error, as without the pass. If the entry is
+accepted, the lemmas that both passes declared stay declared, even if another place gets no lemma, a pass stops, or
+the first pass's value or Lean's original value is used; if the entry is refused or stopped by a limit, they go
+with it. A lemma the
 kernel refuses, a place's or one generated while the places are found
 (a held operation's, a `decide`'s), leaves its whole argument to Lean's
 term; no refusal is remembered, so a later argument generates it again.
 
-The pass is optional work, and all of it is charged before it runs
-(`tick` and `pay` of its charged term layer, `src/leanChargedTerm.ml`):
-each term it visits, copies or builds, each substitution, comparison
-and lookup, natural number evaluation (each value, Fin value and
-parameter value it does not find in its memo, each step of the Fin
-case's head reduction, each unary literal it builds) and certificate
-construction, against the `Lean Transport Step Budget` of each part of
-an entry (the entry's own scans and walks are one part, and each
-argument it looks at is
-another), 1 000 000 steps by default, and all the parts of one entry
-together against ten times that budget (at most OCaml's `max_int`,
-2^62 - 1 on 64-bit systems). One charge comes after its work: the
-importer's list of the export's constants of a Lean name, whose length
-is known only once the list is returned, is charged by that length
-then; the pass asks for 47 fixed names, once per entry, and 56 when
-the lemmas of literal arithmetic are registered. A reused
+The pass is optional work, and all of it is charged before it runs (`tick` and `pay` of its charged term layer,
+`src/leanChargedTerm.ml`): each term it visits, copies or builds, each substitution, comparison and lookup, natural
+number evaluation (each value, Fin value and parameter value it does not find in its memo, each step of the Fin
+case's head reduction, each unary literal it builds) and certificate construction, against the `Lean Transport
+Step Budget` of each part of an entry (the entry's own scans and walks are one part, and each argument it looks at
+is another), 1 000 000 steps by default, and all the parts of one entry together against ten times that budget (at
+most OCaml's `max_int`, 2^62 - 1 on 64-bit systems). The pass of proof casts, the detector of relevant places and
+the second pass of relevant casts each have parts and a total of their own, and no step of one is charged to
+another. Two charges come after their work. The importer's list of the export's constants of a Lean name, whose
+length is known only once the list is returned, is charged by that length then; the first and the second pass each
+ask for 47 fixed names, once per entry, and 56 when the lemmas of literal arithmetic are registered, and the
+detector for the 47 only. The first pass's list of its proof
+cast places, one cell per cast it placed, is charged to the second pass, one step per cell, when the second pass
+starts. A reused
 certificate counts again at its full size because the kernel checks
 the proof tree. A substitution pays, before it is made, for each node
 it visits and, at each place it substitutes, for the size of the
@@ -647,6 +684,12 @@ An error in the pass takes the same path and logs `the transport pass
 fails (E); the value is left as Lean's`, `E` the name of the error's
 exception only.
 
+The second pass of relevant casts logs `the relevant pass stops: it needs more than N steps or a nesting deeper
+than 10000; no relevant argument is cast` (for its total, `... more than T steps in total; ...`), `the relevant
+pass fails (E); no relevant argument is cast`, and, when its value lacks a proof cast of the first pass, `the
+relevant pass keeps J of the SProp pass's K cast sites; no relevant argument is cast`; the first pass's value then
+stands. The detector logs nothing.
+
 The pass reads the types it needs itself, without Rocq's retyping or
 reduction: a variable's declared type, a global's declared type at its
 universe instance, and the types of applications, lambdas, lets, casts
@@ -674,10 +717,12 @@ literal is asked once whether it is a literal (a step per level to the
 point where it is none), then walked in one loop to its base (a step per
 level), the base walked once.
 
-Limits: only on the new path; only proof (`SProp`) positions. A
-mismatch in a data position, such as `UInt32.toFin : Fin UInt32.size
-:= x.toBitVec.toFin` (`Init/Data/UInt/BasicAux.lean:141`), is left to
-the kernel. The places are found in the types the arguments and the
+Limits: only on the new path. A proof (`SProp`) position gets a cast at closed `Nat` terms and at Fin places. A
+relevant position gets one only inside the value of an entry whose type is a proposition, only where its declared
+domain is an inductive type or one applied, and only at Fin places of closed values (no `Nat` place and no literal
+arithmetic there). A mismatch in a data position of a data definition, such as `UInt32.toFin : Fin UInt32.size :=
+x.toBitVec.toFin` (`Init/Data/UInt/BasicAux.lean:141`), or in any declared type, is left to the kernel. The places
+are found in the types the arguments and the
 function have as written: a `Nat` place is never found by unfolding a
 constant, and a Fin place only by the head reduction of the Fin case
 (at most 64 steps of each side in all). For a `Nat` place the
@@ -950,19 +995,19 @@ also occurred.
 
 ## Lean Transport Step Budget
 
-A positive integer option, unset by default (1 000 000 steps). `Set
-Lean Transport Step Budget N.` gives each part of an entry N steps of
-the transport pass and all the parts of one entry together 10 N, or
-OCaml's `max_int` (2^62 - 1 on 64-bit systems) when 10 N is larger (see
-"Transport of proof arguments across Nat literals"); 0 and negative
-values are refused, and `Unset` restores the default. A step pays for
-one unit of the pass's work before it is done; a size the pass would
-have to pay that is larger than `max_int` stops it as a part over its
-budget does. Over a limit, the pass stops and the entry's original
-value goes to the kernel. The budget bounds the optional pass only:
-the kernel's checks of the generated lemmas and of the entry's value
-are not charged, and they run under `Lean Entry Timeout` and
-`Lean Entry Memory Limit` as for any entry. Inside one pair of literal
+A positive integer option, unset by default (1 000 000 steps). `Set Lean Transport Step Budget N.` gives each part
+of an entry N steps and all the parts of one entry together 10 N, or OCaml's `max_int` (2^62 - 1 on 64-bit
+systems) when 10 N is larger (see "Transport of proof arguments across Nat literals"), on each of three budgets of
+their own: the pass of proof casts, the detector of relevant places, and the second pass of relevant casts, which
+runs only after the detector found a place. An entry with no such place therefore spends at most 10 N steps more
+than without relevant casts, and one with such a place at most 20 N. 0 and negative values are refused, and
+`Unset` restores the default. A step pays for one unit of work before it is done; a size that would have to be
+paid and is larger than `max_int` stops the work as a part over its budget does. Over a limit of the pass of proof
+casts, that pass stops and the entry's original value goes to the kernel. Over a limit of the detector, the
+detection ends and nothing is logged. Over a limit of the second pass, its value is dropped (`the relevant pass
+stops: ...`) and the first pass's value goes on. The budgets bound the optional passes only: the kernel's checks of
+the generated lemmas and of the entry's value are not charged, and they run under `Lean Entry Timeout` and `Lean
+Entry Memory Limit` as for any entry. Inside one pair of literal
 arithmetic the pass also counts the pair's steps, every nested
 evaluation with them and the tree size of the evaluated terms its proof
 holds, against a cap of 200 000, which declines that pair: no pair inside
