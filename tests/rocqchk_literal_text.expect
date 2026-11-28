@@ -1,0 +1,8 @@
+# Log file, polarity, literal substring (tab-separated).
+rocqchk_literal_text.log.out	+	line 14: RLIChkText.seven
+rocqchk_literal_text.log.out	+	Skipping: Error at line 15 (for line-15): 5 #ELN x7
+rocqchk_literal_text.log.out	+	Skipping: Error at line 17 (for line-17): #DEF 7 1 5
+rocqchk_literal_text.log.out	+	uses expression 5 of a refused line
+rocqchk_literal_text.log.out	+	Skipping: Error at line 20 (for RLIChkText.neg): #DEF 8 1 6
+rocqchk_literal_text.log.out	+	Done!
+rocqchk_literal_text.log.out	+	Skipped 3

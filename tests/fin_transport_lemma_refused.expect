@@ -1,0 +1,11 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_lemma_refused.log.out	+	line 8554: RLI434S.lemma_refused: the generated lemma RLI434S_lemma_refused__nat_eq_1
+fin_transport_lemma_refused.log.out	+	is refused by the kernel
+fin_transport_lemma_refused.log.out	-	the generated lemma RLI434S_lemma_refused__nat_eq_1 :
+fin_transport_lemma_refused.log.out	-	RLI434S.lemma_refused: 1 argument(s) transported
+fin_transport_lemma_refused.log.out	-	the transported value is refused
+fin_transport_lemma_refused.log.out	+	Skipping: Error at line 8554 (for RLI434S.lemma_refused)
+fin_transport_lemma_refused.log.out	+	line 8557: RLI434S.after_refusal
+fin_transport_lemma_refused.log.out	-	Error at line 8557
+fin_transport_lemma_refused.log.out	+	Skipped 1
+fin_transport_lemma_refused.log.out	+	Done!

@@ -1,0 +1,82 @@
+name: build-9.2-cut
+
+# Build Rocq at the cut, build the plugin against it and run the suite, through ci/build-9.2-cut.sh, for each
+# pull request into the cut branch, draft or not, and for each push to it.
+# A pull request edit that changed its base (retargeted to the cut) runs it like any other pull request event.
+# An edit that did not (`github.event.action == 'edited' && github.event.changes.base == null`: a title or body
+# edit, or an edit with no `changes`) builds nothing, and it reports under another check name and in another
+# concurrency group, so that its skipped job is never the build-9.2-cut check and it never replaces a pending
+# build in the build's group. Each of the three places below tests that same expression. GitHub does not
+# evaluate the name of a job its `if` skips: the skipped job's check shows the name expression's text.
+# A draft builds like any other pull request, so marking it ready for review starts nothing more.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [typewise-isomorphism-9.2-cut]
+  push:
+    branches: [typewise-isomorphism-9.2-cut]
+
+permissions:
+  contents: read
+
+# Every event but a metadata-only edit: the group ${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}.
+concurrency:
+  group: >-
+    ${{ (github.event.action == 'edited' && github.event.changes.base == null)
+      && format('{0}-metadata-edit-{1}', github.workflow, github.run_id)
+      || format('{0}-{1}-{2}', github.workflow, github.event_name, github.sha) }}
+  cancel-in-progress: false
+
+jobs:
+  # A job id may not hold a '.'; the name is what GitHub shows as the check.
+  build_9_2_cut:
+    name: >-
+      ${{ (github.event.action == 'edited' && github.event.changes.base == null)
+        && 'build-9.2-cut metadata edit (not built)' || 'build-9.2-cut' }}
+    if: ${{ !(github.event.action == 'edited' && github.event.changes.base == null) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      # An opam root is not relocatable: the cached root must come back at the path it was built at, and
+      # runner.temp is not stable across runs.
+      CUT_ROOT: /home/runner/cut
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          lfs: true
+          fetch-depth: 0 # the inventory checks read the history
+          persist-credentials: false # no later step needs the token
+
+      # The rows of ci/build-9.2-cut-selftest.sh, before the build: stubs stand in for the build and the tests.
+      - name: Self-test of ci/build-9.2-cut.sh
+        run: ci/build-9.2-cut.sh --self-test
+
+      - name: Install system prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends m4 rsync pkg-config libgmp-dev unzip
+
+      - name: Read the cut's Rocq commit from the settings
+        id: cut
+        run: |
+          source ci/cut-settings.sh
+          echo "sha=$CUT_ROCQ_COMMIT" >> "$GITHUB_OUTPUT"
+
+      # The key is the hash of ci/cut-settings.sh, the inputs the opam root is built from; the Rocq commit,
+      # which that hash already covers, is in the key for its readers.
+      - name: Restore the opam root
+        id: cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ${{ env.CUT_ROOT }}
+          key: cut-${{ steps.cut.outputs.sha }}-${{ hashFiles('ci/cut-settings.sh') }}
+
+      - name: Build Rocq at the cut, build the plugin, run the suite
+        run: ci/build-9.2-cut.sh
+
+      - name: Save the opam root
+        if: github.event_name == 'push' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ${{ env.CUT_ROOT }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}

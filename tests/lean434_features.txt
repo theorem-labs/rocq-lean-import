@@ -1,0 +1,49 @@
+# file	features	base_entry	own_entry	status	commits	stack
+# base_entry and own_entry: the Lean entry the test fails at, option:<option name> (its Set line fails), or check:rocqchk (tests/Makefile's rocqchk step refuses the test's .vo; the test is in ROCQCHK_TESTS)
+tests/lean434_bitvec_uint32.v	F1 F7	BitVec.ofNatLT	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c	-
+tests/lean434_pow.v	F2 F3 F4 F8 F9 F10 F11 F12 F13	Nat.pow_succ	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c	-
+tests/lean434_char.v	char-ofnataux	BitVec.ofNatLT	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
+tests/lean434_isvalidchar.v	F6	_private.Init.Prelude0.isValidChar_UInt32.match_1_1	-	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c	8192
+tests/lean434_strings.v	string-literals	Nat.pow_pos._f	RLI434.astral	fixed	50081965aa3fc78936727ec4d74012fcdbd6e06c 17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
+tests/lean434_string_length.v	string-length nat-linear-reflection	Nat.pow_pos._f	RLI434.ab_length	listed	-	-
+tests/lean434_nested.v	char-ofnataux-autoparam-closure	Nat.pow_pos._f	Char.ofNatAux	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
+tests/lean434_linear.v	F5	Nat.«Internal».Linear.ExprCnstr.denote_toNormPoly	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba	-
+tests/lean434_bigint.v	int-literals record-rfl	RLI434.big_fields	-	fixed	c7fcdb6c8046ce10f9b8f87c782b149d72847eba	-
+tests/lean434_bigint_decide.v	decide omega proof-auxiliaries	RLI434.big_fields	RLI434.boundedVal._proof_1	listed	-	-
+tests/entry_timeout.v	entry-timeout	option:Lean Entry Timeout	-	fixed	4d81edbc7ca0baf3f88ea258a0e0c90da237837a	-
+tests/entry_memory.v	entry-memory-limit	option:Lean Entry Memory Limit	-	fixed	86bba9c52f69d1d0f207b895b4bbcb3efa441929	-
+tests/path_deferred_legacy.v	deferred-legacy-path	RLIV.mix_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/path_deferred_string.v	deferred-string-version	RLI426.pair_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/path_deferred_reload.v	deferred-path-reload	RLI426.pair_eq	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/parse_untagged.v	numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/parse_untagged_prefix.v	prefix-numbered-record-recovery	RLIUntaggedName	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/parse_unclear_id.v	ambiguous-numbered-record	RLIUnclear	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/parse_text_recovery.v	text-numbered-record-recovery	RLITextAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/parse_text_recovery_prefix.v	text-saved-numbered-record-recovery	RLITextAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/parse_text_numbering.v	text-numbered-sequence-check	RLITextAfterGaps	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/parse_wrong_payload.v	ndjson-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/parse_wrong_payload_prefix.v	ndjson-prefix-wrong-payload-recovery	RLIAfter	-	fixed	c0275f0258f914244e06a5310be7c89f22ebaa84	-
+tests/entry_timeout_parse.v	ndjson-negative-id	option:Lean Entry Timeout	line-132	fixed	c17da2641ba58527c8c0b3536a0af12df1fa8c5b	-
+tests/uint32_legacy_only.v	legacy-only-duplicate-dispatch	UInt32	-	fixed	353be90ae861f3c73927ad8c79882a48b13d7881	-
+tests/uint32_transport_ofnatlt.v	uint32-ofnatlt-transport	BitVec.ofNatLT	UInt32.ofNatLT	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
+tests/uint32_transport_shiftleft.v	uint32-shiftleft-transport	Nat.pow_pos._f	UInt32.toNat_shiftLeft	fixed	17ac70f1528ee2d9f74cd8c2026c5c342834b4d1	-
+tests/lean434_stack.v	stack-limit	instInhabitedTrue	_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1	fixed	83737abbc89ca4dae79200bdc4d7d655f131b127	-
+tests/univ_undeclared.v	univ-param-undeclared	RLIU.refl_u	RLIU.refl_u	fixed	4dcb44e98dbb4cde4e79035bbb711977daeb45ed	-
+tests/utf8size_transport_one.v	char-utf8size-fin-transport	option:Lean Entry Timeout	Char.utf8Size_eq_one_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
+tests/utf8size_transport_two.v	char-utf8size-fin-transport fin-transport-budget	option:Lean Entry Timeout	Char.utf8Size_eq_two_iff	fixed	1adfe1d1dc70520632cef5e33417f6d8d1e25ffd	-
+tests/fin_transport_values_differ.v	fin-transport-values-differ	option:Lean Entry Timeout	RLI434V.values_differ	fixed	bc0d4888eadebdac4a9b8198aeb85d13c58d6649	-
+tests/fin_transport_bitwise.v	fin-transport-bitwise	option:Lean Entry Timeout	RLI434B.u32_and	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
+tests/fin_transport_bitwise_absent.v	fin-transport-bitwise-absent	option:Lean Entry Timeout	RLI434B.u32_lor	fixed	73f4af944d611f2231c9538f216fac1f3a2b437d	-
+tests/litarith_eval.v	litarith-eval	option:Lean Entry Timeout	RLI434L.tidy_big	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_hold.v	litarith-hold	option:Lean Entry Timeout	RLI434L.div_held_l	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_dvd.v	litarith-dvd	option:Lean Entry Timeout	RLI434L.dvd_256	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_refused.v	litarith-refused	option:Lean Entry Timeout	RLI434L.refused_hole	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_budget.v	litarith-budget	option:Lean Entry Timeout	RLI434L.bud_tidy	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_absent.v	litarith-absent	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_nobool.v	litarith-nobool	option:Lean Entry Timeout	RLI434L.own_mul	fixed	b2d930c189f08f58f49c8fdbefdb2c0f41daf3a2	-
+tests/litarith_chain.v	litarith-chain	option:Lean Entry Timeout	RLI434L.chain_1	fixed	749063125b2a8f71220d7495611e0444c53c00c7	-
+tests/transport_walk.v	transport-walk-literal	option:Lean Entry Timeout	RLI434Wk.walk_lits	fixed	5b8b335940d35af8b89dfc6f353e923805a8f57c	-
+tests/relcast.v	relcast-relevant-position	option:Lean Entry Timeout	RLI434RC.theorem_closed	fixed	4e2aac38f2e69bf8f491a4dc43afb60cc9fdd60a	-
+tests/rocqchk_literal.v	rocqchk-nat-literal-2pow62	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
+tests/rocqchk_literal_over.v	rocqchk-nat-literal-2pow62-plus1	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-
+tests/rocqchk_literal_text.v	rocqchk-text-literal-unused	check:rocqchk	check:rocqchk	fixed	79c00f5f6ededb9795ee63f5533492e15f7a9d1d	-

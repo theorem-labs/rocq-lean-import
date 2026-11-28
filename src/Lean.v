@@ -431,5 +431,197 @@ Register Nat_isValidChar as lean.Nat_isValidChar.
 Register Char as lean.Char.
 Register Char_legacy as lean.Char.legacy.
 Register reflective_Char_legacy_mk_prim as lean.Char.legacy.mk.reflective_prim.
-(* TODO: lean.Char.mk.reflective_prim for the BitVec Char; blocks
-   string literals in Lean >= 4.17 dumps. *)
+(* On the new path (Lean 4.17.0 on) a string literal is translated through the export's own
+   [String.ofList] (or [String.mk]) and [Char.ofNat] (lean.ml, [string_lit_expr]); the BitVec [Char] needs
+   no reflective constructor here. *)
+
+(* Transport of proof arguments across Nat literals (README, "Transport of proof arguments across Nat
+   literals"). Rocq computes Lean's Nat arithmetic on the unary [Nat] one [Nat_succ] at a time, so Lean
+   Import proves an equality [x = y] of two closed Nat terms of equal value (a literal, a constant such as
+   [UInt32.size], or [2 ^ 32] built from the export's own [Nat.pow]) through Rocq's binary [N] and casts an
+   SProp argument along it with [sprop_transport]. The lemmas below are proved by induction on [Nat],
+   [rewrite], [destruct] and [lia]: the [toN] lemmas rely on no axiom, [Nat_eq_of_toN] and
+   [sprop_transport] only on the definitional UIP of [eq]. The importer instantiates them with the
+   export's [Nat.add], [Nat.mul] and [Nat.pow], whose defining equations it closes by [Logic.eq_refl], and
+   with steps that compute the value of a literal from its form. The lemmas of the Fin case (the two
+   values of a [Fin] that two closed terms reduce to) do not go through [N]: each is [sprop_transport]
+   along [eq_refl] of the unary literal of the value, applied to [eq_refl] of the first value, so that the
+   kernel converts each value with that literal on the unary [Nat]; the importer generates one only when
+   the value and every operand of it but a divisor are below 65536. Literal arithmetic (two closed terms
+   of a data type that the importer evaluates) adds the lemmas of Lean's [-] ([toN_pred], [toN_sub]), of a
+   division ([Nat_le_of_toN], [toN_of_eq], with Lean's [Nat.div_eq_of_lt_le]) and the cast at a type of
+   any universe ([sprop_transport_any]); [toN_nat], [Nat_le_of_toN] and the [toN] lemmas rely on no
+   axiom, [toN_of_eq] and [sprop_transport_any] only on the definitional UIP of [eq]. *)
+Section nat_transport.
+  Import ZArith NArith Lia.
+  Local Unset Universe Polymorphism.
+
+  Fixpoint toN (n : Nat) : N :=
+    match n with
+    | Nat_zero => N0
+    | Nat_succ n => N.succ (toN n)
+    end.
+
+  Lemma toN_inj (a b : Nat) : Logic.eq (toN a) (toN b) -> Logic.eq a b.
+  Proof.
+    revert b; induction a as [|a IH]; intros [|b] H; cbn [toN] in H.
+    - reflexivity.
+    - exfalso; lia.
+    - exfalso; lia.
+    - f_equal; apply IH; lia.
+  Qed.
+
+  Lemma toN_double (n : Nat) : Logic.eq (toN (double n)) (N.double (toN n)).
+  Proof.
+    induction n as [|n IH]; cbn [double toN].
+    - reflexivity.
+    - rewrite IH, !N.double_spec; lia.
+  Qed.
+
+  (* For any [add], [mul] and [pow] that recurse on their second argument as Lean's [Nat.add],
+     [Nat.mul] and [Nat.pow] do, given as their defining equations. *)
+  Lemma toN_add (add : Nat -> Nat -> Nat)
+    (add_0 : forall n, Logic.eq (add n Nat_zero) n)
+    (add_S : forall n m, Logic.eq (add n (Nat_succ m)) (Nat_succ (add n m)))
+    (a b : Nat) : Logic.eq (toN (add a b)) (N.add (toN a) (toN b)).
+  Proof.
+    induction b as [|b IH].
+    - rewrite add_0; cbn [toN]; lia.
+    - rewrite add_S; cbn [toN]; rewrite IH; lia.
+  Qed.
+
+  Lemma toN_mul (add mul : Nat -> Nat -> Nat)
+    (Hadd : forall a b, Logic.eq (toN (add a b)) (N.add (toN a) (toN b)))
+    (mul_0 : forall n, Logic.eq (mul n Nat_zero) Nat_zero)
+    (mul_S : forall n m, Logic.eq (mul n (Nat_succ m)) (add (mul n m) n))
+    (a b : Nat) : Logic.eq (toN (mul a b)) (N.mul (toN a) (toN b)).
+  Proof.
+    induction b as [|b IH].
+    - rewrite mul_0; cbn [toN]; lia.
+    - rewrite mul_S, Hadd, IH; cbn [toN]; now rewrite N.mul_succ_r.
+  Qed.
+
+  Lemma toN_pow (mul pow : Nat -> Nat -> Nat)
+    (Hmul : forall a b, Logic.eq (toN (mul a b)) (N.mul (toN a) (toN b)))
+    (pow_0 : forall b, Logic.eq (pow b Nat_zero) (Nat_succ Nat_zero))
+    (pow_S : forall b e, Logic.eq (pow b (Nat_succ e)) (mul (pow b e) b))
+    (a b : Nat) : Logic.eq (toN (pow a b)) (N.pow (toN a) (toN b)).
+  Proof.
+    induction b as [|b IH].
+    - now rewrite pow_0.
+    - rewrite pow_S, Hmul, IH; cbn [toN].
+      rewrite (N.pow_succ_r _ _ (N.le_0_l _)).
+      apply N.mul_comm.
+  Qed.
+
+  (* The steps of a certificate [Logic.eq (toN t) w] for a closed Nat term [t] and a binary literal [w]:
+     each step states its term as it is, so that the kernel compares a step with the next one term for
+     term, and checks each binary computation ([E]) on literals. *)
+  Lemma toN_succ_step (m : Nat) (v w : N) (H : Logic.eq (toN m) v) (E : Logic.eq (N.succ v) w)
+    : Logic.eq (toN (Nat_succ m)) w.
+  Proof. cbn [toN]; rewrite H; exact E. Qed.
+
+  Lemma toN_double_step (m : Nat) (v w : N) (H : Logic.eq (toN m) v) (E : Logic.eq (N.double v) w)
+    : Logic.eq (toN (double m)) w.
+  Proof. rewrite toN_double, H; exact E. Qed.
+
+  (* [Hab] is closed by [Logic.eq_refl]: [b] is what [a] unfolds to (the body of a constant, or the
+     literal of an [OfNat.ofNat]). *)
+  Lemma toN_unfold_step (a b : Nat) (w : N) (Hab : Logic.eq a b) (H : Logic.eq (toN b) w)
+    : Logic.eq (toN a) w.
+  Proof. rewrite Hab; exact H. Qed.
+
+  (* [f] is the operation as the term applies it ([HPow.hPow Nat Nat Nat inst], say), [g] the export's
+     operation ([Nat.pow]), [Hfg] closed by [Logic.eq_refl] on open [a b], [Hg] one of the lemmas above. *)
+  Lemma toN_op_step (f g : Nat -> Nat -> Nat) (h : N -> N -> N)
+    (Hfg : forall a b, Logic.eq (f a b) (g a b))
+    (Hg : forall a b, Logic.eq (toN (g a b)) (h (toN a) (toN b)))
+    (a b : Nat) (va vb w : N) (Ha : Logic.eq (toN a) va) (Hb : Logic.eq (toN b) vb)
+    (E : Logic.eq (h va vb) w) : Logic.eq (toN (f a b)) w.
+  Proof. rewrite Hfg, Hg, Ha, Hb; exact E. Qed.
+
+  Lemma Nat_eq_of_toN (x y : Nat) (w : N) (Hx : Logic.eq (toN x) w) (Hy : Logic.eq (toN y) w)
+    : @eq@{Set} Nat x y.
+  Proof.
+    assert (H : Logic.eq x y) by exact (toN_inj x y (Logic.eq_trans Hx (Logic.eq_sym Hy))).
+    destruct H; constructor.
+  Qed.
+
+  Definition sprop_transport (P : Nat -> SProp) {x y : Nat} (e : @eq@{Set} Nat x y) (p : P x) : P y.
+  Proof. destruct e; exact p. Defined.
+
+  (* Lean's [Nat.pred] and [Nat.sub], given as their defining equations, each closed by [Logic.eq_refl]. *)
+  Lemma toN_pred (pred : Nat -> Nat) (pred_0 : Logic.eq (pred Nat_zero) Nat_zero)
+    (pred_S : forall n, Logic.eq (pred (Nat_succ n)) n) (a : Nat)
+    : Logic.eq (toN (pred a)) (N.pred (toN a)).
+  Proof. destruct a as [|a]; [rewrite pred_0 | rewrite pred_S]; cbn [toN]; lia. Qed.
+
+  Lemma toN_sub (pred : Nat -> Nat) (Hpred : forall a, Logic.eq (toN (pred a)) (N.pred (toN a)))
+    (sub : Nat -> Nat -> Nat)
+    (sub_0 : forall n, Logic.eq (sub n Nat_zero) n)
+    (sub_S : forall n m, Logic.eq (sub n (Nat_succ m)) (pred (sub n m)))
+    (a b : Nat) : Logic.eq (toN (sub a b)) (N.sub (toN a) (toN b)).
+  Proof.
+    induction b as [|b IH].
+    - rewrite sub_0; cbn [toN]; lia.
+    - rewrite sub_S, Hpred, IH; cbn [toN]; lia.
+  Qed.
+
+  Lemma toN_nat (n : Nat) : Logic.eq (toN n) (N.of_nat (nat_of_Nat n)).
+  Proof. induction n as [|n IH]; cbn [toN nat_of_Nat]; [reflexivity | rewrite IH; lia]. Qed.
+
+  (* A proof of Lean's [a ≤ b] from the binary values of [a] and [b]. *)
+  Lemma Nat_le_of_toN (a b : Nat) (wa wb : N) (Ha : Logic.eq (toN a) wa) (Hb : Logic.eq (toN b) wb)
+    (E : Logic.eq (N.leb wa wb) true) : Nat_le a b.
+  Proof.
+    apply nat_le_Nat_le. apply N.leb_le in E. rewrite <- Ha, <- Hb, !toN_nat in E. lia.
+  Qed.
+
+  (* The binary value of a term [x] that Lean proves equal to a term of known value (a proof of Lean's
+     library such as [Nat.div_eq_of_lt_le]). *)
+  Lemma toN_of_eq (x y : Nat) (w : N) (E : @eq@{Set} Nat x y) (H : Logic.eq (toN y) w) : Logic.eq (toN x) w.
+  Proof. destruct E; exact H. Qed.
+
+  Register N.add as lean.N.add.
+  Register N.mul as lean.N.mul.
+  Register N.pow as lean.N.pow.
+  Register N.sub as lean.N.sub.
+End nat_transport.
+
+(* Literal arithmetic: the cast at the type of the two terms, universe-polymorphic in the universe [u] of
+   the type, which the importer reads from the type (Lean's [Bool], [Int] and omega's [Constraint]). *)
+Section literal_arithmetic.
+  Local Set Universe Polymorphism.
+
+  Definition sprop_transport_any@{u} (A : Type@{u}) (P : A -> SProp) {x y : A} (e : @eq@{u} A x y) (p : P x)
+    : P y.
+  Proof. destruct e; exact p. Defined.
+End literal_arithmetic.
+
+(* The cast at a relevant position (README, "Transport of proof arguments across Nat literals", the item on
+   relevant positions): a term of [P x] taken to [P y] along Lean's [eq] at Nat, which this file puts in SProp;
+   with the definitional UIP of [eq] it is a term of any universe [u]. The transport pass uses it only in the value
+   of an entry whose type is a proposition, for a closed value of records of one field down to a [Fin] (the Fin
+   case's pair). *)
+Section relevant_transport.
+  Local Set Universe Polymorphism.
+
+  Definition rel_transport@{u} (P : Nat -> Type@{u}) {x y : Nat} (e : @eq@{Set} Nat x y) (p : P x) : P y.
+  Proof. destruct e; exact p. Defined.
+End relevant_transport.
+
+Register toN_succ_step as lean.toN_succ_step.
+Register toN_double_step as lean.toN_double_step.
+Register toN_unfold_step as lean.toN_unfold_step.
+Register toN_op_step as lean.toN_op_step.
+Register toN_add as lean.toN_add.
+Register toN_mul as lean.toN_mul.
+Register toN_pow as lean.toN_pow.
+Register Nat_eq_of_toN as lean.Nat_eq_of_toN.
+Register sprop_transport as lean.sprop_transport.
+Register sprop_transport_any as lean.sprop_transport_any.
+Register toN_pred as lean.toN_pred.
+Register toN_sub as lean.toN_sub.
+Register Nat_le_of_toN as lean.Nat_le_of_toN.
+Register toN_of_eq as lean.toN_of_eq.
+Register rel_transport as lean.rel_transport.

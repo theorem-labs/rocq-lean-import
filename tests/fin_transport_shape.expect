@@ -1,0 +1,174 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_shape.log.out	+	line 8472: RLI434S.cast_127: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 8479: RLI434S.result_127: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 8506: RLI434S.fin_and_nat: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1, RLI434S_fin_and_nat__nat_eq_1)
+fin_transport_shape.log.out	+	line 9203: RLI434S.chain_3: 1 argument(s) transported (RLI434S_chain_3__nat_eq_1)
+fin_transport_shape.log.out	+	line 9247: RLI434S.chain_4: 1 argument(s) transported (RLI434S_chain_3__nat_eq_1)
+fin_transport_shape.log.out	+	line 9396: RLI434S.side_63: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 9407: RLI434S.side_64: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10055: RLI434S.bind3_63: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10068: RLI434S.bind3_64: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10197: RLI434S.proj_63: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10206: RLI434S.proj_64: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 9862: RLI434S.step_let: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10864: RLI434S.chain_0_small: 1 argument(s) transported (RLI434S_chain_0_small__nat_eq_1)
+fin_transport_shape.log.out	+	line 10895: RLI434S.fin12292: 1 argument(s) transported (RLI434S_fin12292__nat_eq_1)
+fin_transport_shape.log.out	+	line 10916: RLI434S.chain_0: 2 argument(s) transported (RLI434S_fin12292__nat_eq_1, RLI434S_chain_0__nat_eq_1)
+fin_transport_shape.log.out	+	line 10959: RLI434S.chain_1: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 10986: RLI434S.lam_63: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	line 11013: RLI434S.lam_64: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape.log.out	+	Skipping: Error at line 9420 (for RLI434S.side_65)
+fin_transport_shape.log.out	-	RLI434S.side_65: 
+fin_transport_shape.log.out	+	Skipping: Error at line 10081 (for RLI434S.bind3_65)
+fin_transport_shape.log.out	-	RLI434S.bind3_65: 
+fin_transport_shape.log.out	+	Skipping: Error at line 10222 (for RLI434S.proj_65)
+fin_transport_shape.log.out	-	RLI434S.proj_65: 
+fin_transport_shape.log.out	+	Skipping: Error at line 11042 (for RLI434S.lam_65)
+fin_transport_shape.log.out	-	RLI434S.lam_65: 
+fin_transport_shape.log.out	+	Skipping: Error at line 9584 (for RLI434S.chain_5)
+fin_transport_shape.log.out	-	RLI434S.chain_5: 
+fin_transport_shape.log.out	+	line 9616: RLI434S.sub_value: 1 argument(s) transported (RLI434S_sub_value__nat_eq_1)
+fin_transport_shape.log.out	+	Skipping: Error at line 9624 (for RLI434S.gate_const)
+fin_transport_shape.log.out	-	RLI434S.gate_const: 
+fin_transport_shape.log.out	+	Skipping: Error at line 9756 (for RLI434S.stop_match)
+fin_transport_shape.log.out	-	RLI434S.stop_match: 
+fin_transport_shape.log.out	+	Skipping: Error at line 9805 (for RLI434S.stop_fix)
+fin_transport_shape.log.out	-	RLI434S.stop_fix: 
+fin_transport_shape.log.out	+	Skipping: Error at line 9847 (for RLI434S.stop_proj)
+fin_transport_shape.log.out	-	RLI434S.stop_proj: 
+fin_transport_shape.log.out	+	line 9443: RLI434S.open_pair
+fin_transport_shape.log.out	-	RLI434S.open_pair: 
+fin_transport_shape.log.out	-	(for RLI434S.open_pair)
+fin_transport_shape.log.out	+	line 9503: RLI434S.two_fields
+fin_transport_shape.log.out	-	RLI434S.two_fields: 
+fin_transport_shape.log.out	-	(for RLI434S.two_fields)
+fin_transport_shape.log.out	+	line 9540: RLI434S.other_width
+fin_transport_shape.log.out	-	RLI434S.other_width: 
+fin_transport_shape.log.out	-	(for RLI434S.other_width)
+fin_transport_shape.log.out	+	line 9653: RLI434S.stop_axiom
+fin_transport_shape.log.out	-	RLI434S.stop_axiom: 
+fin_transport_shape.log.out	-	(for RLI434S.stop_axiom)
+fin_transport_shape.log.out	+	line 9733: RLI434S.stop_opaque
+fin_transport_shape.log.out	-	RLI434S.stop_opaque: 
+fin_transport_shape.log.out	-	(for RLI434S.stop_opaque)
+fin_transport_shape.log.out	+	line 9884: RLI434S.mod_zero
+fin_transport_shape.log.out	-	RLI434S.mod_zero: 
+fin_transport_shape.log.out	-	(for RLI434S.mod_zero)
+fin_transport_shape.log.out	+	line 9916: RLI434S.mod_novalue
+fin_transport_shape.log.out	-	RLI434S.mod_novalue: 
+fin_transport_shape.log.out	-	(for RLI434S.mod_novalue)
+fin_transport_shape.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+fin_transport_shape.log.out	+	Skipped 9
+fin_transport_shape.log.out	+	Done!
+fin_transport_shape_ordinary_deps.log.out	-	Error at line
+fin_transport_shape_ordinary.log.out	+	line 8485: RLI434SW.ordinary
+fin_transport_shape_ordinary.log.out	+	Done!
+fin_transport_shape_ordinary.log.out	-	the transport pass stops
+fin_transport_shape_ordinary.log.out	+	line 8485: RLI434SW.ordinary: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape_ordinary.log.out	-	Error at line
+fin_transport_shape_poly_body_deps.log.out	-	Error at line
+fin_transport_shape_poly_body_precharge.log.out	+	line 8862: RLI434SW.poly_body: the transport pass stops: it needs more than 3936 steps
+fin_transport_shape_poly_body_precharge.log.out	-	argument(s) transported
+fin_transport_shape_poly_body_precharge.log.out	+	Done!
+fin_transport_shape_poly_body_precharge.log.out	+	Skipping: Error at line 8862 (for RLI434SW.poly_body)
+fin_transport_shape_poly_body_precharge.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_poly_body.log.out	+	line 8862: RLI434SW.poly_body
+fin_transport_shape_poly_body.log.out	+	Done!
+fin_transport_shape_poly_body.log.out	-	the transport pass stops
+fin_transport_shape_poly_body.log.out	+	line 8862: RLI434SW.poly_body: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_poly_body.log.out	-	Error at line
+fin_transport_shape_binder_depth_deps.log.out	-	Error at line
+fin_transport_shape_binder_depth_closed.log.out	+	line 8969: RLI434SW.binder_depth: the transport pass stops: it needs more than 2407 steps
+fin_transport_shape_binder_depth_closed.log.out	-	argument(s) transported
+fin_transport_shape_binder_depth_closed.log.out	+	Done!
+fin_transport_shape_binder_depth_closed.log.out	+	Skipping: Error at line 8969 (for RLI434SW.binder_depth)
+fin_transport_shape_binder_depth_closed.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_binder_depth.log.out	+	line 8969: RLI434SW.binder_depth
+fin_transport_shape_binder_depth.log.out	+	Done!
+fin_transport_shape_binder_depth.log.out	-	the transport pass stops
+fin_transport_shape_binder_depth.log.out	+	line 8969: RLI434SW.binder_depth: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_binder_depth.log.out	-	Error at line
+fin_transport_shape_parameters_equal_deps.log.out	-	Error at line
+fin_transport_shape_parameters_equal_parameters.log.out	+	line 9036: RLI434SW.parameters_equal: the transport pass stops: it needs more than 10169 steps
+fin_transport_shape_parameters_equal_parameters.log.out	-	argument(s) transported
+fin_transport_shape_parameters_equal_parameters.log.out	+	Done!
+fin_transport_shape_parameters_equal_parameters.log.out	-	Error at line
+fin_transport_shape_parameters_equal.log.out	+	line 9036: RLI434SW.parameters_equal
+fin_transport_shape_parameters_equal.log.out	+	Done!
+fin_transport_shape_parameters_equal.log.out	-	the transport pass stops
+fin_transport_shape_parameters_equal.log.out	+	line 9036: RLI434SW.parameters_equal: 1 argument(s) transported (RLI434SW_parameters_equal__nat_eq_1)
+fin_transport_shape_parameters_equal.log.out	-	Error at line
+fin_transport_shape_parameters_differ_deps.log.out	-	Error at line
+fin_transport_shape_parameters_differ.log.out	+	line 9084: RLI434SW.parameters_differ
+fin_transport_shape_parameters_differ.log.out	+	Done!
+fin_transport_shape_parameters_differ.log.out	-	the transport pass stops
+fin_transport_shape_parameters_differ.log.out	-	argument(s) transported
+fin_transport_shape_parameters_differ.log.out	-	Error at line
+fin_transport_shape_beta_subst_deps.log.out	-	Error at line
+fin_transport_shape_beta_subst_beta.log.out	+	line 9428: RLI434SW.beta_subst: the transport pass stops: it needs more than 56070 steps
+fin_transport_shape_beta_subst_beta.log.out	-	argument(s) transported
+fin_transport_shape_beta_subst_beta.log.out	+	Done!
+fin_transport_shape_beta_subst_beta.log.out	+	Skipping: Error at line 9428 (for RLI434SW.beta_subst)
+fin_transport_shape_beta_subst_beta.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_beta_subst.log.out	+	line 9428: RLI434SW.beta_subst
+fin_transport_shape_beta_subst.log.out	+	Done!
+fin_transport_shape_beta_subst.log.out	-	the transport pass stops
+fin_transport_shape_beta_subst.log.out	+	line 9428: RLI434SW.beta_subst: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_beta_subst.log.out	-	Error at line
+fin_transport_shape_let_subst_deps.log.out	-	Error at line
+fin_transport_shape_let_subst_zeta.log.out	+	line 9441: RLI434SW.let_subst: the transport pass stops: it needs more than 56066 steps
+fin_transport_shape_let_subst_zeta.log.out	-	argument(s) transported
+fin_transport_shape_let_subst_zeta.log.out	+	Done!
+fin_transport_shape_let_subst_zeta.log.out	+	Skipping: Error at line 9441 (for RLI434SW.let_subst)
+fin_transport_shape_let_subst_zeta.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_let_subst.log.out	+	line 9441: RLI434SW.let_subst
+fin_transport_shape_let_subst.log.out	+	Done!
+fin_transport_shape_let_subst.log.out	-	the transport pass stops
+fin_transport_shape_let_subst.log.out	+	line 9441: RLI434SW.let_subst: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_let_subst.log.out	-	Error at line
+fin_transport_shape_early_cap_deps.log.out	-	Error at line
+fin_transport_shape_early_cap.log.out	+	line 9824: RLI434SW.early_cap
+fin_transport_shape_early_cap.log.out	+	Done!
+fin_transport_shape_early_cap.log.out	-	the transport pass stops
+fin_transport_shape_early_cap.log.out	+	line 9824: RLI434SW.early_cap: 1 argument(s) transported (RLI434S_cast_127__nat_eq_1)
+fin_transport_shape_early_cap.log.out	-	Error at line
+fin_transport_shape_flatten_deps.log.out	-	Error at line
+fin_transport_shape_flatten_stop.log.out	+	line 9955: RLI434SW.flatten: the transport pass stops: it needs more than 2650 steps
+fin_transport_shape_flatten_stop.log.out	-	argument(s) transported
+fin_transport_shape_flatten_stop.log.out	+	Done!
+fin_transport_shape_flatten_stop.log.out	+	Skipping: Error at line 9955 (for RLI434SW.flatten)
+fin_transport_shape_flatten_stop.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_flatten.log.out	+	line 9955: RLI434SW.flatten
+fin_transport_shape_flatten.log.out	+	Done!
+fin_transport_shape_flatten.log.out	-	the transport pass stops
+fin_transport_shape_flatten.log.out	+	line 9955: RLI434SW.flatten: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_flatten.log.out	-	Error at line
+fin_transport_shape_product_peel_deps.log.out	-	Error at line
+fin_transport_shape_product_peel.log.out	+	line 10081: RLI434SW.product_peel
+fin_transport_shape_product_peel.log.out	+	Done!
+fin_transport_shape_product_peel.log.out	-	the transport pass stops
+fin_transport_shape_product_peel.log.out	+	line 10081: RLI434SW.product_peel: 1 argument(s) transported (RLI434SW_product_peel__nat_eq_1)
+fin_transport_shape_product_peel.log.out	-	Error at line
+fin_transport_shape_head_fits_deps.log.out	-	Error at line
+fin_transport_shape_head_fits.log.out	+	line 10137: RLI434SW.head_fits
+fin_transport_shape_head_fits.log.out	+	Done!
+fin_transport_shape_head_fits.log.out	-	the transport pass stops
+fin_transport_shape_head_fits.log.out	+	line 10137: RLI434SW.head_fits: 1 argument(s) transported (RLI434SW_poly_body__nat_eq_1)
+fin_transport_shape_head_fits.log.out	-	Error at line
+fin_transport_shape_head_overflow_deps.log.out	-	Error at line
+fin_transport_shape_head_overflow.log.out	+	line 10299: RLI434SW.head_overflow
+fin_transport_shape_head_overflow.log.out	+	Done!
+fin_transport_shape_head_overflow.log.out	+	line 10299: RLI434SW.head_overflow: the transport pass stops: it needs more than 4611686018427387903 steps
+fin_transport_shape_head_overflow.log.out	-	argument(s) transported
+fin_transport_shape_head_overflow.log.out	-	Error at line
+fin_transport_shape_product_peel_arg_deps.log.out	-	Error at line
+fin_transport_shape_product_peel_arg_peel.log.out	+	line 10327: RLI434SW.product_peel_arg: the transport pass stops: it needs more than 2997 steps
+fin_transport_shape_product_peel_arg_peel.log.out	-	argument(s) transported
+fin_transport_shape_product_peel_arg_peel.log.out	+	Done!
+fin_transport_shape_product_peel_arg_peel.log.out	+	Skipping: Error at line 10327 (for RLI434SW.product_peel_arg)
+fin_transport_shape_product_peel_arg_peel.log.out	+	Timed out after 20 s (Lean Entry Timeout)
+fin_transport_shape_product_peel_arg.log.out	+	line 10327: RLI434SW.product_peel_arg
+fin_transport_shape_product_peel_arg.log.out	+	Done!
+fin_transport_shape_product_peel_arg.log.out	-	the transport pass stops
+fin_transport_shape_product_peel_arg.log.out	+	line 10327: RLI434SW.product_peel_arg: 1 argument(s) transported (RLI434SW_product_peel__nat_eq_1)
+fin_transport_shape_product_peel_arg.log.out	-	Error at line

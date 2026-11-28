@@ -1,0 +1,33 @@
+# Log file, polarity, literal substring (tab-separated).
+# W4, UInt32.size := 2147483648: no lemma, Char.ofNatAux refused.
+nat_transport_size.log.out	+	Error at line 5118 (for Char.ofNatAux)
+nat_transport_size.log.out	-	argument(s) transported
+nat_transport_size.log.out	-	generated lemma
+nat_transport_size.log.out	+	Done!
+# W4, Nat.pow m n := Nat.zero: the kernel refuses the generated lemma, Char.ofNatAux refused.
+nat_transport_pow.log.out	+	line 5118: Char.ofNatAux: the generated lemma Char_ofNatAux__nat_eq_1 : 
+nat_transport_pow.log.out	+	is refused by the kernel
+nat_transport_pow.log.out	-	argument(s) transported
+nat_transport_pow.log.out	+	Error at line 5118 (for Char.ofNatAux)
+nat_transport_pow.log.out	+	Done!
+# W1, W5: char.ndjson.
+nat_transport_char.log.out	+	line 5118: Char.ofNatAux: 1 argument(s) transported (Char_ofNatAux__nat_eq_1)
+nat_transport_char.log.out	-	Char.ofNat: 
+nat_transport_char.log.out	-	Char.ofNat._proof_1: 
+nat_transport_char.log.out	-	Error at line
+nat_transport_char.log.out	+	Done!
+# The generated lemma relies on the definitional UIP of Lean's eq and on nothing else: Print Assumptions gives
+# exactly that line under its "Axioms:" header (an axiom would add "name : type", an unchecked elimination
+# "X relies on unchecked sort eliminations."), and an empty log is no result.
+nat_transport_assumptions_lemma.log.out	=	Axioms:\neq relies on definitional UIP.\n
+nat_transport_assumptions_toN.log.out	+	Closed under the global context
+nat_transport_assumptions_eq.log.out	+	relies on definitional UIP.
+nat_transport_assumptions_eq.log.out	-	 :
+nat_transport_print_aux.log.out	+	sprop_transport
+nat_transport_print_ofnat.log.out	-	sprop_transport
+# W2, W3: uint32_transport.ndjson.
+nat_transport_uint32.log.out	+	line 1062: UInt32.ofNatLT: 1 argument(s) transported (Char_ofNatAux__nat_eq_1)
+nat_transport_uint32.log.out	+	line 12267: UInt32.toNat_shiftLeft: 
+nat_transport_uint32.log.out	+	line 12297: UInt32.toNat_ofNatLT: 1 argument(s) transported (Char_ofNatAux__nat_eq_1)
+nat_transport_uint32.log.out	-	Error at line
+nat_transport_uint32.log.out	+	Done!

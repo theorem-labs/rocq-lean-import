@@ -19,7 +19,10 @@ type expr =
   | Lam of binder_kind * LeanName.t * expr * expr
   | Pi of binder_kind * LeanName.t * expr * expr
   | Proj of LeanName.t * int * expr  (** Proj: name of ind, field, term *)
-  | Nat of Z.t
+  | Nat of string
+      (** A natural number literal: the decimal string of its value that [LeanParseShared.nat_lit] writes, and
+          the term builder of lean.ml reads with [Z.of_string]; a string, not a [Z.t], for the reason stated at
+          [lean_obj] in lean.ml. *)
   | String of string
 
 type def = { name : LeanName.t; ty : expr; body : expr; univs : LeanName.t list; }

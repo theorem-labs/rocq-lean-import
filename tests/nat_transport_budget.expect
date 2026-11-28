@@ -1,0 +1,13 @@
+# Log file, polarity, literal substring (tab-separated).
+nat_transport_budget.log.out	+	line 1009: RLI434D1.c0
+nat_transport_budget.log.out	-	Error at line 1009
+nat_transport_budget.log.out	+	line 1019: RLI434D1.refl
+nat_transport_budget.log.out	-	Error at line 1019
+nat_transport_budget.log.out	+	line 1023: RLI434D1.lit: the transport pass stops: it needs more than 1000000 steps
+nat_transport_budget.log.out	-	RLI434D1.lit: 1 argument(s) transported
+nat_transport_budget.log.out	+	Skipping: Error at line 1023 (for RLI434D1.lit)
+nat_transport_budget.log.out	+	Done!
+nat_transport_budget_fits.log.out	+	line 1145: RLI434D1.under: 14 argument(s) transported (RLI434D1_under__nat_eq_1,
+nat_transport_budget_fits.log.out	-	RLI434D1.under: the transport pass stops
+nat_transport_budget_fits.log.out	-	Error at line
+nat_transport_budget_fits.log.out	+	Done!

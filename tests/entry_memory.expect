@@ -1,0 +1,40 @@
+# Log file, polarity, literal substring (tab-separated); "<=N" compares two heap readings (tests/check_expect.py).
+entry_memory_zero.log.out	+	Lean Entry Memory Limit must be a positive number of GiB, not 0.
+entry_memory_negative.log.out	+	Lean Entry Memory Limit must be a positive number of GiB, not -1.
+entry_memory_under.log.out	+	Done!
+entry_memory_under.log.out	-	Error at line
+entry_memory_fail.log.out	+	Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_fail.log.out	+	Memory limit of 1 GiB reached (Lean Entry Memory Limit); major heap at the entry's start:
+entry_memory_stop.log.out	+	Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_stop.log.out	+	Memory limit of 1 GiB reached (Lean Entry Memory Limit); major heap at the entry's start:
+entry_memory_stop.log.out	-	Skipping: Error at line
+entry_memory_skip.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_skip.log.out	+	Skipping: Error at line 2493 (for RLI434.boundedVal._proof_2)
+entry_memory_skip.log.out	<=768	Memory limit of 1 GiB reached (Lean Entry Memory Limit); major heap at the entry's start:
+entry_memory_skip.log.out	+	Skipped 2
+entry_memory_skip.log.out	+	Done!
+entry_memory_skip.log.out	-	missing
+entry_memory_skip.log.out	-	not found
+entry_memory_skip.log.out	-	Unknown
+entry_memory_skip.log.out	-	Timed out
+entry_memory_skip.log.out	-	timeout
+entry_memory_skip.log.out	-	ill-typed
+entry_memory_skip.log.out	-	Illegal application
+entry_memory_skip.log.out	-	unsupported
+entry_memory_skip.log.out	-	not supported
+entry_memory_first.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_first.log.out	+	Memory limit of 1 GiB reached (Lean Entry Memory Limit)
+entry_memory_first.log.out	-	Timed out
+entry_memory_time_first.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_time_first.log.out	+	Timed out after 2 s (Lean Entry Timeout); major heap at the entry's start:
+entry_memory_time_first.log.out	-	Memory limit
+entry_memory_unset.log.out	+	Skipping: Error at line 2491 (for RLI434.boundedVal._proof_1)
+entry_memory_unset.log.out	+	Skipping: Error at line 2493 (for RLI434.boundedVal._proof_2)
+entry_memory_unset.log.out	<=768	Timed out after 10 s (Lean Entry Timeout); major heap at the entry's start:
+entry_memory_unset.log.out	-	Memory limit
+# M9: the outer Timeout, with both entry limits set: neither limit's refusal.
+entry_memory_outer.log.out	+	Timeout!
+entry_memory_outer.log.out	-	Memory limit
+entry_memory_outer.log.out	-	(Lean Entry Memory Limit)
+entry_memory_outer.log.out	-	Timed out
+entry_memory_outer.log.out	-	(Lean Entry Timeout)

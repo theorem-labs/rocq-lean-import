@@ -1,0 +1,20 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_bitwise_noofnat.log.out	+	line 122: RLI434B.noofnat
+fin_transport_bitwise_noofnat.log.out	-	RLI434B.noofnat: 
+fin_transport_bitwise_noofnat.log.out	-	(for RLI434B.noofnat)
+fin_transport_bitwise_noofnat.log.out	-	the transport pass fails
+fin_transport_bitwise_noofnat.log.out	+	Done!
+fin_transport_bitwise_absent.log.out	+	line 15810: RLI434B.u32_lor: 1 argument(s) transported (RLI434B_u32_lor__nat_eq_1)
+fin_transport_bitwise_absent.log.out	+	line 15881: RLI434B.land_class: 1 argument(s) transported (RLI434B_land_class__nat_eq_1)
+fin_transport_bitwise_absent.log.out	+	line 15904: RLI434B.lor_class: 1 argument(s) transported (RLI434B_lor_class__nat_eq_1)
+fin_transport_bitwise_absent.log.out	+	line 16158: RLI434B.xor_both: 1 argument(s) transported (RLI434B_xor_both__nat_eq_1)
+fin_transport_bitwise_absent.log.out	+	line 15875: RLI434B.land_fun
+fin_transport_bitwise_absent.log.out	-	RLI434B.land_fun: 
+fin_transport_bitwise_absent.log.out	-	(for RLI434B.land_fun)
+fin_transport_bitwise_absent.log.out	-	the transport pass fails
+fin_transport_bitwise_absent.log.out	+	Done!
+fin_transport_bitwise_absent_differ.log.out	+	Skipping: Error at line 19573 (for RLI434B.w_differ)
+fin_transport_bitwise_absent_differ.log.out	-	RLI434B.w_differ: 
+fin_transport_bitwise_absent_differ.log.out	-	the transport pass fails
+fin_transport_bitwise_absent_differ.log.out	+	Done!
+fin_transport_bitwise_absent_differ.log.out	-	the transported value is refused

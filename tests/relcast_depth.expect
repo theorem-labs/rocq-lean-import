@@ -1,0 +1,30 @@
+# Log file, polarity, literal substring (tab-separated).
+relcast_depth_lib.log.out	+	Done!
+relcast_depth_lib.log.out	-	Error at line
+relcast_detect_depth_9989.log.out	+	RLI434RD.detect_depth_9989: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RD_rel_depth__rel_eq_1)
+relcast_detect_depth_9989.log.out	-	the relevant pass
+relcast_detect_depth_9989.log.out	-	the transport pass stops
+relcast_detect_depth_9989.log.out	-	Error at line
+relcast_detect_depth_9989.log.out	+	Done!
+relcast_detect_depth_9990.log.out	+	RLI434RD.detect_depth_9990: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RD_rel_depth__rel_eq_1)
+relcast_detect_depth_9990.log.out	-	the relevant pass
+relcast_detect_depth_9990.log.out	-	the transport pass stops
+relcast_detect_depth_9990.log.out	-	Error at line
+relcast_detect_depth_9990.log.out	+	Done!
+relcast_detect_depth_9991.log.out	-	RLI434RD.detect_depth_9991: 
+relcast_detect_depth_9991.log.out	-	the transport pass stops
+relcast_detect_depth_9991.log.out	-	Error at line
+relcast_detect_depth_9991.log.out	+	Done!
+relcast_rel_depth_9989.log.out	+	RLI434RD.rel_depth_9989: 0 argument(s) transported (); 2 relevant argument(s) cast (RLI434RD_rel_depth__rel_eq_1)
+relcast_rel_depth_9989.log.out	-	the relevant pass
+relcast_rel_depth_9989.log.out	-	Error at line
+relcast_rel_depth_9989.log.out	+	Done!
+relcast_rel_depth_9990.log.out	+	RLI434RD.rel_depth_9990: 0 argument(s) transported (); 2 relevant argument(s) cast (RLI434RD_rel_depth__rel_eq_1)
+relcast_rel_depth_9990.log.out	-	the relevant pass
+relcast_rel_depth_9990.log.out	-	Error at line
+relcast_rel_depth_9990.log.out	+	Done!
+relcast_rel_depth_9991.log.out	+	RLI434RD.rel_depth_9991: the relevant pass stops: it needs more than 1000000 steps or a nesting deeper than 10000; no relevant argument is cast
+relcast_rel_depth_9991.log.out	-	relevant argument(s) cast
+relcast_rel_depth_9991.log.out	-	the transport pass stops
+relcast_rel_depth_9991.log.out	-	Error at line
+relcast_rel_depth_9991.log.out	+	Done!

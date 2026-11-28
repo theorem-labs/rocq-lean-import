@@ -1,0 +1,23 @@
+# Log file, polarity, literal substring (tab-separated).
+entry_timeout_zero.log.out	+	Lean Entry Timeout must be a positive number of seconds, not 0.
+entry_timeout_negative.log.out	+	Lean Entry Timeout must be a positive number of seconds, not -1.
+entry_timeout_large.log.out	+	line 131: RLI434T.fast
+entry_timeout_large.log.out	+	- 5 entries
+entry_timeout_unset.log.out	+	line 2195: RLI434T.slow_sum
+entry_timeout_unset.log.out	-	Error at line
+entry_timeout_outer.log.out	+	Timeout!
+entry_timeout_outer.log.out	-	(Lean Entry Timeout)
+entry_timeout_stop.log.out	+	Error at line 2218 (for RLI434T.slower_sum)
+entry_timeout_stop.log.out	+	Timed out after 1 s (Lean Entry Timeout)
+entry_timeout_stop.log.out	-	RLI434T.after_slow
+entry_timeout_stop.log.out	-	Skipping: Error at line
+entry_timeout_fail.log.out	+	Error at line 2218 (for RLI434T.slower_sum)
+entry_timeout_fail.log.out	+	Timed out after 1 s (Lean Entry Timeout)
+entry_timeout_fail.log.out	-	RLI434T.after_slow
+entry_timeout_skip.log.out	+	Skipping: Error at line 2218 (for RLI434T.slower_sum)
+entry_timeout_skip.log.out	+	Timed out after 1 s (Lean Entry Timeout)
+entry_timeout_skip.log.out	+	Skipping: Error at line 2229 (for RLI434T.needs_slower)
+entry_timeout_skip.log.out	+	missing RLI434T.slower_sum
+entry_timeout_skip.log.out	+	Done!
+entry_timeout_inductive.log.out	+	Error at line 2202 (for RLI434T.SlowBox)
+entry_timeout_inductive.log.out	+	Timed out after 1 s (Lean Entry Timeout)

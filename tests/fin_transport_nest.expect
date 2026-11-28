@@ -1,0 +1,9 @@
+# Log file, polarity, literal substring (tab-separated).
+fin_transport_nest_base.log.out	-	Error at line
+fin_transport_nest_rest.log.out	+	line 10534: RLI434N.axNest
+fin_transport_nest_rest.log.out	-	Error at line
+fin_transport_nest.log.out	+	line 10564: RLI434N.nest_1000: 1 argument(s) transported (RLI434N_nest_1000__nat_eq_1)
+fin_transport_nest.log.out	-	the transport pass stops
+fin_transport_nest.log.out	-	Error at line
+fin_transport_nest.log.out	+	Done!
+fin_transport_nest_budget.log.out	+	Current value of Lean Transport Step Budget is 27251

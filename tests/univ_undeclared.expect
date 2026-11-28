@@ -1,0 +1,22 @@
+# Log file, polarity, literal substring (tab-separated).
+# Nat (line 51) and Eq (line 101), the entries of pow.ndjson that the planted ones use.
+univ_undeclared.log.out	+	line 101: Eq
+univ_undeclared.log.out	-	(for Nat)
+univ_undeclared.log.out	-	(for Eq)
+# RLIU.refl_u (line 111): the universe u in the universe instance of Eq.refl.
+univ_undeclared.log.out	+	Skipping: Error at line 111 (for RLIU.refl_u)
+univ_undeclared.log.out	+	the universe u is not a universe parameter of this entry (its parameters: none)
+# RLIU.refl_one (line 116), the next entry, is declared (tests/univ_undeclared.v checks it).
+univ_undeclared.log.out	+	line 116: RLIU.refl_one
+univ_undeclared.log.out	-	(for RLIU.refl_one)
+# RLIU.sort_u_1 (line 120), whose parameter is u: the sort Sort u_1 in its type.
+univ_undeclared.log.out	+	Skipping: Error at line 120 (for RLIU.sort_u_1)
+univ_undeclared.log.out	+	the universe u_1 is not a universe parameter of this entry (its parameters: u)
+# RLIU.Box (line 128): the sort Sort v in its constructor's type.
+univ_undeclared.log.out	+	Skipping: Error at line 128 (for RLIU.Box)
+univ_undeclared.log.out	+	the universe v is not a universe parameter of this entry (its parameters: none)
+# No anomaly; before the fix, each planted entry was refused with the second one (the r5 lines of the test).
+univ_undeclared.log.out	-	Anomaly
+univ_undeclared.log.out	-	Anomaly "File "clib/cMap.ml", line 145, characters 16-22: Assertion failed."
+univ_undeclared.log.out	+	Skipped 3
+univ_undeclared.log.out	+	Done!

@@ -1,0 +1,4 @@
+# Log file, polarity, literal substring (tab-separated).
+nat_transport_step_budget_zero.log.out	+	Lean Transport Step Budget must be a positive number of steps, not 0.
+nat_transport_step_budget_negative.log.out	+	Lean Transport Step Budget must be a positive number of steps, not -1.
+nat_transport_step_budget_unset.log.out	+	Current value of Lean Transport Step Budget is undefined

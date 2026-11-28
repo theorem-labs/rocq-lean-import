@@ -1,0 +1,16 @@
+# Log file, polarity, literal substring (tab-separated).
+# Fail stops on the same first refusal and never reaches the successor.
+parse_text_recovery_fail.log.out	+	Error at line 11 (for line-11)
+parse_text_recovery_fail.log.out	+	unknown expression 99
+parse_text_recovery_fail.log.out	-	Skipping:
+parse_text_recovery_fail.log.out	-	Error at line 12 (
+parse_text_recovery_fail.log.out	-	RLITextRefused
+parse_text_recovery_fail.log.out	-	RLITextAfter
+# Skip keeps expression 3 unavailable and admits expression 4.
+parse_text_recovery.log.out	+	Skipping: Error at line 11 (for line-11)
+parse_text_recovery.log.out	-	Error at line 12 (
+parse_text_recovery.log.out	+	Error at line 13 (
+parse_text_recovery.log.out	+	uses expression 3 of a refused line
+parse_text_recovery.log.out	-	Error at line 15 (
+parse_text_recovery.log.out	+	Done!
+parse_text_recovery.log.out	+	Skipped 2

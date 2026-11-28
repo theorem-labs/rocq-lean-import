@@ -7,9 +7,13 @@ src/ULiftCumulativeRegistration.v
 src/g_lean.mlg
 src/lean.ml
 src/lean.mli
+src/leanChargedTerm.ml
+src/leanChargedTerm.mli
 src/leanExpr.mli
 src/leanName.ml
 src/leanName.mli
+src/leanNatTransport.ml
+src/leanNatTransport.mli
 src/leanParseShared.ml
 src/leanParseShared.mli
 src/leanParse.ml

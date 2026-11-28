@@ -93,9 +93,33 @@ An "entry" means an axiom or constant, or an inductive type (including
 its constructors and recursor), or the primitive quotient declarations
 `quot`, `quot.mk`, `quot.lift` and `quot.ind`.
 
-For ease of debugging, `Lean Import` will succeed even when an error
-occurs: this allows inspecting the state from just before the failing entry.
-This may probably be changed to only happen in a debugging mode at some point.
+By default `Lean Import` fails at the first error. With `Set Lean Error
+Mode "Stop".` it succeeds instead, which allows inspecting the state from
+just before the failing entry (see `Lean Error Mode` below).
+
+# How do I run the tests?
+
+`make test` builds the plugin and runs each test of `tests/_CoqProject`
+(`make -k test` runs every one even after a failure). Two of the exports
+the tests read, `dumps/init.ndjson.zip` and `dumps/stdlib.ndjson.zip`, are
+Git LFS objects: in a clone made without Git LFS they are small pointer
+files, and `tests/Makefile`, which extracts each archive next to it on the
+first run, fails on them. Fetch them first:
+
+~~~sh
+git lfs install
+git lfs pull --include 'dumps/init.ndjson.zip,dumps/stdlib.ndjson.zip'
+make test
+~~~
+
+After it makes a test that its `ROCQCHK_TESTS` names, `tests/Makefile`
+runs `rocqchk` (the cut's, on CI) on the test's `.vo`, its output in
+`tests/<name>.rocqchk.log`; when rocqchk refuses the file, the make
+prints `ROCQCHK FAIL: tests/<name>.vo: ` and the first line of that log
+that is not blank, and fails. When a make that passed left no `.vo` of
+such a test, it prints `ROCQCHK MISSING: tests/<name>.vo: ...` and
+fails. The step shows that rocqchk reads the importer's state that
+`Lean Import` stores in the `.vo` (see "Natural number literals").
 
 # How does it work?
 
@@ -202,7 +226,11 @@ The full process of translating a universe expression is then:
     (note that the successor of `SProp` is `Set + 1`, not `SProp + 1`
     which is invalid)
   - a Lean universe parameter is translated to `SProp` or a Coq named
-    universe (depending on which instance we are currently producing)
+    universe (depending on which instance we are currently producing).
+    A universe name that is not one of the entry's universe parameters
+    (its `levelParams` in the export) refuses the entry with `the
+    universe <name> is not a universe parameter of this entry (its
+    parameters: <parameters>)`, with `none` for an entry that has none
   - `max(a,b)` is translated to the max of the respective translations
   - `imax(a,b)` is translated to `SProp` if `b` is translated to
     `SProp`, otherwise to the max of the respective translations.
@@ -298,6 +326,413 @@ Because the `lift` mentions equality, `Coq.Lean` also predeclares the
 equality type (we can't use the one from Coq's standard library since
 it's not polymorphic). Declaring the eliminators for equality is still
 done by `Lean Import`.
+
+## Predeclared constants and the path of an export
+
+Besides equality and the quotient, `src/Lean.v` predeclares a few Lean
+types and definitions, and `Lean Import` binds the export's entry of
+each to the predeclared one instead of declaring it: `Eq`, `Nat`,
+`Nat.le`, `Or`, `And`, `Fin`, `ULift` (with
+`ULiftCumulativeRegistration`, see `src/ULiftCumulativeRegistration.v`)
+and, on the legacy path only, `BitVec`, `UInt32`, `Char`, `UInt32.size`,
+`Nat.isValidChar` and `Nat.pow`.
+
+An NDJSON export takes the new path when its metadata line gives
+`lean.version` 4.17.0 or later (a leading `v` and a suffix after `-`,
+as in `4.17.0-rc1`, are ignored), and the legacy path for an earlier
+version. An export in the old text format takes the legacy path. An
+NDJSON export whose metadata has no `lean` object or no
+`MAJOR.MINOR.PATCH` version takes the legacy path with a warning that
+names the field and its value. The path is chosen before the first
+entry, from the metadata only.
+
+Each entry is saved with the path, and the Lean version, of the export
+that gave it. An instance that is declared only when an entry first
+asks for it (an instance at `Prop`, see "Prop instantiations" above, or
+any instance under `Lean Lazy Instantiation`) may be asked for by an
+entry of a later export: it is declared on the saved path and version,
+after which the entry that asked goes on on its own export's path and
+version. A compiled Rocq library keeps the saved paths and versions, so
+a later import in another Rocq process that loads the library declares
+such an instance the same way.
+
+On the new path `BitVec`, `UInt32`, `Char`, `UInt32.size`,
+`Nat.isValidChar` and `Nat.pow` are imported from their own entries, as
+Lean defines them, and a string literal is translated as the term
+Lean's kernel unfolds it to (its `string_lit_to_constructor`): the
+string constructor applied to a list of `Char.ofNat <code point>`.
+The constructor is `String.mk` for an export of Lean 4.17.0 to 4.25.x
+and `String.ofList` from Lean 4.26.0 on, as the metadata's
+`lean.version` says (for an instance declared later, the version saved
+with its entry); an export that does not declare that constructor is
+refused at its first literal (`missing String.mk` or `missing
+String.ofList`). On either
+path a literal must be well-formed UTF-8, as Lean's strings are. A
+repeated `UInt32` or `Char` entry is skipped as a duplicate, like any
+other entry. On the legacy path a second `UInt32` or `Char` entry may
+switch between the pre-4.17 records `UInt32_legacy`/`Char_legacy` and
+`UInt32`/`Char`.
+
+On either path each entry bound to a predeclared constant is first
+checked against it, after the translation the importer gives any entry:
+an inductive type's parameter count, type, constructor count and
+constructor types, and a definition's declared type (its value is not
+read: the predeclared one is kept). Types are compared by conversion,
+except the sort of an inductive type, which must be exactly the one the
+predeclared type stands for: `src/Lean.v` declares in `Set` the types
+Lean declares in `Type`, so a type predeclared in `Set` accepts only
+`Type@{Set+1}`, the importer's translation of Lean's `Type` (not `Type
+1` or above), and a type predeclared in `SProp` accepts only `SProp`,
+the translation of Lean's `Prop`. An entry that differs is refused with
+a message `The export's <name> does not agree with the predeclared
+<constant>: ...` that gives the difference. The constructors of the
+export are bound, by their export names, to the predeclared
+constructors in order.
+
+## Natural number literals
+
+Lean's `Nat` is imported as the unary type `Nat` of `src/Lean.v`, on
+either path. A literal below 5000 becomes `Nat_succ` applied to the
+literal one below (shared between literals). A literal `i` of 5000 or
+more becomes `Nat_succ` applied `r` times (1 to 8) to the binary form
+of `i - r` (`Nat_double` and `Nat_succ` over its bits), with `r` chosen
+so that `i - r` is 4 modulo 8. For each such `b`, large literals in
+the block `b + 1` through `b + 8` use the same binary form of `b`.
+If `j` and `j - 1` are both large literals in that block, the predecessor
+of the literal `j` is, term for term, the literal `j - 1`, and
+the kernel compares two such predecessors without unfolding
+`Nat_double`; the predecessor of the literal `b + 1` is the binary form
+of `b`, which is not the literal `b`. So a conversion that takes `k`
+`Nat_succ` off the literal `j` and meets the literal `j - k` is cheap
+when `j - k` is in the block of `j` (comparing `-(-x)` with `x` for
+`x = -134217728`, 134217728 being `b + 4`, where the plain binary form
+needs a stack as deep as the value). Crossing the block boundary can
+still force a unary walk: for example, `Nat.pred` of the literal
+134217733 reaches the binary form of 134217732, not the literal
+134217732. Before this form a literal of 5000 or more was the binary
+form of `i` itself; a tool that reads the translated terms must accept
+up to 8 leading
+`Nat_succ`.
+
+Until it builds the term, the importer keeps a literal as the decimal
+string of its value (Zarith's, so `007` and `7` are the same string),
+not as a Zarith number. `Lean Import` stores the importer's state in the
+`.vo` (the entries it read and, for an export of the old text format,
+every expression parsed so far). `rocqchk`'s reader of a `.vo` reads an
+OCaml custom block only when it is an `Int64`, and Zarith writes a
+number of 2^62 or more as a custom block with code 0x18
+(`CODE_CUSTOM_LEN`), which rocqchk refuses with `Unhandled code 0018`.
+A `.vo` that an earlier importer wrote holds Zarith numbers there;
+compile it again.
+
+Lean's kernel computes `Nat` arithmetic on literals with GMP. Rocq's
+kernel reduces Lean's own `Nat.add`, `Nat.sub`, `Nat.mul` and `Nat.pow`
+on these unary terms one `Nat_succ` at a time, so a proof that Lean's
+kernel checks by computing with large numbers (`decide` on `Int`
+values near 2^33 or above, for example) does not end in Rocq in any
+useful time, unless the transport pass below proves the values it needs
+(literal arithmetic) for the proof arguments it casts.
+
+## Transport of proof arguments across Nat literals
+
+Lean `Prop` is `SProp` here, so a proof argument whose type differs
+from the expected one only at closed `Nat` terms of equal value can be
+cast without changing anything a computation sees. On the new path,
+before the value of a definition or theorem is declared, `Lean Import`
+does that where the kernel would otherwise compare the two terms one
+`Nat_succ` at a time. Lean v4.34.0's `Char.ofNatAux`, for example,
+passes a proof of `n < UInt32.size` where `BitVec.ofNatLT 32` expects
+`n < 2 ^ 32`; Lean's kernel computes `2 ^ 32` with GMP, Rocq's would
+unfold Lean's `Nat.pow`, `Nat.mul` and `Nat.add` 2^32 times.
+
+What it changes:
+
+- An argument of an application, or the value of a theorem itself,
+  whose type is an `SProp` type that differs from the expected type
+  only at closed `Nat` terms of equal value of 4096 or more, becomes
+  `sprop_transport P x y e p` (`src/Lean.v`): `p` is Lean's proof, `P`
+  the expected type with the place abstracted, and `e : x = y` a
+  generated lemma. A closed `Nat` term is a literal, a constant whose
+  value is a closed `Nat` term (`UInt32.size`), or the export's
+  `Nat.add`, `Nat.mul`, `Nat.pow`, `HAdd.hAdd`, `HMul.hMul`,
+  `HPow.hPow` (at Lean's `Nat` instances) or `OfNat.ofNat Nat` applied
+  to closed `Nat` terms. Two terms that unfold to the same literal
+  (`UInt32.size` and `4294967296`) are left to the kernel, which
+  converts them without arithmetic.
+- The lemma `<entry>__nat_eq_<k>` (`Char_ofNatAux__nat_eq_1 :
+  UInt32.size = 2 ^ 32`, say) is declared before the entry, as a
+  constant the kernel checks like any other. For two `Nat` terms its
+  proof goes through Rocq's binary `N` (`toN` and the lemmas after it
+  in `src/Lean.v`): the export's own `Nat.add`, `Nat.mul` and
+  `Nat.pow`, whose defining equations the kernel checks by
+  `Logic.eq_refl` on open terms, a step per bit of each literal, and
+  each binary computation checked on literals. In the Fin case (below)
+  the proof goes through the unary literal `l` of the value:
+  `sprop_transport (fun n => x = n) l y (eq_refl l) (eq_refl x)`, so
+  that the kernel converts each of the two values with `l` on its own.
+  A later argument with the same two terms reuses the lemma, within the
+  Rocq file that runs the imports: the cache is not kept in a compiled
+  file, so a file that Requires one with an earlier import generates
+  the lemmas it needs again, under new names. The values the importer
+  computes only find the places: a wrong one gives a lemma the kernel
+  refuses, which is logged and not used: `line N: NAME: the generated
+  lemma ID : X = Y is refused by the kernel` when `X` and `Y` have at
+  most 256 nodes together (then followed by the kernel's error when the
+  proof has at most 256 nodes too, which a Fin lemma of a value above
+  about 60 exceeds: its proof holds the unary literal twice), else
+  `line N: NAME: the generated lemma ID is refused by the kernel (its
+  statement has more than 256 nodes and is not printed)`.
+- The import's output has one line per entry whose value changes, printed once the kernel has accepted that value:
+  `line N: NAME: <k> argument(s) transported (<lemmas>)`, and, when the value holds casts at relevant positions
+  (below), `line N: NAME: <k> argument(s) transported (<lemmas>); <r> relevant argument(s) cast (<relevant
+  lemmas>)`. `<k>` counts the proof (`SProp`) casts and `<lemmas>` names their lemmas, as the line without relevant
+  casts would; `<r>` counts the relevant arguments cast and `<relevant lemmas>` names the other lemmas the value
+  uses. `<k>` is 0 and `<lemmas>` empty when the value holds no proof cast.
+- The Fin case. Two closed terms whose head constants differ, which
+  both reduce (at most 64 steps each side in all, counting every step
+  of its head reductions: of the term, of the subject of a projection,
+  and of the field of each record; a step is the unfolding of a
+  constant, the substitution of one bound argument, so that a constant
+  applied to three arguments it binds takes four steps, a zeta step, or
+  a projection, which is counted before its subject is reduced) through
+  zero to four records of one field (a fifth gives no lemma), the same
+  records on both sides with the same parameters, to a `Fin` of the
+  same bound, and whose two `Fin` values are closed `Nat` terms of the
+  same value. Two parameters, or the two bounds, are the same when they
+  are the same term, or closed `Nat` terms of the same value of at most
+  1024 whose every operand, a divisor included, is at most 1024 (so
+  `BitVec (2 + 6)` against `BitVec 8`, of bounds `2 ^ (2 + 6)` and
+  `2 ^ 8`; the kernel converts them in the cast):
+  Lean v4.34.0's `Char.utf8Size_eq_one_iff` passes a proof of
+  `v ≤ UInt32.ofNatLT 127 _` where `v ≤ (127 : UInt32)` is expected,
+  and `(127 : UInt32)` stores `127 % 2 ^ 32`. The lemma is
+  `<entry>__nat_eq_<k> : 127 = 127 % 2 ^ 32`, through the unary literal
+  `127`: the kernel computes each value on the unary `Nat`, in time
+  that grows with each number it computes but a divisor. A `Fin` value
+  is read through the forms of a closed `Nat` term above, `Nat.mod`
+  and `HMod.hMod` at Lean's `Nat` instance, and `Nat.land`, `Nat.lor`,
+  `Nat.xor`, `Nat.shiftLeft` (by at most 16, or of 0), `Nat.shiftRight`,
+  `Nat.sub` (truncated at 0) and `Nat.div` (0 for a divisor 0), each
+  function or its class function at Lean's `Nat` instance (`&&&`,
+  `|||`, `^^^`, `<<<`, `>>>`, `-`, `/`), every operand of each read the
+  same way (so `(255 &&& 127) + 0` has a value); a term it reads none of
+  is reduced at its head (as above, at most 64 steps of its own) until
+  the term is one of those forms: `BitVec.toNat 8 (UInt8.toBitVec 224)`
+  reads `224 % 2 ^ 8`. A head reduction that stops anywhere else (a `match`,
+  a fixpoint, an axiom) gives no value. The value and every operand of
+  it, but the divisor of a `%`, are below 65536; otherwise there is no
+  lemma. Two such terms whose `Fin` values differ give no lemma either:
+  they are left to the kernel as without the pass, and the other places
+  of the same argument are still cast.
+- A cast at a relevant position, only in the value of an entry whose type is a proposition (`SProp`: a theorem, or
+  an auxiliary definition whose type the pass reads as a proposition; never in a data definition, an inductive type,
+  an axiom or a quotient, and never in a declared type). A relevant argument whose declared domain is an inductive
+  type or one applied (`Decidable p`, `Fin n`), and whose type differs from that domain only at closed values that
+  the Fin case proves equal, becomes `rel_transport@{u} M x y e (fun hz => t) p` (`src/Lean.v`). Here `t` is the
+  argument as the walk returns it (with the proof casts the walk placed inside it), `x` and `y` are the two `Fin`
+  values, `p` is the proof of `y`'s bound, `e : x = y` is the Fin case's
+  lemma, named `<entry>__rel_eq_<k>`, `M := fun z => forall hz, D[mk z hz]` is the domain with the place abstracted,
+  and `u` is the level of the domain's sort (`Set` or a `Type` of one level). The importer gives every sort of a
+  declaration the form `SProp`, `Set` or `Type@{l}` for one level `l` (a Lean universe expression, a maximum
+  included, becomes a level of its own; no `Prop` and no other sort quality is made), so a domain's sort goes
+  unread only when the pass's bounded head reduction does not reach it (a type alias of a sort that takes more
+  unfoldings than that reduction allows). Lean v4.34.0's
+  `String.length_utf8EncodeChar` passes `UInt32.decLe c.val (UInt32.ofNatLT 65535 _)` where `ite` expects a
+  `Decidable (c.val ≤ 65535)`; without the cast, Rocq's kernel computes on the unary `Nat` the remainder that
+  `65535 : UInt32` unfolds to. A value is closed when no variable bound outside it occurs in it (the export gives no
+  other kind of free variable). An open value, a `Nat` literal alone, two values the Fin case does not prove equal,
+  a domain whose sort the pass does not read, and a type that differs at anything but such Fin places get no cast.
+  The pass looks at a domain only when it holds a closed Fin place outside every run of `Nat_succ` and `Nat_double`
+  (a literal is one node to it), and computes no literal arithmetic there. A proof argument whose type holds a
+  relevant cast where the expected type holds Lean's argument is cast with both places in one motive that binds
+  `e : x = z`. Its abstracted argument is `rel_transport M x z e (fun hz => t) hz`, which is `t` itself at
+  `z = x` and the relevant cast at `z = y`, up to proofs, by `eq`'s definitional UIP.
+
+  The relevant casts come after the proof casts and never replace them. The pass first runs exactly as without them:
+  the same budget, memos, lemmas and log lines. While it walks the value, a detector with a budget of its own looks
+  at the relevant arguments until it finds one that passes the tests above that come before a lemma is asked for
+  (the Fin place, the Fin holes only, the domain's sort). Such an argument is no promise of a cast: the second pass
+  may get no lemma for it, or stop or fail. Only after the detector found one, and only when the first pass neither
+  stopped nor failed, a second pass walks Lean's value again on a third budget, with both kinds of casts. Its value
+  counts only when it casts at least one relevant argument and keeps each proof cast of the first pass at the same
+  place. The kernel is given that value first. If it refuses, the first pass's value goes to the kernel (when the
+  first pass changed the value), and then Lean's. The second pass's lemmas are kept apart from the first pass's: it
+  reads the first pass's lemmas but adds its own only to a cache of its own, so a later entry's first pass costs and
+  names what it would without relevant casts.
+- Literal arithmetic, when `src/Lean.v` registers its lemmas (a missing
+  one turns off this case alone). Two closed terms of a data type whose
+  heads differ (two constants, two constructors, or one of each), of a
+  type whose sort the pass reads (`Set` or `Type@{l}`, so not a function
+  type or a sort): the pass evaluates each side in rounds. A round
+  reduces the term to a normal form: it unfolds constants, beta, zeta
+  and casts, takes the branch of a `match`, unfolds a fixpoint once its
+  recursive argument is a constructor, and takes the field of a
+  constructor's projection. It holds each Lean `Nat.add`, `Nat.mul`,
+  `Nat.pow`, `Nat.sub`, `Nat.div` and `Nat.mod` with an operand or a
+  value of 65536 or more, or a held operand, and each closed `decide p`
+  whose `p` holds a `Nat` term of 65536 or more; below that it computes
+  the operation, as the kernel does. The next round puts each held
+  operation's value in its place, by a lemma of its own: `toN_sub` for
+  `-`, Lean's `Nat.div_eq_of_lt_le` with `Nat_le_of_toN` and `toN_of_eq`
+  for `/`, the certificates above for `+`, `*` and `^`, and Lean's
+  `decide_eq_true` for a `decide`, from a proof of `p`: `a ∣ b` by its
+  witness, `≤` and `=` at `Nat` by the certificates, `=` at another data
+  type by the same evaluation, and Lean's `Int.NonNeg`. When the two
+  normal forms are the same value, the lemma `<entry>__nat_eq_<k> : a =
+  d` at their type is proved through `sprop_transport_any` and the
+  argument cast along it (omega's `tidyConstraint` on `Int` literals near
+  2^32, `decide (256 ∣ 4294967296)` at Lean's `Bool`). The pair gets no
+  lemma when a `match`, fixpoint or projection meets anything but a
+  constructor, a held operation, or a `match`, fixpoint or projection that
+  waits on one (a variable, an axiom, an opaque constant, or a `match`
+  stuck on one of those), when one still waits on a held operation,
+  directly or through other matches, fixpoints or projections that wait on
+  it, after the last of 16 rounds of
+  replacement, at such a chain under a `match` whose type has parameters
+  (an `if`, an `Option`), when an operation has an operand of no value or
+  a value of more than 1024 bits, at a held `%`
+  and at a closed `Nat.mod` with a value anywhere in a normal form, however
+  small (no lemma proves its value), at `Nat.beq` and `Nat.ble` on anything
+  but two literals below 65536 (which it computes), when the two values
+  differ (the other places of the argument are still cast), and when the
+  pair would need more than 200 000 steps, every nested evaluation and the
+  tree size of the proof's evaluated terms counted with it: the pass goes on
+  with the other places, evaluates no pair inside the declined one, and the
+  declined pair's steps stay charged to the argument's part. Two operations
+  of one function and values share a representative only when their form and
+  operands are the same term or unfold to the same literal, so the kernel
+  never converts `2^32` with `4294967296`; a small operation (below 65536)
+  in a parameter, proof or type is not held.
+
+What it does not change: an entry's declared type (its statement); the relevant (data) arguments of a data
+definition, and of a proposition entry except at the places described above, so that Lean's `rfl` lemmas about data
+still check (a relevant cast stands only inside a proof, whose terms nothing computes with); any kernel check; and
+the axioms: no imported entry becomes an axiom, the `toN` lemmas of `src/Lean.v` are closed under the global
+context, `Nat_eq_of_toN`, `sprop_transport` and `rel_transport` (and literal arithmetic's `toN_of_eq` and
+`sprop_transport_any`) rely only on the definitional UIP of `eq` (as every entry that names `eq` does),
+and a generated lemma relies on no
+axiom of its own (`Print Assumptions`): what it relies on is what the
+export's lemmas it names rely on, so a lemma that certifies a held
+division (literal arithmetic, through Lean's `Nat.div_eq_of_lt_le`)
+relies on that theorem's own `propext` (with the sort eliminations of
+`Iff`), as `Print Assumptions Nat_div_eq_of_lt_le` prints. An entry where the pass casts nothing is
+declared with Lean's own value; a cheap scan for the export's `Nat`
+operations and large literals in the entry and the types of the
+constants it names decides which entries are looked at, and it also
+passes on an entry that holds itself `OfNat.ofNat T` or a constant
+whose declared type ends in `T`, for `T` a record of one relevant
+field of an inductive type (`UInt8`, `BitVec w`). Two closed
+`Nat` terms of different values give no lemma, and the argument that
+holds them no cast: the kernel refuses the entry as before. If the kernel refuses a value with relevant casts, the
+import logs `line N: NAME: the relevant pass's value is refused (...); the SProp pass's value goes to the kernel
+instead` and submits the first pass's value; when the first pass changed nothing, it logs `line N: NAME: the
+relevant pass's value is refused (...); Lean's value goes to the kernel instead` and submits Lean's value. The
+kernel's error is in the parentheses only when the refused value has at most 256 nodes; else the line reads `the
+relevant pass's value is refused by the kernel (it has more than 256 nodes: the kernel's error is not printed);
+...`. If the kernel refuses a transported value of the first pass, the import logs `line N: NAME: the transported
+value is refused (...); Lean's value goes to the kernel instead` (the kernel's error in the parentheses only when
+the transported value has at most 256 nodes; else `the transported value is refused by the kernel (it has more
+than 256 nodes: the kernel's error is not printed); Lean's value goes to the kernel instead`) and submits Lean's
+value; if the kernel refuses that too, the entry fails with Lean's error, as without the pass. If the entry is
+accepted, the lemmas that both passes declared stay declared, even if another place gets no lemma, a pass stops, or
+the first pass's value or Lean's original value is used; if the entry is refused or stopped by a limit, they go
+with it. A lemma the
+kernel refuses, a place's or one generated while the places are found
+(a held operation's, a `decide`'s), leaves its whole argument to Lean's
+term; no refusal is remembered, so a later argument generates it again.
+
+The pass is optional work, and all of it is charged before it runs (`tick` and `pay` of its charged term layer,
+`src/leanChargedTerm.ml`): each term it visits, copies or builds, each substitution, comparison and lookup, natural
+number evaluation (each value, Fin value and parameter value it does not find in its memo, each step of the Fin
+case's head reduction, each unary literal it builds) and certificate construction, against the `Lean Transport
+Step Budget` of each part of an entry (the entry's own scans and walks are one part, and each argument it looks at
+is another), 1 000 000 steps by default, and all the parts of one entry together against ten times that budget (at
+most OCaml's `max_int`, 2^62 - 1 on 64-bit systems). The pass of proof casts, the detector of relevant places and
+the second pass of relevant casts each have parts and a total of their own, and no step of one is charged to
+another. Two charges come after their work. The importer's list of the export's constants of a Lean name, whose
+length is known only once the list is returned, is charged by that length then; the first and the second pass each
+ask for 47 fixed names, once per entry, and 56 when the lemmas of literal arithmetic are registered, and the
+detector for the 47 only. The first pass's list of its proof
+cast places, one cell per cast it placed, is charged to the second pass, one step per cell, when the second pass
+starts. A reused
+certificate counts again at its full size because the kernel checks
+the proof tree. A substitution pays, before it is made, for each node
+it visits and, at each place it substitutes, for the size of the
+replacement counted as a tree (with its lift under binders), so one
+that would build a term of more than `max_int` nodes stops the pass
+before it is made; a term instantiated at a universe instance pays its
+size with the universe data of each node. The pass keeps, per entry,
+the values of constants in tables, which never evict, and the results
+it computes for other terms (values, Fin values, parameter values,
+certificates, sizes, free variables, beta normal forms) in memos of 512
+slots each, one slot per term found by a bounded hash (at most 10 nodes
+that carry a value among at most 100 visited): a lookup or a write
+costs one step and compares at most one term, by physical identity, and
+a result replaced by another term of the same slot is computed again at
+its full charge. The memos' hash and the tables' read no module path and
+no universe level (a constant counts by the label of its name, a sort
+by its kind), so the same export costs the same steps in whatever file
+imports it (`tests/fin_transport_budget_name.v`). The pass also caps its
+depth at 10 000, counted from the entry's value or type down through
+the terms its scans and walks visit
+and the `Nat` terms the finder computes, together, a result found in a
+memo included. When a limit is reached, the importer logs `line N:
+NAME: the transport pass stops: it needs more than N steps or a nesting
+deeper than 10000; ...` (for the total, `... more than T steps in
+total; ...`) and submits the original value for the usual kernel check.
+An error in the pass takes the same path and logs `the transport pass
+fails (E); the value is left as Lean's`, `E` the name of the error's
+exception only.
+
+The second pass of relevant casts logs `the relevant pass stops: it needs more than N steps or a nesting deeper
+than 10000; no relevant argument is cast` (for its total, `... more than T steps in total; ...`), `the relevant
+pass fails (E); no relevant argument is cast`, and, when its value lacks a proof cast of the first pass, `the
+relevant pass keeps J of the SProp pass's K cast sites; no relevant argument is cast`; the first pass's value then
+stands. The detector logs nothing.
+
+The pass reads the types it needs itself, without Rocq's retyping or
+reduction: a variable's declared type, a global's declared type at its
+universe instance, and the types of applications, lambdas, lets, casts
+and projections of records built from those. Where a type must be a
+product or a sort it reduces the head as the Fin case does (unfolding a
+transparent constant, beta, zeta, a cast, a local definition, the
+projection of a constructor; at most 64 steps, every step charged), and
+no further: a type behind a `match` or a fixpoint, or any other term,
+gives no type, and an argument whose type the pass cannot read gets no
+cast; the kernel then checks it as without the pass. It reads no type
+for an application of `Nat_succ` or `Nat_double` to one argument, whose
+declarations it reads once per entry (one relevant `Nat` argument). A
+literal holds no other node, so the walk of the entry's value takes it
+whole: a step for the node and one for the walk's own memo of literals
+(its own, so that the walk changes no charge of literal arithmetic or
+of an argument), and one more to keep its answer at a miss; at a miss
+(every unary literal of 10 or more has the same slot, since the hash
+reads only its first ten `Nat_succ`), a step for each of the at most 16
+literals of 16 levels or more the walk met last that it compares, and,
+only if it is none of them, a step per `Nat_succ` and `Nat_double` of
+the literal. A literal found among them moves first, and a literal of
+16 levels or more walked at a miss is kept first: a step for it and one
+for each literal moved one place. A run of `Nat_succ` that is no
+literal is asked once whether it is a literal (a step per level to the
+point where it is none), then walked in one loop to its base (a step per
+level), the base walked once.
+
+Limits: only on the new path. A proof (`SProp`) position gets a cast at closed `Nat` terms and at Fin places. A
+relevant position gets one only inside the value of an entry whose type is a proposition, only where its declared
+domain is an inductive type or one applied, and only at Fin places of closed values (no `Nat` place and no literal
+arithmetic there). A mismatch in a data position of a data definition, such as `UInt32.toFin : Fin UInt32.size :=
+x.toBitVec.toFin` (`Init/Data/UInt/BasicAux.lean:141`), or in any declared type, is left to the kernel. The places
+are found in the types the arguments and the
+function have as written: a `Nat` place is never found by unfolding a
+constant, and a Fin place only by the head reduction of the Fin case
+(at most 64 steps of each side in all). For a `Nat` place the
+operations are the six above; for a `Fin` value also `Nat.mod` and the
+seven of the Fin case; `Nat.sub` and `Nat.div` are covered only in the
+values literal arithmetic evaluates, not at a `Nat` place; `Nat.ble` and
+`Nat.beq` only on two literals below 65536; a `%` of 65536 or more not
+at all.
+Values are computed up to 1024 bits. `USize.size` (`2 ^
+System.Platform.numBits`) has no closed value.
 
 ## Additional note on recursors
 
@@ -438,20 +873,200 @@ Off by default, this may be useful for debugging if `Lean Import`
 misdetects whether Lean would allow unrestricted elimination for some
 inductive type.
 
-## Lean Skip Errors
+## Lean Error Mode
 
-Off by default. With it on, when an error is encountered, skip the
-failed line and keep going.
+A string option: `"Fail"` (the default), `"Stop"` or `"Skip"`. It decides
+what `Lean Import` does with a line it refuses: a line whose entry it cannot
+declare, or a line it cannot parse. In an NDJSON export, a line before
+the first line to import (`Lean Import "file" FROM` starts at line FROM)
+is parsed for its metadata, names, levels and expressions only (a declaration
+there is not read); when it cannot be parsed, it is refused like any
+other line. The old text format reads nothing before line FROM. The
+refusal reads `Error at line N (for NAME)`, followed by the
+line and the error. NAME is the entry's name. For a line that cannot be
+parsed, it is the name the NDJSON parser read before the error, else
+`line-N`.
 
-Useful to tell how much the current system can handle.
+The text parser requires the next id in the name, level or expression
+sequence for every recognized numbered line. An unreadable number, an
+unknown tag or an out-of-sequence number does not advance a sequence.
+After the metadata, the NDJSON parser uses the single next integer id
+field (`in`, `il` or `ie`) to choose the sequence. This applies even when
+the payload tag belongs to a different kind of record. In either format,
+if the parser refuses the payload of a recognized record with the next
+id, it keeps that id in the sequence but does not make its value available.
 
-Note that timeouts and interrupts are also absorbed by this option. If
-you turn it on and start loading mathlib, then change your mind and
-decide to stop, you will need to kill the Coq process.
+- `Fail`: the import stops there and `Lean Import` fails with the refusal.
+- `Stop`: the import stops there and `Lean Import` succeeds, keeping what it
+  declared before the refused line.
+- `Skip`: the refusal is printed after `Skipping: `, what the refused entry
+  had declared is undone, and the import goes on with the next line. An
+  entry that uses a refused entry is refused in turn. In either format,
+  the parser refuses a line that uses a refused name, level or expression
+  id and names that id in the error. The final summary counts the refused
+  lines (`Skipped N`).
+
+`Skip` is useful to tell how much the current system can handle.
+
+Note that in `Skip` mode, an interrupt or an outer `Timeout` that arrives
+while an entry is being declared refuses that entry like any other error,
+and the import goes on. If you start loading mathlib this way and decide to
+stop, you will need to kill the Coq process.
+
+## Lean Entry Timeout
+
+An integer option, unset by default. Use `Set Lean Entry Timeout 10.` to
+bound the time spent declaring each entry (translating and checking it) to
+10 seconds. An entry still being declared after that is refused with
+`Timed out after 10 s (Lean Entry Timeout); major heap at the entry's start:
+N MiB` (N is the size of the importer's major heap when the entry started),
+and `Lean Error Mode` handles it like any other refused entry. The heap is
+then compacted (see `Lean Entry Memory Limit`). With `Skip`, this allows
+processing all the entries which do not depend on something that takes more
+than 10s.
+
+The value must be a positive number of seconds. `Unset Lean Entry Timeout.`
+removes the limit. The limit does not bound parsing the entry's line (see
+`Lean Line Timeout`). An enclosing `Timeout` shorter than the limit fires
+first: in `Skip` mode, when it fires while an entry is being declared, that
+entry is refused like any other error and the import runs to its end; Rocq
+then prints `Timeout!` when the command returns (see the note under `Lean
+Error Mode`).
+
+An importer without this option only warns that the option is unknown and
+imports with no limit. A file that sets it should therefore first run `Set
+Warnings "+unknown-option".`, so that such an importer fails at the `Set`:
+
+~~~coq
+Set Warnings "+unknown-option".
+Set Lean Entry Timeout 10.
+Set Lean Error Mode "Skip".
+Lean Import "/path/to/export.ndjson".
+~~~
+
+## Lean Entry Memory Limit
+
+An integer option, unset by default. Use `Set Lean Entry Memory Limit 40.` to
+bound how much the importer's major heap may grow while each entry is
+declared (translated and checked): by 40 GiB above its size when the entry
+started. The limit bounds the growth during the entry, not the size of the
+heap, so the heap the import holds before the entry does not count. An entry
+during which the heap grows by more is stopped and refused with
+`Memory limit of 40 GiB reached (Lean Entry Memory Limit); major heap at the
+entry's start: N MiB`, and `Lean Error Mode` handles it like any other
+refused entry.
+
+The importer measures the net growth of the major heap, which the whole
+process shares, at the end of each major collection of the OCaml heap. It
+then stops the entry with Rocq's interrupt exception, `Sys.Break`, which it
+raises from an allocation callback of OCaml's memory profiler (`Gc.Memprof`)
+at the next allocation the profiler samples in the thread that declares the
+entry. So an entry can pass the limit by what the heap grows until the next
+collection ends and then until that sample; this is no fixed bound, and
+collections come further apart as the heap grows. In the measured case,
+Rocq's reduction did not poll the interrupt flag, so setting the flag alone
+did not stop the entry. The importer also refuses an entry if it records
+excess growth but the entry ends before the next sampled allocation.
+
+The importer runs its profiler only while declaring an entry under the
+limit. It never takes over an active profiler. If it cannot start its own
+profiler, it refuses the entry before declaring it, with `Lean Entry
+Memory Limit cannot watch this entry, which is not declared: ...`.
+
+After an entry is stopped by this limit or by `Lean Entry Timeout`, and what
+it had declared is undone, the importer compacts the heap (`Gc.compact`)
+before the next entry, so that the space of the stopped entry is given back
+and two stopped entries do not add up. On a large heap the compaction takes
+seconds or more.
+
+The value must be a positive number of GiB. `Unset Lean Entry Memory
+Limit.` removes the limit. A file that sets the option should first run
+`Set Warnings "+unknown-option".`.
+
+When both limits are set, the importer compares the entry timer's deadline
+with the first heap measurement over the limit. If the heap guard interrupts
+the entry, the importer reports a time limit only if it can establish that
+the entry's own timer was active and its deadline had passed at that
+measurement. An observed enclosing `Timeout` or independent interrupt
+keeps its existing `Lean Error Mode` behavior. If asynchronous exceptions
+overlap while an entry stops, the runtime may expose only the exception
+that survives. The importer cannot always tell whether another interrupt
+also occurred.
+
+## Lean Transport Step Budget
+
+A positive integer option, unset by default (1 000 000 steps). `Set Lean Transport Step Budget N.` gives each part
+of an entry N steps and all the parts of one entry together 10 N, or OCaml's `max_int` (2^62 - 1 on 64-bit
+systems) when 10 N is larger (see "Transport of proof arguments across Nat literals"), on each of three budgets of
+their own: the pass of proof casts, the detector of relevant places, and the second pass of relevant casts, which
+runs only after the detector found a place. An entry with no such place therefore spends at most 10 N steps more
+than without relevant casts, and one with such a place at most 20 N. 0 and negative values are refused, and
+`Unset` restores the default. A step pays for one unit of work before it is done; a size that would have to be
+paid and is larger than `max_int` stops the work as a part over its budget does. Over a limit of the pass of proof
+casts, that pass stops and the entry's original value goes to the kernel. Over a limit of the detector, the
+detection ends and nothing is logged. Over a limit of the second pass, its value is dropped (`the relevant pass
+stops: ...`) and the first pass's value goes on. The budgets bound the optional passes only: the kernel's checks of
+the generated lemmas and of the entry's value are not charged, and they run under `Lean Entry Timeout` and `Lean
+Entry Memory Limit` as for any entry. Inside one pair of literal
+arithmetic the pass also counts the pair's steps, every nested
+evaluation with them and the tree size of the evaluated terms its proof
+holds, against a cap of 200 000, which declines that pair: no pair inside
+it is evaluated again, its steps stay charged to the argument's part (so
+that enough declined pairs side by side stop the pass as a part over its
+budget does), and the pass goes on with the other places; there is no
+other option.
+
+## Corpus import settings
+
+The final corpus import uses `Set Lean Entry Timeout 2400.` (2400 seconds)
+and `Set Lean Entry Memory Limit 40.` (40 GiB of major heap growth per
+entry). `ci/build-9.2-cut.sh` sets the soft stack limit to 131072 KiB
+(128 MiB) for tests, `--import` and `--check` via `CUT_STACK_KIB`.
+`--revert-fix` checks that the head passes and that reverting one fix makes
+the test fail at its expected entry. Both sides use the head's tests and
+dumps, with a separate plugin build for each side.
+
+For a source fix, the parent side builds the source of the parent of the
+first fix commit. Both sides use the head's stack unless the row in
+`tests/lean434_features.txt` sets `stack`, the seventh tab-separated
+column. That column is `-` or a positive whole number of KiB and applies
+only to a fixed row's control, not to the suite or `--handoff`.
+For a stack fix, both sides build the head's source; the parent side
+uses the stack setting of the first fix commit's parent, or the default
+soft limit if it has no setting. A control cannot revert both kinds of
+change. Its `R5 CONTROL` line records the source commit and the stack
+read back for each side.
+
+R5 is the name of this per-fix control: a fix is shown by its test, which
+passes at the head and fails when the fix is reverted. "R5 negative" is
+that failure on the parent side, and `R5 NEGATIVE MET` is the verdict
+line when it fails as its row says: at the row's own entry (`own_entry`,
+the fourth column) or, when that is `-`, at its base entry (`base_entry`,
+the third column, the first error at the base); an entry `option:NAME`
+is a failure at the test's `Set NAME` line, and `check:rocqchk` a
+failure of the rocqchk step of `tests/Makefile` on the test's `.vo`: its
+line `ROCQCHK FAIL: tests/<name>.vo: ...`, which the verdict line then
+ends with (the test must be in `ROCQCHK_TESTS`; a line
+`ROCQCHK MISSING`, a `.vo` the make did not write, never meets it). A
+test whose failure there is not its first `Error at line N (for X)`
+says what the failure is
+in comment lines that start `(* r5 `: `r5 error: TEXT` (the Rocq error
+of the next command holds TEXT and names the entry), `r5 log: "LOG"
+TEXT` and `r5 log lacks: "LOG" TEXT` (the log of `Redirect "LOG"` has,
+or has not, the line TEXT), and `r5 assertion: "LOG" TEXT` (the test's
+`.expect` fails with `unexpected 'TEXT'` on that log). Such a test has
+exactly one `r5 error` or `r5 assertion` line; `r5_lines` in
+`ci/build-9.2-cut.sh` states each rule in full.
+
+Lean 4.34.0's entry `_private.Init.Data.String.Decode0.Char.toNat_le._proof_1_1`
+(as printed by the importer) fails with `Stack overflow.` at 8, 16, 32
+and 64 MiB, and imports at 128 MiB, the gVisor stack ceiling.
+Run a corpus reading on a machine with a hard stack limit of at least
+131072 KiB; the script refuses to run with a lower limit.
 
 ## Lean Line Timeout
 
 An integer option, off by default. Use `Set Lean Line Timeout 10.` to
-cause a failure whenever some entry takes more than 10s. Combined with
-`Lean Skip Errors`, this allows processing all the entries which do
-not depend on something that takes more than 10s.
+cause a failure whenever parsing a line takes more than 10s. This failure
+ends the import whatever `Lean Error Mode`. It does not bound declaring the
+line's entry: `Lean Entry Timeout` does.

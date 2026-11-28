@@ -1,0 +1,83 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_dvd_lib.log.out	+	Done!
+litarith_dvd_lib.log.out	-	the transport pass fails
+litarith_dvd.log.out	+	line 24570: RLI434L.dvd_256: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.dvd_256)
+litarith_dvd.log.out	+	line 24578: RLI434L.dvd_zero
+litarith_dvd.log.out	-	RLI434L.dvd_zero: 
+litarith_dvd.log.out	-	(for RLI434L.dvd_zero)
+litarith_dvd.log.out	+	line 24586: RLI434L.dvd_zero_sub: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.dvd_zero_sub)
+litarith_dvd.log.out	+	line 24594: RLI434L.le_big: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.le_big)
+litarith_dvd.log.out	+	line 24602: RLI434L.le_eq: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.le_eq)
+litarith_dvd.log.out	+	line 24610: RLI434L.eq_nat: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.eq_nat)
+litarith_dvd.log.out	+	line 24618: RLI434L.eq_data: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.eq_data)
+litarith_dvd.log.out	+	line 24626: RLI434L.nonneg: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.nonneg)
+litarith_dvd.log.out	+	line 24634: RLI434L.nonneg_neg
+litarith_dvd.log.out	-	RLI434L.nonneg_neg: 
+litarith_dvd.log.out	-	(for RLI434L.nonneg_neg)
+litarith_dvd.log.out	+	line 24642: RLI434L.fb12_63: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.fb12_63)
+litarith_dvd.log.out	+	line 24648: RLI434L.fb12_64: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.fb12_64)
+litarith_dvd.log.out	+	line 24654: RLI434L.fb12_65
+litarith_dvd.log.out	-	RLI434L.fb12_65: 
+litarith_dvd.log.out	-	(for RLI434L.fb12_65)
+litarith_dvd.log.out	+	line 24664: RLI434L.nested_stop: 1 argument(s) transported (
+litarith_dvd.log.out	-	(for RLI434L.nested_stop)
+litarith_dvd.log.out	+	line 24672: RLI434L.nested_wait
+litarith_dvd.log.out	-	RLI434L.nested_wait: 
+litarith_dvd.log.out	-	(for RLI434L.nested_wait)
+litarith_dvd.log.out	+	Done!
+litarith_dvd.log.out	-	the transport pass fails
+litarith_dvd_l.log.out	+	line 26021: RLI434L.eq_nat_l: 1 argument(s) transported (
+litarith_dvd_l.log.out	-	(for RLI434L.eq_nat_l)
+litarith_dvd_l.log.out	+	line 26043: RLI434L.nonneg_l: 1 argument(s) transported (
+litarith_dvd_l.log.out	-	(for RLI434L.nonneg_l)
+litarith_dvd_l.log.out	+	Done!
+litarith_dvd_l.log.out	-	the transport pass fails
+litarith_dvd_chain_0.log.out	+	Done!
+litarith_dvd_chain_0.log.out	-	Error at line
+litarith_dvd_chain_1.log.out	+	Done!
+litarith_dvd_chain_1.log.out	-	Error at line
+litarith_dvd_chain_2.log.out	+	Done!
+litarith_dvd_chain_2.log.out	-	Error at line
+litarith_dvd_chain_3.log.out	+	Done!
+litarith_dvd_chain_3.log.out	-	Error at line
+litarith_dvd_chain_4.log.out	+	Done!
+litarith_dvd_chain_4.log.out	-	Error at line
+litarith_dvd_chain_5.log.out	+	Done!
+litarith_dvd_chain_5.log.out	-	Error at line
+litarith_dvd_chain_6.log.out	+	Done!
+litarith_dvd_chain_6.log.out	-	Error at line
+litarith_dvd_chain_7.log.out	+	Done!
+litarith_dvd_chain_7.log.out	-	Error at line
+litarith_dvd_chain_8.log.out	+	Done!
+litarith_dvd_chain_8.log.out	-	Error at line
+litarith_dvd_chain_9.log.out	+	Done!
+litarith_dvd_chain_9.log.out	-	Error at line
+litarith_dvd_chain_10.log.out	+	Done!
+litarith_dvd_chain_10.log.out	-	Error at line
+litarith_dvd_chain_11.log.out	+	Done!
+litarith_dvd_chain_11.log.out	-	Error at line
+litarith_dvd_chain_12.log.out	+	Done!
+litarith_dvd_chain_12.log.out	-	Error at line
+litarith_dvd_chain_13.log.out	+	Done!
+litarith_dvd_chain_13.log.out	-	Error at line
+litarith_dvd_chain_14.log.out	+	Done!
+litarith_dvd_chain_14.log.out	-	Error at line
+litarith_dvd_chain_15.log.out	+	line 26603: RLI434L.chain_nested: 1 argument(s) transported (
+litarith_dvd_chain_15.log.out	-	(for RLI434L.chain_nested)
+litarith_dvd_chain_15.log.out	+	Done!
+litarith_dvd_chain_15.log.out	-	the transport pass fails
+litarith_dvd_chain_16.log.out	+	Done!
+litarith_dvd_chain_16.log.out	-	Error at line
+litarith_dvd_chain_17.log.out	+	Done!
+litarith_dvd_chain_17.log.out	-	Error at line
+litarith_dvd_chain_18.log.out	+	Done!
+litarith_dvd_chain_18.log.out	-	Error at line

@@ -1,0 +1,11 @@
+# Log file, polarity, literal substring (tab-separated).
+uint32_legacy_only.log.out	+	Fin is predeclared
+uint32_legacy_only.log.out	+	line 13: UInt32
+uint32_legacy_only.log.out	+	line 14: UInt32
+uint32_legacy_only.log.out	+	UInt32 is predeclared
+# The second UInt32 entry is declared again (its eliminators exist), not skipped as a duplicate.
+uint32_legacy_only.log.out	-	Skipping duplicate declaration for UInt32
+uint32_legacy_only.log.out	+	Skipping scheme
+uint32_legacy_only.log.out	+	line 20: RLIP.x
+uint32_legacy_only.log.out	-	Error at line
+uint32_legacy_only.log.out	+	Done!

@@ -231,6 +231,10 @@ let with_unsafe_univs f () =
 
 module N = LeanName
 
+(* Rocq's [Record.Internal], under a name of its own: a push's leak check reads the dotted path
+   [Record.Internal.<name>] as a host name. *)
+module RecordInternal = Record.Internal
+
 let sort_of_level = function
   | LSProp -> Sorts.sprop
   | Level u -> Sorts.sort_of_univ (Universe.make u)
@@ -253,10 +257,24 @@ let sort_max (s1 : Sorts.t) (s2 : Sorts.t) =
   | QSort _, _ | _, QSort _ -> assert false
 
 (** [map] goes from lean names to universes (in practice either SProp or a named
-    level) *)
+    level): the universe parameters of the entry being translated
+    ([start_uconv]). A universe name that is not one of them refuses the entry:
+    the export gave the entry a level its [levelParams] do not declare. *)
 let rec to_universe map = function
   | U.Prop -> Sorts.sprop
-  | UNamed n -> sort_of_level (N.Map.get n map)
+  | UNamed n -> (
+    match N.Map.find_opt n map with
+    | Some l -> sort_of_level l
+    | None ->
+      let params =
+        if N.Map.is_empty map then Pp.str "none"
+        else Pp.prlist_with_sep Pp.pr_comma N.pp (List.map fst (N.Map.bindings map))
+      in
+      CErrors.user_err
+        Pp.(
+          str "the universe " ++ N.pp n
+          ++ str " is not a universe parameter of this entry (its parameters: " ++ params
+          ++ str ")"))
   | Succ u -> Sorts.super (to_universe map u)
   | Max (a, b) -> sort_max (to_universe map a) (to_universe map b)
   | IMax (a, b) ->
@@ -672,19 +690,23 @@ let name_for n i =
     let base = if i = 0 then base else Id.of_string (Id.to_string base ^ "_") in
     Namegen.next_global_ident_away (Global.safe_env ()) base Id.Set.empty
 
+(* The predeclared lookups below read the registrations with
+   [Rocqlib.lib_ref_opt]: a name that is not registered is not predeclared, and
+   no handler can mistake another failure of the lookup (a [Control.Timeout] of
+   the Lean Entry Timeout) for a missing registration. *)
 let get_predeclared_ind_suffixed indn suffix n i =
   if N.equal n (N.append_list N.anon indn) then
     let ind_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string ind_name ^ suffix in
-    match Rocqlib.lib_ref reg with
-    | IndRef (ind, 0) -> Some (ind_name, ind)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (IndRef (ind, 0)) -> Some (ind_name, ind)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for "
           ++ str reg
           ++ str " expected an inductive.")
-    | exception _ -> None
   else None
 
 let get_predeclared_ind indn n i = get_predeclared_ind_suffixed indn "" n i
@@ -708,51 +730,69 @@ let get_predeclared_ind_as_def indn n i =
   if N.equal n (N.append_list N.anon indn) then
     let ind_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string ind_name ^ ".cumul" in
-    match Rocqlib.lib_ref reg with
-    | ConstRef c -> Some (ind_name, c)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (ConstRef c) -> Some (ind_name, c)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for "
           ++ str reg
           ++ str " expected a constant.")
-    | exception _ -> None
   else None
 
 let get_predeclared_def defn n i =
   if N.equal n (N.append_list N.anon defn) then
     let def_name = name_for_core n i in
     let reg = "lean." ^ Id.to_string def_name in
-    match Rocqlib.lib_ref reg with
-    | ConstRef c -> Some (def_name, c)
-    | _ ->
+    match Rocqlib.lib_ref_opt reg with
+    | None -> None
+    | Some (ConstRef c) -> Some (def_name, c)
+    | Some _ ->
       CErrors.user_err
         Pp.(
           str "Bad registration for " ++ str reg ++ str " expected a constant.")
-    | exception _ -> None
   else None
 
 type predeclared_ind_kind = Eq | Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char
 type predeclared_def_kind = UInt32_size | Nat_isValidChar | Nat_pow
 type predeclared_ind_as_def_kind = ULift_cumul
 
-let get_predeclared_cnames (k : predeclared_ind_kind) n =
-  match k with
-  | Eq -> [ N.append n "refl" ]
-  | Nat -> [ N.append n "zero"; N.append n "succ" ]
-  | Nat_le -> [ N.append n "refl"; N.append n "step" ]
-  | Or -> [ N.append n "inl"; N.append n "inr" ]
-  | And -> [ N.append n "intro" ]
-  | Fin -> [ N.append n "mk" ]
-  | UInt32 -> [ N.append n "mk" ]
-  | BitVec -> [ N.append n "mk" ]
-  | Char -> [ N.append n "mk" ]
+(* The path of the export being imported, with its Lean version on the new
+   path. [do_input] sets it from the parser before it declares each entry:
+   what [LeanParseNdjson.path] read from the NDJSON metadata; the legacy path
+   for the old text format. An instance that [ensure_exists] declares later is
+   declared on the path saved with its entry (see [on_path]). *)
+let current_path = ref LeanParseNdjson.Legacy
+
+let on_new_path () =
+  match !current_path with LeanParseNdjson.New _ -> true | LeanParseNdjson.Legacy -> false
+
+(* [on_path path f] computes [f ()] with [path] as the current path, then puts
+   back the path it replaced, whether [f] returns or raises. *)
+let on_path path f =
+  let outer = !current_path in
+  current_path := path;
+  match f () with
+  | v ->
+    current_path := outer;
+    v
+  | exception e ->
+    current_path := outer;
+    Exninfo.iraise (Exninfo.capture e)
+
+(* The paths a row of the predeclared tables below applies on: both, or only
+   the legacy path (the new path imports that entry from the export, as Lean
+   defines it). *)
+type predeclared_paths = Both_paths | Legacy_path_only
+
+let on_current_path = function
+  | Both_paths -> true
+  | Legacy_path_only -> not (on_new_path ())
 
 (* Fin-headed ctor -> pre-4.17 [.legacy] record; otherwise default. *)
-let get_predeclared_uint32 ctors n i =
-  let try_suffixed suffix =
-    get_predeclared_ind_suffixed [ "UInt32" ] suffix n i
-  in
+let get_predeclared_uint32 ~ctors indh n i =
+  let try_suffixed suffix = get_predeclared_ind_suffixed indh suffix n i in
   match ctor_first_field_head ctors with
   | Some head when N.equal head (N.append_list N.anon [ "Fin" ]) ->
     (match try_suffixed ".legacy" with
@@ -760,35 +800,45 @@ let get_predeclared_uint32 ctors n i =
      | None -> try_suffixed "")
   | _ -> try_suffixed ""
 
-let get_predeclared_char ~uint32_is_legacy n i =
-  let try_suffixed suffix =
-    get_predeclared_ind_suffixed [ "Char" ] suffix n i
-  in
+let get_predeclared_char ~uint32_is_legacy indh n i =
+  let try_suffixed suffix = get_predeclared_ind_suffixed indh suffix n i in
   if uint32_is_legacy then
     match try_suffixed ".legacy" with
     | Some _ as r -> r
     | None -> try_suffixed ""
   else try_suffixed ""
 
+(* The rows of the predeclared inductive types that apply on the current path
+   to the Lean name [n]. Each row is the kind, the Lean name, the paths the row
+   applies on and the lookup of the predeclared inductive type for that name
+   at instance [i], which reads a registration only when it is called (see
+   [get_predeclared_ind_some]). *)
 let get_predeclared_ind_any ?(ctors = []) ?(uint32_is_legacy = false) n i =
-  let std indh = get_predeclared_ind indh n i in
+  let std indh () = get_predeclared_ind indh n i in
+  let uint32 indh () = get_predeclared_uint32 ~ctors indh n i in
+  let char indh () = get_predeclared_char ~uint32_is_legacy indh n i in
   List.filter_map
-    (fun (indk, indh, lookup) ->
-      lookup () |> Option.map (fun x -> (indk, indh, x)))
+    (fun (indk, indh, paths, lookup) ->
+      if on_current_path paths && N.equal n (N.append_list N.anon indh) then Some (indk, indh, lookup indh)
+      else None)
     [
-      (Eq, [ "Eq" ], fun () -> std [ "Eq" ]);
-      (Nat, [ "Nat" ], fun () -> std [ "Nat" ]);
-      (Nat_le, [ "Nat"; "le" ], fun () -> std [ "Nat"; "le" ]);
-      (Or, [ "Or" ], fun () -> std [ "Or" ]);
-      (And, [ "And" ], fun () -> std [ "And" ]);
-      (Fin, [ "Fin" ], fun () -> std [ "Fin" ]);
-      (UInt32, [ "UInt32" ], fun () -> get_predeclared_uint32 ctors n i);
-      (BitVec, [ "BitVec" ], fun () -> std [ "BitVec" ]);
-      (Char, [ "Char" ], fun () -> get_predeclared_char ~uint32_is_legacy n i);
+      (Eq, [ "Eq" ], Both_paths, std);
+      (Nat, [ "Nat" ], Both_paths, std);
+      (Nat_le, [ "Nat"; "le" ], Both_paths, std);
+      (Or, [ "Or" ], Both_paths, std);
+      (And, [ "And" ], Both_paths, std);
+      (Fin, [ "Fin" ], Both_paths, std);
+      (UInt32, [ "UInt32" ], Legacy_path_only, uint32);
+      (BitVec, [ "BitVec" ], Legacy_path_only, std);
+      (Char, [ "Char" ], Legacy_path_only, char);
     ]
 
 let get_predeclared_ind_some ?(ctors = []) ?(uint32_is_legacy = false) n i =
-  match get_predeclared_ind_any ~ctors ~uint32_is_legacy n i with
+  match
+    List.filter_map
+      (fun (indk, indh, lookup) -> lookup () |> Option.map (fun x -> (indk, indh, x)))
+      (get_predeclared_ind_any ~ctors ~uint32_is_legacy n i)
+  with
   | [] -> None
   | [ x ] -> Some x
   | _ :: _ :: _ ->
@@ -811,14 +861,16 @@ let get_predeclared_ind_as_def_some n i =
     CErrors.user_err
       Pp.(str "Multiple predeclared ind-as-def constants for " ++ N.pp n)
 
+(* Each row: the kind, the Lean name and the paths the row applies on. *)
 let get_predeclared_def_any n i =
   List.filter_map
-    (fun (defk, defh) ->
-      get_predeclared_def defh n i |> Option.map (fun x -> (defk, defh, x)))
+    (fun (defk, defh, paths) ->
+      if not (on_current_path paths) then None
+      else get_predeclared_def defh n i |> Option.map (fun x -> (defk, defh, x)))
     [
-      (UInt32_size, [ "UInt32"; "size" ]);
-      (Nat_isValidChar, [ "Nat"; "isValidChar" ]);
-      (Nat_pow, [ "Nat"; "pow" ]);
+      (UInt32_size, [ "UInt32"; "size" ], Legacy_path_only);
+      (Nat_isValidChar, [ "Nat"; "isValidChar" ], Legacy_path_only);
+      (Nat_pow, [ "Nat"; "pow" ], Legacy_path_only);
     ]
 
 let get_predeclared_def_some n i =
@@ -833,9 +885,9 @@ let mk_char_prim = "Char.mk.reflective_prim"
 let mk_char_prim_legacy = "Char.legacy.mk.reflective_prim"
 
 let lookup_char_prim_ref () =
-  match Rocqlib.lib_ref ("lean." ^ mk_char_prim) with
-  | c -> c
-  | exception _ -> Rocqlib.lib_ref ("lean." ^ mk_char_prim_legacy)
+  match Rocqlib.lib_ref_opt ("lean." ^ mk_char_prim) with
+  | Some c -> c
+  | None -> Rocqlib.lib_ref ("lean." ^ mk_char_prim_legacy)
 
 (*
 Register Nat_isValidChar as lean.Nat_isValidChar.
@@ -850,7 +902,12 @@ let nat_double = "Nat_double"
 let declared : instantiation Int.Map.t N.Map.t ref =
   Summary.ref ~name:"lean-declared-instances" N.Map.empty
 
-let entries : entry N.Map.t ref = Summary.ref ~name:"lean-entries" N.Map.empty
+(* An entry of an export and the path (with the Lean version) of that export:
+   [add_entry] saves it, and [ensure_exists] declares its instances on that
+   path, also when an entry of a later export asks for one. *)
+type saved_entry = { entry : entry; path : LeanParseNdjson.path }
+
+let entries : saved_entry N.Map.t ref = Summary.ref ~name:"lean-entries" N.Map.empty
 
 let squash_info : squashy N.Map.t ref =
   Summary.ref ~name:"lean-squash-info" N.Map.empty
@@ -918,37 +975,14 @@ let one_more_int nat =
   nat_ints := ZMap.add i c !nat_ints;
   max_known_int := i
 
-let max_nat_int = Z.of_string "5000"
-
-let nat_int_binary nat double i =
-  assert (Z.leq Z.zero i);
-  let rec to_binary z acc =
-    if Z.equal z Z.zero then acc
-    else
-      let bit = if Z.equal (Z.rem z (Z.of_int 2)) Z.zero then 0 else 1 in
-      to_binary (Z.div z (Z.of_int 2)) (bit :: acc)
-  in
-  let binary_representation = to_binary i [] in
-  let xO = Constr.mkConstructU ((nat, 1), UVars.Instance.empty) in
-  let xS = Constr.mkConstructU ((nat, 2), UVars.Instance.empty) in
-  let fS x = Constr.mkApp (xS, [| x |]) in
-  let fDouble x = Constr.mkApp (double, [| x |]) in
-  let rec construct_nat binary_list_rev =
-    match binary_list_rev with
-    | [] -> xO
-    | 0 :: rest ->
-      let rest_constr = construct_nat rest in
-      fDouble rest_constr
-    | 1 :: rest ->
-      let rest_constr = construct_nat rest in
-      fS (fDouble rest_constr)
-    | _ -> assert false
-  in
-  construct_nat (List.rev binary_representation)
-
+(* A literal below [LeanNatTransport.max_nat_int] is [Nat_succ] applied [i]
+   times to [Nat_zero], each predecessor the literal [i - 1] (kept in
+   [nat_ints]); from it on, the form [LeanNatTransport.large_literal] builds
+   (shared with the transport pass, whose evaluation writes the literals it
+   computes in the same form). *)
 let nat_int nat double i =
   assert (Z.leq Z.zero i);
-  if Z.leq max_nat_int i then nat_int_binary nat double i
+  if Z.leq LeanNatTransport.max_nat_int i then LeanNatTransport.large_literal nat double i
   else begin
     while Z.lt !max_known_int i do
       one_more_int nat
@@ -956,68 +990,22 @@ let nat_int nat double i =
     ZMap.get i !nat_ints
   end
 
-(* Decode a UTF-8 string into a list of valid codepoints, with error reporting for bad characters *)
-(* let string_to_codepoints s =
-  (* Create a UTF-8 decoder for the input string *)
-  let decoder = Uutf.decoder ~encoding:`UTF_8 (`String s) in
-
-  (* Define the condition for filtering codepoints *)
-  let is_valid_codepoint n = n < 0xd800 || (0xdfff < n && n < 0x110000) in
-
-  (* Decode the string and collect valid codepoints *)
-  let rec collect_codepoints acc =
-    match Uutf.decode decoder with
-    | `Uchar u when is_valid_codepoint (Uchar.to_int u) ->
-      collect_codepoints (Uchar.to_int u :: acc)
-    | `Uchar u when Uchar.to_int u >= 0x110000 ->
-      (* Raise an exception with the problematic character *)
-      let bad_char = Printf.sprintf "U+%04X" (Uchar.to_int u) in
-      failwith (Printf.sprintf "Invalid codepoint (>= 0x110000): %s" bad_char)
-    | `Uchar u when Uchar.to_int u >= 0xd800 && 0xdfff >= Uchar.to_int u ->
-      (* Raise an exception with the problematic character *)
-      let bad_char = Printf.sprintf "U+%04X" (Uchar.to_int u) in
-      failwith
-        (Printf.sprintf "Invalid codepoint (u >= 0xd800 && 0xdfff >= u): %s"
-           bad_char)
-    | `Uchar _ -> assert false
-    | `End -> List.rev acc
-    | `Malformed s ->
-      (* Handle malformed UTF-8 sequences *)
-      failwith (Printf.sprintf "Malformed UTF-8 sequence: %S" s)
-    | `Await -> assert false (* This case should not occur for a string input *)
-  in
-  collect_codepoints [] *)
-
-let string_to_codepoints str =
-  let rec decode_utf8 s pos acc =
-    if pos >= String.length s then List.rev acc
+(* The code points of the string literal [s], in order. Lean's strings are
+   well-formed UTF-8 (no overlong form, no surrogate, nothing above U+10FFFF,
+   no sequence cut short): a literal that is not is refused, on either path. *)
+let code_points s =
+  let rec rev_code_points i acc =
+    if i >= String.length s then acc
     else
-      let c = Char.code (String.get s pos) in
-      let n =
-        if c < 0x80 then (1, c)
-        else if c < 0xE0 then (2, c land 0x1F)
-        else if c < 0xF0 then (3, c land 0x0F)
-        else (4, c land 0x07)
-      in
-      let bytes, value = n in
-      let code_point = ref value in
-      for i = 1 to bytes - 1 do
-        let next_byte = Char.code (String.get s (pos + i)) in
-        code_point := (!code_point lsl 6) lor (next_byte land 0x3F)
-      done;
-      decode_utf8 s (pos + bytes) (!code_point :: acc)
-  in
-  decode_utf8 str 0 []
-
-let check_valid_codepoints cs =
-  List.map
-    (fun c ->
-      if c < 0xd800 || (0xdfff < c && c < 0x110000) then c
-      else
-        let bad_char = Printf.sprintf "U+%04X" c in
+      let d = String.get_utf_8_uchar s i in
+      if not (Uchar.utf_decode_is_valid d) then
         CErrors.user_err
-          Pp.(str (Printf.sprintf "Invalid codepoint: %s" bad_char)))
-    cs
+          Pp.(str "String literal is not well-formed UTF-8 at byte " ++ int i ++ str ".")
+      else
+        rev_code_points (i + Uchar.utf_decode_length d)
+          (Uchar.to_int (Uchar.utf_decode_uchar d) :: acc)
+  in
+  List.rev (rev_code_points 0 [])
 
 let mk_char mkChar (c : int) =
   Constr.(mkApp (mkChar, [| mkInt (Uint63.of_int c) |]))
@@ -1033,20 +1021,187 @@ let mk_list list uinst ty l =
   mk_list_rec l
 
 let mk_string char string list char_uinst mkChar s =
-  let codepoints =
-    try check_valid_codepoints (string_to_codepoints s)
-    with Failure msg as exn ->
-      let _, info = Exninfo.capture exn in
-      CErrors.user_err ~info Pp.(str msg)
-  in
-  let chars = List.map (mk_char mkChar) codepoints in
+  let chars = List.map (mk_char mkChar) (code_points s) in
   let ls = mk_list list char_uinst char chars in
   Constr.(mkApp (mkConstructU ((string, 1), UVars.Instance.empty), [| ls |]))
 
+(* On the new path, a string literal is translated as the term Lean's kernel
+   unfolds it to ([string_lit_to_constructor], Lean v4.25.0
+   src/kernel/inductive.cpp:1200-1211): the string constructor applied to the
+   list [List.cons.{0} Char (Char.ofNat c)] ... [List.nil.{0} Char] of the
+   literal's code points [c], each a natural number literal ([Char.ofNat] is
+   set at line 1233). The constructor is [String.mk] up to Lean 4.25.x (v4.25.0
+   line 1226) and [String.ofList] from 4.26.0 on (v4.26.0 line 1226): the
+   export's [lean.version], [version], chooses. [to_constr] translates the term
+   like any other Lean term, so it uses the export's own constructor, [List],
+   [Char] and [Char.ofNat]. *)
+let string_lit_expr version s =
+  let const path us = Const (N.append_list N.anon path, us) in
+  let char = const [ "Char" ] [] in
+  (* [U.Prop] is Lean's universe level 0, as in the exports. *)
+  let list_ctor k = App (const [ "List"; k ] [ U.Prop ], char) in
+  let cons rest c =
+    App (App (list_ctor "cons", App (const [ "Char"; "ofNat" ] [], LeanParseShared.nat_lit (Z.of_int c))), rest)
+  in
+  let string_ctor = if version < (4, 26, 0) then [ "String"; "mk" ] else [ "String"; "ofList" ] in
+  App (const string_ctor [], List.fold_left cons (list_ctor "nil") (List.rev (code_points s)))
+
+(* The Rocq term of the instantiation [inst] at the Rocq universes [univs] of
+   the Lean universes that are not SProp (see [int_of_univs]): its [algs] are
+   instantiated with them. *)
+let instance_term inst univs uconv =
+  let subst l =
+    let u =
+      match Level.var_index l with
+      | None -> Universe.make l
+      | Some n -> List.nth univs n
+    in
+    Some u
+  in
+  let extra =
+    List.map
+      (fun alg -> simplify_universe (UnivSubst.subst_univs_universe subst alg))
+      inst.algs
+  in
+  let univs = List.concat [ univs; extra ] in
+  let uconv, univs =
+    CList.fold_left_map (fun uconv u -> to_univ_level u uconv) uconv univs
+  in
+  let u = Instance.of_array ([||], Array.of_list univs) in
+  (uconv, Constr.mkRef (inst.ref, u))
+
+(* The check of an entry of the export bound to a predeclared constant
+   ([check_predeclared_def], [check_predeclared_ind], on either path): the
+   entry is translated as the importer translates any entry, at the universes
+   [start_uconv] gives its instance, and the predeclared constant is taken at
+   the same universes, as [instantiate] takes it. A difference refuses the
+   entry, with a message that names the entry, the predeclared constant and
+   the difference. *)
+
+(* The universes of an entry with the Lean universes [univs] at instance [i],
+   and the Rocq universes a predeclared constant is taken at for it. *)
+let predeclared_univs univs i =
+  let uconv = start_uconv univs i in
+  (uconv, snd (int_of_univs (List.map (fun u -> to_universe uconv.map (U.UNamed u)) univs)))
+
+(* Refuse the entry [name] of the export, bound to the predeclared [ref]. *)
+let refuse_predeclared name ref difference =
+  CErrors.user_err
+    Pp.(
+      str "The export's " ++ N.pp name ++ str " does not agree with the predeclared "
+      ++ Printer.pr_global ref ++ str ": " ++ difference ++ str ".")
+
+(* The type of the predeclared [inst] at the Rocq universes [rocq_univs], with
+   the environment to compare it in. *)
+let predeclared_type uconv rocq_univs inst =
+  let uconv, c = instance_term inst rocq_univs uconv in
+  let env = Environ.set_universes uconv.graph (Global.env ()) in
+  let evd = Evd.from_env env in
+  (uconv, env, EConstr.to_constr evd (Retyping.get_type_of env evd (EConstr.of_constr c)))
+
+(* Compare [export], [what] of the entry [name] of the export, with the type of
+   the predeclared [inst] by conversion, and refuse the entry, bound to the
+   predeclared [pred], when they differ. *)
+let compare_predeclared_type ~name ~pred uconv rocq_univs what export inst =
+  let uconv, env, predeclared = predeclared_type uconv rocq_univs inst in
+  match Conversion.conv env predeclared export with
+  | Ok () -> uconv
+  | Error () ->
+    let pr = Printer.pr_constr_env env (Evd.from_env env) in
+    refuse_predeclared name pred
+      Pp.(
+        what ++ spc () ++ pr export ++ spc () ++ str "is not convertible with" ++ spc ()
+        ++ pr predeclared ++ str ", the type of " ++ Printer.pr_global inst.ref)
+
+(* Compare the type [export] of the inductive type [name] of the export with
+   the type of the predeclared [inst] it is bound to, and refuse the entry when
+   they differ. The parameters and indices are compared by conversion, and the
+   sort exactly: the export's sort, the importer's translation of the sort Lean
+   gives the type, must be the one the predeclared type stands for. src/Lean.v
+   declares in [Set] the types Lean declares in [Type], so a type predeclared
+   in [Set] accepts only the translation of Lean's [Type] ([Type@{Set+1}], see
+   [level_of_sets]); a type predeclared in [SProp], or at the universes of the
+   entry (as [ULift], predeclared as a definition), accepts only its own
+   sort. *)
+let compare_predeclared_arity ~name uconv rocq_univs export inst =
+  let refuse difference = refuse_predeclared name inst.ref difference in
+  let uconv, env, predeclared = predeclared_type uconv rocq_univs inst in
+  let evd = Evd.from_env env in
+  let export_binders, export_sort = Reduction.dest_arity env export in
+  let binders, sort = Reduction.dest_arity env predeclared in
+  let in_prop binders = Term.it_mkProd_or_LetIn Constr.mkProp binders in
+  if Result.is_error (Conversion.conv env (in_prop binders) (in_prop export_binders)) then begin
+    let pr = Printer.pr_constr_env env evd in
+    refuse
+      Pp.(
+        str "its type" ++ spc () ++ pr export ++ spc ()
+        ++ str "does not have the parameters and indices of" ++ spc () ++ pr predeclared
+        ++ str ", the type of " ++ Printer.pr_global inst.ref)
+  end;
+  let pr_sort = Printer.pr_sort ~universes:true evd in
+  let uconv, expected, rule =
+    match sort with
+    | Sorts.Set ->
+      let uconv, lean_type = to_univ_level' (U.Succ U.Prop) uconv in
+      let expected = sort_of_level lean_type in
+      ( uconv,
+        expected,
+        Pp.(
+          str "a type predeclared in Set accepts only " ++ pr_sort expected
+          ++ str ", the importer's translation of Lean's Type") )
+    | _ ->
+      ( uconv,
+        sort,
+        Pp.(
+          Printer.pr_global inst.ref ++ str " is in " ++ pr_sort sort
+          ++ str ", and a predeclared type accepts only its own sort") )
+  in
+  match Conversion.conv env (Constr.mkSort expected) (Constr.mkSort export_sort) with
+  | Ok () -> uconv
+  | Error () -> refuse Pp.(str "its type is in the sort " ++ pr_sort export_sort ++ str ", but " ++ rule)
+
+(* The translation of an inductive type of the export ([translate_ind]): its
+   parameters (innermost first), its arity in their context, the indices and
+   sort of that arity, and its constructors with their types in the context
+   [tr_ctor_env] of the type itself and its parameters. *)
+type translated_ind = {
+  tr_params : Constr.rel_context;
+  tr_arity : Constr.types;
+  tr_indices : Constr.rel_context;
+  tr_sort : Sorts.t;
+  tr_ctor_env : Environ.rel_context_val;
+  tr_ctors : (N.t * Constr.types) list;
+}
+
 let lcnt = ref 0
 
-let line_msg name =
-  Feedback.msg_info Pp.(str "line " ++ int !lcnt ++ str ": " ++ N.pp name)
+(* The line of the import's output about the entry [name] of the current line: "line N: NAME", followed by
+   ": MSG" when [msg] is given. *)
+let line_msg ?msg name =
+  Feedback.msg_info
+    Pp.(
+      str "line " ++ int !lcnt ++ str ": " ++ N.pp name
+      ++ match msg with None -> mt () | Some msg -> str ": " ++ msg)
+
+(* The constants of every declared instance of the export's entry [path]. *)
+let lean_consts path =
+  match N.Map.find_opt (N.append_list N.anon path) !declared with
+  | None -> []
+  | Some m ->
+    Int.Map.fold (fun _ { ref; _ } acc -> match ref with GlobRef.ConstRef c -> c :: acc | _ -> acc) m []
+
+(* What the transport pass reads of the importer's state, for the entry [name]: the export's constants, a
+   way to declare a lemma and a way to log a line about the entry. *)
+let nat_transport_context name =
+  {
+    LeanNatTransport.consts = lean_consts;
+    declare =
+      (fun id ty c ->
+        quickdef ~name:id ~types:(Some ty)
+          ~univs:(UState.Polymorphic_entry UContext.empty, UnivNames.empty_binders)
+          c);
+    log = (fun msg -> line_msg ~msg name);
+  }
 
 let rec to_constr =
   let open Constr in
@@ -1099,7 +1254,7 @@ let rec to_constr =
             match EConstr.kind evd tc_head with
             | Constr.Ind _ ->
               (* Standard inductive: use normal projection *)
-              let ((ind, _) as indu) =
+              let ind, u =
                 Constr.destInd (EConstr.Unsafe.to_constr tc_head)
               in
               let mib, mip = Inductive.lookup_mind_specif (Global.env()) ind in
@@ -1111,6 +1266,24 @@ let rec to_constr =
                   in
                   (* unfolded?? *)
                   mkProj (Projection.make p false, r, c)
+                | FakeRecord when Structures.Structure.mem env ind ->
+                  (* Non-primitive record (see [declare_ind]): apply its
+                     projection constant to the parameters and [c]. *)
+                  begin
+                    match
+                      List.nth_opt
+                        (Structures.Structure.find_projections env ind)
+                        field
+                    with
+                    | Some (Some p) ->
+                      let params = Array.map EConstr.Unsafe.to_constr args in
+                      mkApp (mkConstU (p, u), Array.append params [| c |])
+                    | Some None | None ->
+                      CErrors.user_err
+                        Pp.(
+                          str "no projection " ++ int field ++ str " for "
+                          ++ N.pp lean_ind)
+                  end
                 | NotRecord | FakeRecord ->
                   if
                     mip.mind_relevance
@@ -1129,7 +1302,7 @@ let rec to_constr =
           ()
       in
       ret c
-    | Nat i ->
+    | Nat s ->
       (* [nat_ints] is not synchronized so ensure Nat is instantiated *)
       instantiate (N.append N.anon "Nat") [] >>= fun nat ->
       let nat, _ = Constr.destInd nat in
@@ -1143,77 +1316,61 @@ let rec to_constr =
             EConstr.to_constr evd p)
           ()
       in
-      ret (nat_int nat double i)
-    | String s ->
-      (* instantiate (N.append N.anon "Char") [] >>= fun char -> *)
-      (* let (_, charu) = Constr.destInd char in *)
-      instantiate (N.append N.anon "String") [] >>= fun string ->
-      let string, _ = Constr.destInd string in
-      instantiate (N.append (N.append N.anon "String") "mk") []
-      >>= fun string_mk ->
-      get_uconv >>= fun uconv ->
-      let list, char =
-        with_env_evm env uconv
-          (fun env evd () ->
-            let ty =
-              Retyping.get_type_of env evd (EConstr.of_constr string_mk)
-            in
-            let _, list_char, _ = EConstr.destProd evd ty in
-            let list, char =
-              match EConstr.destApp evd list_char with
-              | list, [| char |] -> (list, char)
-              | _ ->
-                CErrors.user_err
-                  Pp.(
-                    str "Invalid type for string constructor: "
-                    ++ Printer.pr_type_env env evd (EConstr.to_constr evd ty)
-                    ++ str " ("
-                    ++ Printer.pr_type_env env evd
-                         (EConstr.to_constr evd list_char)
-                    ++ str " should be an application of list to char)")
-            in
-            (EConstr.to_constr evd list, EConstr.to_constr evd char))
-          ()
-      in
-      (* instantiate (N.append N.anon "List") [] >>= fun list -> *)
-      let list, _ = Constr.destInd list in
-      get_uconv >>= fun uconv ->
-      let mkChar =
-        with_env_evm env uconv
-          (fun env evd () ->
-            let _, mkChar =
-              Evd.fresh_global env evd (lookup_char_prim_ref ())
-            in
-            EConstr.to_constr evd mkChar)
-          ()
-      in
-      ret (mk_string char string list UVars.Instance.empty mkChar s)
+      ret (nat_int nat double (Z.of_string s))
+    | String s -> (
+      match !current_path with
+      | LeanParseNdjson.New version -> to_constr env (string_lit_expr version s)
+      | LeanParseNdjson.Legacy ->
+        (* instantiate (N.append N.anon "Char") [] >>= fun char -> *)
+        (* let (_, charu) = Constr.destInd char in *)
+        instantiate (N.append N.anon "String") [] >>= fun string ->
+        let string, _ = Constr.destInd string in
+        instantiate (N.append (N.append N.anon "String") "mk") []
+        >>= fun string_mk ->
+        get_uconv >>= fun uconv ->
+        let list, char =
+          with_env_evm env uconv
+            (fun env evd () ->
+              let ty =
+                Retyping.get_type_of env evd (EConstr.of_constr string_mk)
+              in
+              let _, list_char, _ = EConstr.destProd evd ty in
+              let list, char =
+                match EConstr.destApp evd list_char with
+                | list, [| char |] -> (list, char)
+                | _ ->
+                  CErrors.user_err
+                    Pp.(
+                      str "Invalid type for string constructor: "
+                      ++ Printer.pr_type_env env evd (EConstr.to_constr evd ty)
+                      ++ str " ("
+                      ++ Printer.pr_type_env env evd
+                           (EConstr.to_constr evd list_char)
+                      ++ str " should be an application of list to char)")
+              in
+              (EConstr.to_constr evd list, EConstr.to_constr evd char))
+            ()
+        in
+        (* instantiate (N.append N.anon "List") [] >>= fun list -> *)
+        let list, _ = Constr.destInd list in
+        get_uconv >>= fun uconv ->
+        let mkChar =
+          with_env_evm env uconv
+            (fun env evd () ->
+              let _, mkChar =
+                Evd.fresh_global env evd (lookup_char_prim_ref ())
+              in
+              EConstr.to_constr evd mkChar)
+            ()
+        in
+        ret (mk_string char string list UVars.Instance.empty mkChar s))
 
 and instantiate n univs uconv =
   assert (List.length univs < Sys.int_size);
   (* TODO what happens when is_large_elim and the motive is instantiated with Prop? *)
   let univs = List.map (to_universe uconv.map) univs in
   let i, univs = int_of_univs univs in
-  let inst = ensure_exists n i in
-  let subst l =
-    let u =
-      match Level.var_index l with
-      | None -> Universe.make l
-      | Some n -> List.nth univs n
-    in
-    Some u
-  in
-  let extra =
-    List.map
-      (fun alg -> simplify_universe (UnivSubst.subst_univs_universe subst alg))
-      inst.algs
-  in
-  let univs = List.concat [ univs; extra ] in
-  let uconv, univs =
-    CList.fold_left_map (fun uconv u -> to_univ_level u uconv) uconv univs
-  in
-  let u = Instance.of_array ([||], Array.of_list univs) in
-  (uconv, Constr.mkRef (inst.ref, u))
+  instance_term (ensure_exists n i) univs uconv
 
 and ensure_exists n i =
   try !declared |> N.Map.find n |> Int.Map.find i
@@ -1223,40 +1380,158 @@ and ensure_exists n i =
     (* if i = 0 then CErrors.user_err Pp.(N.pp n ++ str " was not instantiated!"); *)
     (* assert (not (upfront_instances ())); *)
     (match N.Map.find n !entries with
-    | Def def -> declare_def def i
-    | Ax ax -> declare_ax ax i
-    | Ind ind -> declare_ind ind i
-    | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared")
+    | { entry; path } ->
+      on_path path (fun () ->
+          match entry with
+          | Def def -> declare_def def i
+          | Ax ax -> declare_ax ax i
+          | Ind ind -> declare_ind ind i
+          | Quot _ -> CErrors.user_err Pp.(str "quot must be predeclared"))
     | exception Not_found -> CErrors.user_err Pp.(str "missing " ++ N.pp n))
 
-and declare_def { name = n; ty; body; univs; } i =
+(* Check the definition [def] of the export against the predeclared constant
+   [pred] the importer binds it to at instance [i]: its declared type is
+   compared by conversion, not its value (the predeclared value is kept). *)
+and check_predeclared_def ({ name; ty; univs; _ } : def) i (pred : instantiation) =
+  let uconv, rocq_univs = predeclared_univs univs i in
+  let uconv, ty = to_constr empty_env ty uconv in
+  ignore
+    (compare_predeclared_type ~name ~pred:pred.ref uconv rocq_univs (Pp.str "its declared type") ty
+       pred)
+
+(* Check the inductive type [ind] of the export against the predeclared [pred]
+   the importer binds it to at instance [i], translated as [declare_ind]
+   translates a new inductive type ([translate_ind]): its parameter count
+   ([nparams], [None] for a type predeclared as a definition), its type (see
+   [compare_predeclared_arity]), its constructor count and each constructor's
+   type, by conversion, against the predeclared constructors [pred_ctors] in
+   order. *)
+and check_predeclared_ind (ind : ind) i ~nparams ~ctors:pred_ctors (pred : instantiation) =
+  let count what export predeclared =
+    if export <> predeclared then
+      refuse_predeclared ind.name pred.ref
+        Pp.(
+          str "the export gives it " ++ int export ++ str " " ++ str what
+          ++ str ", the predeclared one has " ++ int predeclared)
+  in
+  Option.iter (count "parameters" (List.length ind.params)) nparams;
+  let uconv, rocq_univs = predeclared_univs ind.univs i in
+  let uconv, t = translate_ind uconv ind in
+  let uconv =
+    compare_predeclared_arity ~name:ind.name uconv rocq_univs
+      (Term.it_mkProd_or_LetIn t.tr_arity t.tr_params)
+      pred
+  in
+  count "constructors" (List.length t.tr_ctors) (List.length pred_ctors);
+  let uconv, ind_term = instance_term pred rocq_univs uconv in
+  ignore
+    (List.fold_left2
+       (fun uconv (cname, cty) cinst ->
+         let cty = Vars.subst1 ind_term (Term.it_mkProd_or_LetIn cty t.tr_params) in
+         compare_predeclared_type ~name:ind.name ~pred:pred.ref uconv rocq_univs
+           Pp.(str "the type of its constructor " ++ N.pp cname ++ str ",")
+           cty cinst)
+       uconv t.tr_ctors pred_ctors)
+
+and declare_def ({ name = n; ty; body; univs; } as def) i =
   let ref, algs =
     match get_predeclared_def_some n i with
     | Some ((UInt32_size | Nat_isValidChar | Nat_pow), _, (def_name, c)) ->
       (* Hack to let the user predeclare some constants
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print def_name ++ str " is predeclared");
-      (GlobRef.ConstRef c, [])
+      let ref = GlobRef.ConstRef c in
+      check_predeclared_def def i { ref; algs = [] };
+      (ref, [])
     | None ->
       let uconv = start_uconv univs i in
       let uconv, ty = to_constr empty_env ty uconv in
       let uconv, body = to_constr empty_env body uconv in
+      let id = name_for n i in
+      let transported =
+        if not (on_new_path ()) then None
+        else
+          LeanNatTransport.transport (nat_transport_context n)
+            (Environ.set_universes uconv.graph (Global.env ()))
+            ~entry:id ty body
+      in
       let univs, algs = univ_entry uconv univs in
-      let ref =
-        try quickdef ~name:(name_for n i) ~types:(Some ty) ~univs body
+      let declare body =
+        try quickdef ~name:id ~types:(Some ty) ~univs body
         with e ->
           let e = Exninfo.capture e in
-          Feedback.msg_info
-            Pp.(
-              str "Failed with" ++ fnl ()
-              ++ Printer.pr_constr_env (Global.env ())
-                   (Evd.from_env (Global.env ()))
-                   body
-              ++ fnl () ++ str ": "
-              ++ Printer.pr_constr_env (Global.env ())
-                   (Evd.from_env (Global.env ()))
-                   ty);
+          (* The term and its type are printed for a failure of the term, not
+             for a critical exception such as the [Control.Timeout] of the
+             Lean Entry Timeout, which ends the entry at once. *)
+          if CErrors.noncritical (fst e) then
+            Feedback.msg_info
+              Pp.(
+                str "Failed with" ++ fnl ()
+                ++ Printer.pr_constr_env (Global.env ())
+                     (Evd.from_env (Global.env ()))
+                     body
+                ++ fnl () ++ str ": "
+                ++ Printer.pr_constr_env (Global.env ())
+                     (Evd.from_env (Global.env ()))
+                     ty);
           Exninfo.iraise e
+      in
+      (* The transported value, when the pass changes it, is declared first. A value the kernel refuses is logged
+         at once, and the next value goes to the kernel instead: after a value with relevant casts, the SProp
+         pass's value when that pass changed the value, else Lean's own value; after the SProp pass's value,
+         Lean's own value. When that is refused too, the entry fails with Lean's error, as without the pass. Only
+         a refusal is caught: a limit of the entry (the Lean Entry Timeout, the Lean Entry Memory Limit) is a
+         critical exception that ends the entry. The kernel's error about a refused value is printed only when that
+         value has at most [LeanChargedTerm.print_bound] nodes. *)
+      let log_accepted count lemmas relevant relevant_lemmas =
+        let ids l = Pp.(prlist_with_sep (fun () -> str ", ") Id.print l) in
+        line_msg n
+          ~msg:
+            Pp.(
+              int count ++ str " argument(s) transported (" ++ ids lemmas ++ str ")"
+              ++ (if relevant > 0 then
+                    str "; " ++ int relevant ++ str " relevant argument(s) cast (" ++ ids relevant_lemmas ++ str ")"
+                  else mt ()))
+      in
+      let log_refused what value next e =
+        line_msg n
+          ~msg:
+            (if LeanChargedTerm.printable [ value ] then
+               Pp.(
+                 str what ++ str " is refused (" ++ CErrors.print e ++ str "); " ++ str next
+                 ++ str " goes to the kernel instead")
+             else
+               Pp.(
+                 str what ++ str " is refused by the kernel (it has more than " ++ int LeanChargedTerm.print_bound
+                 ++ str " nodes: the kernel's error is not printed); " ++ str next ++ str " goes to the kernel instead"))
+      in
+      (* The SProp pass's value [value], then Lean's. *)
+      let try_sprop value count lemmas =
+        match quickdef ~name:id ~types:(Some ty) ~univs value with
+        | ref ->
+          log_accepted count lemmas 0 [];
+          ref
+        | exception e when CErrors.noncritical e ->
+          log_refused "the transported value" value "Lean's value" e;
+          declare body
+      in
+      let ref =
+        match transported with
+        | None -> declare body
+        | Some { LeanNatTransport.value; count; lemmas; relevant = 0; _ } -> try_sprop value count lemmas
+        | Some { LeanNatTransport.value; count; lemmas; relevant; relevant_lemmas; saved } -> (
+          match quickdef ~name:id ~types:(Some ty) ~univs value with
+          | ref ->
+            log_accepted count lemmas relevant relevant_lemmas;
+            ref
+          | exception e when CErrors.noncritical e -> (
+            match saved with
+            | Some { LeanNatTransport.sprop_value; sprop_count; sprop_lemmas } ->
+              log_refused "the relevant pass's value" value "the SProp pass's value" e;
+              try_sprop sprop_value sprop_count sprop_lemmas
+            | None ->
+              log_refused "the relevant pass's value" value "Lean's value" e;
+              declare body))
       in
       (ref, algs)
   in
@@ -1295,7 +1570,45 @@ and to_params uconv params =
   in
   (acc, List.rev params)
 
-and declare_ind { name = n; params; ty; ctors; univs } i =
+(* The translation of the inductive type [ind] at the universes [uconv], as
+   [declare_ind] declares it and [check_predeclared_ind] checks it: the
+   parameters, then the arity in their context, then each constructor's type
+   in the context of the type itself and its parameters. *)
+and translate_ind uconv ({ name; params; ty; ctors; _ } : ind) =
+  let (env_params, uconv), params = to_params uconv params in
+  let uconv, arity = to_constr env_params ty uconv in
+  let indices, sort =
+    Reduction.dest_arity
+      (Environ.set_rel_context_val env_params
+         (Environ.set_universes uconv.graph (Global.env ())))
+      arity
+  in
+  let env_ind =
+    Environ.push_rel_context_val
+      (LocalAssum
+         ( Context.make_annot (N.to_name name) (Sorts.relevance_of_sort sort),
+           Term.it_mkProd_or_LetIn arity params ))
+      empty_env
+  in
+  let ctor_env = Context.Rel.fold_outside Environ.push_rel_context_val params ~init:env_ind in
+  let uconv, ctors =
+    CList.fold_left_map
+      (fun uconv (cname, cty) ->
+        let uconv, cty = to_constr ctor_env cty uconv in
+        (uconv, (cname, cty)))
+      uconv ctors
+  in
+  ( uconv,
+    {
+      tr_params = params;
+      tr_arity = arity;
+      tr_indices = indices;
+      tr_sort = sort;
+      tr_ctor_env = ctor_env;
+      tr_ctors = ctors;
+    } )
+
+and declare_ind ({ name = n; ctors; univs; _ } as ind) i =
   (* Handle inductives predeclared as definitions (e.g., ULift with cumulativity).
      We check if there's a cumul registration for this specific instance. *)
   match get_predeclared_ind_as_def_some n i with
@@ -1320,10 +1633,11 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
     let algs_rec = algs_of 1 2 in
     let ulift_ref = Rocqlib.lib_ref (cumul_reg n) in
     let inst = { ref = ulift_ref; algs = algs_2 } in
+    let up = { ref = Rocqlib.lib_ref (cumul_reg (N.append n "up")); algs = algs_2 } in
+    check_predeclared_ind ind i ~nparams:None ~ctors:[ up ] inst;
     add_declared n i inst;
-    (* Register ULift.up constructor *)
-    let cname = N.append n "up" in
-    add_declared cname i { ref = Rocqlib.lib_ref (cumul_reg cname); algs = algs_2 };
+    (* The export's constructor (Lean's [ULift.up]), bound to ULift_up_cumul. *)
+    List.iter (fun (cname, _) -> add_declared cname i up) ctors;
     (* Register ULift.down *)
     let dname = N.append n "down" in
     add_declared dname i { ref = Rocqlib.lib_ref (cumul_reg dname); algs = algs_2 };
@@ -1339,23 +1653,30 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
     match N.Map.find_opt uname !declared with
     | None -> false
     | Some m ->
-      (match Int.Map.find_opt 0 m with
-       | None -> false
-       | Some { ref = uint32_ref; _ } ->
-         (try
-            let legacy_ref =
-              Rocqlib.lib_ref "lean.UInt32.legacy"
-            in
-            Names.GlobRef.CanOrd.equal uint32_ref legacy_ref
-          with _ -> false))
+      (match (Int.Map.find_opt 0 m, Rocqlib.lib_ref_opt "lean.UInt32.legacy") with
+       | Some { ref = uint32_ref; _ }, Some legacy_ref ->
+         Names.GlobRef.CanOrd.equal uint32_ref legacy_ref
+       | _ -> false)
   in
-  let mind, algs, ind_name, cnames, univs, squashy =
+  (* Check the entry against the predeclared [mind] the importer binds it to. *)
+  let check_predeclared_mind mind =
+    let mib = Global.lookup_mind mind in
+    let pred_ctors =
+      List.init (Array.length mib.mind_packets.(0).mind_consnames) (fun k ->
+          { ref = GlobRef.ConstructRef ((mind, 0), k + 1); algs = [] })
+    in
+    check_predeclared_ind ind i ~nparams:(Some mib.mind_nparams) ~ctors:pred_ctors
+      { ref = GlobRef.IndRef (mind, 0); algs = [] }
+  in
+  (* The export's constructors, bound in order to those of the inductive type. *)
+  let cnames = List.map fst ctors in
+  let mind, algs, ind_name, univs, squashy =
     match get_predeclared_ind_some ~ctors ~uint32_is_legacy n i with
     | Some (Eq, _, (ind_name, mind)) ->
       (* Hack to let the user predeclare eq and quot before running Lean Import
          TODO make a more general Register-like API? *)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cname = N.append n "refl" in
+      check_predeclared_mind mind;
       let squashy =
         { maybe_prop = true; always_prop = true; lean_squashes = false }
       in
@@ -1369,52 +1690,36 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
         | 1 -> UContext.empty
         | _ -> assert false
       in
-      (mind, [], ind_name, [ cname ], univs, squashy)
+      (mind, [], ind_name, univs, squashy)
     | Some
-        ( ((Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char) as k),
+        ( (Nat | Nat_le | Or | And | Fin | UInt32 | BitVec | Char),
           _,
           (ind_name, mind) ) ->
       (* Hack to let the user predeclare various types before running Lean Import
          TODO make a more general Register-like API? *)
       (* this case is for the ones without universes*)
       Feedback.msg_info Pp.(Id.print ind_name ++ str " is predeclared");
-      let cnames = get_predeclared_cnames k n in
+      check_predeclared_mind mind;
       let squashy = N.Map.get n !squash_info in
-      (mind, [], ind_name, cnames, UContext.empty, squashy)
+      (mind, [], ind_name, UContext.empty, squashy)
     | None ->
       let uconv = start_uconv univs i in
-      let (env_params, uconv), params = to_params uconv params in
-      let uconv, ty = to_constr env_params ty uconv in
-      let indices, sort =
-        let env_params =
-          Environ.set_rel_context_val env_params
-            (Environ.set_universes uconv.graph (Global.env ()))
-        in
-        Reduction.dest_arity env_params ty
+      let ( uconv,
+            {
+              tr_params = params;
+              tr_arity = ty;
+              tr_indices = indices;
+              tr_sort = sort;
+              tr_ctor_env = env_ind_params;
+              tr_ctors;
+            } ) =
+        translate_ind uconv ind
       in
-      let env_ind =
-        Environ.push_rel_context_val
-          (LocalAssum
-             ( Context.make_annot (N.to_name n) (Sorts.relevance_of_sort sort),
-               Term.it_mkProd_or_LetIn ty params ))
-          empty_env
-      in
-      let env_ind_params =
-        Context.Rel.fold_outside Environ.push_rel_context_val params
-          ~init:env_ind
-      in
-      let uconv, ctors =
-        CList.fold_left_map
-          (fun uconv (n, ty) ->
-            let uconv, ty = to_constr env_ind_params ty uconv in
-            (uconv, (n, ty)))
-          uconv ctors
-      in
-      let cnames, ctys = List.split ctors in
+      let ctys = List.map snd tr_ctors in
       let graph = uconv.graph in
       let univs, algs = univ_entry_gen uconv univs in
       let ind_name = name_for n i in
-      let record, fields, ctys, needs_unsafe_univs_for_eta =
+      let record, fields, ctys =
         match (indices, ctys) with
         | [], [ cty ] ->
           cty
@@ -1465,19 +1770,28 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
                      fields
                  in
                  match (fields, Sorts.is_sprop sort, is_recursive) with
-                 | [], true, _ -> (None, [], ctys, false)
+                 | [], true, _ -> (None, [], ctys)
                  | _ :: _, false, false ->
-                   ( Some (Some [| default_proj_id |]),
+                   (* Rocq gives eta to a primitive record outside SProp
+                      only when it has a relevant field (or when universe
+                      checking is off, which the import never does), and the
+                      eliminator it builds from the projections of a
+                      primitive record needs eta. A record outside SProp
+                      whose fields are all SProp is therefore declared as a
+                      non-primitive record: its projections and eliminator
+                      are matches. *)
+                   ( Some
+                       (if has_relevant_field then Some [| default_proj_id |]
+                        else None),
                      fields,
-                     [ cty' ],
-                     not has_relevant_field )
-                 | [], false, _ -> (None, [], ctys, false)
+                     [ cty' ] )
+                 | [], false, _ -> (None, [], ctys)
                  | _ :: _, true, false ->
                    if not has_relevant_field then
-                     (Some (Some [| default_proj_id |]), fields, [ cty' ], false)
-                   else (None, [], ctys, false)
-                 | _ :: _, _, true -> (None, [], ctys, false))
-        | _ -> (None, [], ctys, false)
+                     (Some (Some [| default_proj_id |]), fields, [ cty' ])
+                   else (None, [], ctys)
+                 | _ :: _, _, true -> (None, [], ctys))
+        | _ -> (None, [], ctys)
       in
       let entry finite =
         {
@@ -1509,13 +1823,14 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
             (UState.Polymorphic_entry UContext.empty, UnivNames.empty_binders)
             []
         in
-        let act () = try act BiFinite with e -> act Finite in
-        (* Newer Rocq gives eta to primitive records with no relevant fields
-           only while unsafe typing flags are active. *)
-        if
-          (squashy.lean_squashes || not coq_squashes)
-          && not needs_unsafe_univs_for_eta
-        then act ()
+        (* The type is declared [BiFinite] when the kernel accepts that (a
+           non-recursive type), else [Finite]. A critical exception, such as
+           the [Control.Timeout] of the Lean Entry Timeout, is not a refusal
+           of [BiFinite]: it ends the entry. *)
+        let act () =
+          try act BiFinite with e when CErrors.noncritical e -> act Finite
+        in
+        if squashy.lean_squashes || not coq_squashes then act ()
         else with_unsafe_univs act ()
       in
       assert (
@@ -1524,7 +1839,7 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
       (* Declare projections if the inductive is a record *)
       let () =
         match record with
-        | Some (Some _) ->
+        | Some ids ->
           let inhabitant_id = ind_name in
           let kind = Decls.StructureComponent in
           let proj_flags =
@@ -1538,12 +1853,21 @@ and declare_ind { name = n; params; ty; ctors; univs } i =
               fields
           in
           let implfs = List.map (fun _ -> []) fields in
-          ignore
-            (Record.Internal.declare_projections (mind, 0) ~kind ~inhabitant_id
-               proj_flags implfs)
-        | _ -> ()
+          let projs =
+            RecordInternal.declare_projections (mind, 0) ~kind ~inhabitant_id
+              proj_flags implfs
+          in
+          (* The kernel keeps no projections for a non-primitive record:
+             register them as a structure, so that [to_constr] finds the
+             projection constant of a Lean [Proj]. *)
+          (match ids with
+           | None ->
+             RecordInternal.declare_structure_entry
+               (Structures.Structure.make (Global.env ()) (mind, 0) projs)
+           | Some _ -> ())
+        | None -> ()
       in
-      (mind, algs, ind_name, cnames, univs, squashy)
+      (mind, algs, ind_name, univs, squashy)
   in
 
   (* add ind and ctors to [declared] *)
@@ -1800,13 +2124,20 @@ let declare_ind ind =
 let entry_name = function
 | Quot name | Def { name } | Ax { name } | Ind { name } -> name
 
-(* A name registered for the version-aware predeclared dispatch machinery
-   (UInt32/Char in particular) may legitimately be emitted twice: the
-   second [#IND] flips [get_predeclared_*] to a different Rocq reference.
-   We do not dedupe those; the dispatch logic handles them. *)
+(* Whether [n] is bound by a row of the predeclared table that dispatches
+   between two Rocq records ([get_predeclared_uint32], [get_predeclared_char]):
+   on the legacy path, such an entry may legitimately be emitted twice, the
+   second [#IND] flipping the dispatch to the other record, and it is declared
+   again. Those rows apply on the legacy path only: on the new path a repeated
+   [UInt32] or [Char] is a duplicate like any other entry. The answer comes
+   from the rows alone: no registration is read, since which record the entry
+   binds depends on its constructors, which [declare_ind] reads. *)
 let is_predeclared_dispatch_name n =
-  let has_prefix prefix = N.equal n (N.append_list N.anon prefix) in
-  has_prefix [ "UInt32" ] || has_prefix [ "Char" ]
+  List.exists
+    (function
+      | (UInt32 | Char), _, _ -> true
+      | (Eq | Nat | Nat_le | Or | And | Fin | BitVec), _, _ -> false)
+    (get_predeclared_ind_any n 0)
 
 (* Duplicate entries can occur when lean4export is invoked with multiple
    roots that share a transitive dependency: the shared declaration is
@@ -1829,7 +2160,7 @@ let add_entry entry =
       | Ax ax -> declare_ax ax
       | Ind ind -> declare_ind ind
     in
-    entries := N.Map.add name entry !entries
+    entries := N.Map.add name { entry; path = !current_path } !entries
 
 let rec is_arity = function
   | Sort _ -> true
@@ -1857,7 +2188,7 @@ let pp_parser_state = function
 let finish state =
   let max_univs, cnt =
     N.Map.fold
-      (fun _ entry (m, cnt) ->
+      (fun _ { entry; _ } (m, cnt) ->
         match entry with
         | Ax { univs } | Def { univs } | Ind { univs } ->
           let l = List.length univs in
@@ -1867,7 +2198,7 @@ let finish state =
   in
   let nonarities =
     N.Map.fold
-      (fun _ entry cnt ->
+      (fun _ { entry; _ } cnt ->
         match entry with
         | Ax _ | Def _ | Quot _ -> cnt
         | Ind ind -> if is_arity ind.ty then cnt else cnt + 1)
@@ -1886,7 +2217,7 @@ let finish state =
       fnl () ++ fnl () ++ str "Done!" ++ fnl () ++ str "- "
       ++ int (N.Map.cardinal !entries)
       ++ str " entries (" ++ int cnt ++ str " possible instances)"
-      ++ (if N.Map.exists (fun _ -> function Quot _ -> true | _ -> false) !entries then
+      ++ (if N.Map.exists (fun _ { entry; _ } -> match entry with Quot _ -> true | _ -> false) !entries then
             str " (including quot)."
           else str ".")
       ++ fnl () ++
@@ -1920,12 +2251,239 @@ let () =
 
 exception TimedOut
 
-let do_line state l =
+(* Lean Entry Timeout: how many seconds declaring one entry may take, unset by
+   default. An entry still being declared then is refused with
+   [EntryTimedOut]. *)
+let entry_timeout = ref None
+
+let () =
+  LeanNatTransport.declare_positive_int_option
+    ~key:[ "Lean"; "Entry"; "Timeout" ] ~unit:"seconds" entry_timeout
+
+(* Lean Entry Memory Limit: by how many GiB declaring one entry may grow the
+   major heap above its size at the entry's start, unset by default. An entry
+   that grows it more is stopped and refused with [EntryMemoryLimit] (see
+   [watching_memory]). *)
+let entry_memory_limit = ref None
+
+let () =
+  LeanNatTransport.declare_positive_int_option
+    ~key:[ "Lean"; "Entry"; "Memory"; "Limit" ] ~unit:"GiB" entry_memory_limit
+
+(* The refusals of an entry stopped by a limit: the limit, and the size of the
+   major heap at the entry's start, in MiB. *)
+exception EntryTimedOut of int * int
+exception EntryMemoryLimit of int * int
+
+let () =
+  let heap_at_start mib = Pp.(str "; major heap at the entry's start: " ++ int mib ++ str " MiB") in
+  CErrors.register_handler (function
+    | EntryTimedOut (n, mib) ->
+      Some Pp.(str "Timed out after " ++ int n ++ str " s (Lean Entry Timeout)" ++ heap_at_start mib)
+    | EntryMemoryLimit (n, mib) ->
+      Some
+        Pp.(
+          str "Memory limit of " ++ int n ++ str " GiB reached (Lean Entry Memory Limit)"
+          ++ heap_at_start mib)
+    | _ -> None)
+
+(* The size of the major heap, in words. *)
+let heap_words () = (Gc.quick_stat ()).Gc.heap_words
+
+let words_per_mib = (1 lsl 20) / (Sys.word_size / 8)
+
+(* [n] GiB in words, or [max_int] when that does not fit an [int]. *)
+let gib_words n =
+  let per_gib = 1024 * words_per_mib in
+  if n > max_int / per_gib then max_int else n * per_gib
+
+(* What [watching_memory] found while an entry was being declared. *)
+type memory_watch = {
+  mutable stopped_at : float option;
+      (** when the heap was first found over the limit, in wall-clock seconds *)
+  mutable raised : bool;  (** whether [watching_memory] raised [Sys.Break] *)
+}
+
+(* How often OCaml's memory profiler samples the allocations of an entry under
+   a memory limit: once per about 800 KB allocated. *)
+let memory_sampling_rate = 1e-5
+
+(* A removed alarm: the value of a watch's alarm until the watch creates its
+   own, so that storing that alarm allocates nothing (see [watching_memory]). *)
+let no_alarm =
+  let alarm = Gc.create_alarm ignore in
+  Gc.delete_alarm alarm;
+  alarm
+
+(* [watching_memory ~limit ~start w f x] computes [f x], the declaration of an
+   entry with a starting major heap of [start] words. It stops the entry
+   once the heap has grown by more than [limit] words.
+
+   The watch measures the net growth of the major heap, which the whole
+   process shares, at the ends of major collections: a GC alarm, run at the
+   end of each one, reads the heap's size. Once that has grown past the limit,
+   the alarm records the time in [w.stopped_at] and does nothing else: it
+   allocates nothing after that record and raises nothing. The entry stops at
+   the next sampled allocation of its own thread (below), so it can pass its
+   limit by what the heap grows until the next collection ends and then until
+   that sample; no fixed bound holds.
+
+   The entry is stopped with [Sys.Break], which [CErrors.noncritical] does not
+   cover, so no [with e when CErrors.noncritical e] handler between the kernel
+   and [do_input] swallows it. Rocq's own interrupt flag, [Control.interrupt],
+   was not enough on Rocq 07e45e36 and OCaml 4.14.2. In one trial, an alarm set
+   the flag when RLI434.boundedVal._proof_1 in dumps/lean434/memory_twice.ndjson
+   grew the heap by 1 GiB, 5.0 s into the entry. The reduction in this case
+   did not poll the flag. The entry ran to its 30 s timeout with 8151 MiB of
+   heap growth and the flag still set.
+
+   An allocation callback of OCaml's memory profiler, [Gc.Memprof], raises
+   [Sys.Break] instead. After the mark, each sampled allocation of the
+   declaring thread raises it until [f x] ends.
+   Allocations of other threads are never interrupted, and [Control.interrupt]
+   is neither set nor cleared. On the same toolchain, a 1 GiB limit stopped
+   both proofs in the fixture. The first stopped in the same millisecond as
+   the mark (4.968 s into the entry, heap 1344 MiB from 108 MiB). In a trial
+   with a second thread allocating throughout, that thread was not interrupted.
+
+   The importer never takes over or stops a profiler it did not start.
+   If one is already active, or if [Gc.Memprof.start] fails for another
+   reason, the importer refuses the entry before declaring it.
+
+   The watch allocates everything it needs before it acquires the alarm and
+   then the profiler, and one release covers every exit, an exception during
+   that startup included. The release first disables both callbacks, then
+   removes the alarm, then stops the profiler if this watch started it, so the
+   alarm is gone even if stopping the profiler raises. The
+   alarm is stored over [no_alarm] and the profiler marked as started right
+   after each call returns, with no allocation in between, so no asynchronous
+   exception can arrive between acquiring either and the release knowing of
+   it. *)
+let watching_memory ~limit ~start w f x =
+  let owner = Thread.id (Thread.self ()) in
+  let active = ref true in
+  let alarm = ref no_alarm in
+  let profiling = ref false in
+  let check_heap () =
+    if !active && Option.is_empty w.stopped_at && heap_words () - start > limit then
+      w.stopped_at <- Some (Unix.gettimeofday ())
+  in
+  let stop _ =
+    if !active && Option.has_some w.stopped_at && Thread.id (Thread.self ()) = owner then begin
+      w.raised <- true;
+      raise Sys.Break
+    end
+    else None
+  in
+  let tracker = { Gc.Memprof.null_tracker with Gc.Memprof.alloc_minor = stop; alloc_major = stop } in
+  let release () =
+    active := false;
+    Gc.delete_alarm !alarm;
+    if !profiling then begin
+      profiling := false;
+      Gc.Memprof.stop ()
+    end
+  in
+  let watch () =
+    alarm := Gc.create_alarm check_heap;
+    (match ignore (Gc.Memprof.start ~sampling_rate:memory_sampling_rate ~callstack_size:0 tracker) with
+    | () -> profiling := true
+    | exception Failure msg ->
+      CErrors.user_err
+        Pp.(
+          str "Lean Entry Memory Limit cannot watch this entry, which is not declared: OCaml's memory profiler (Gc.Memprof) did not start ("
+          ++ str msg ++ str ")."));
+    f x
+  in
+  match watch () with
+  | v ->
+    release ();
+    v
+  | exception e ->
+    release ();
+    Exninfo.iraise (Exninfo.capture e)
+
+(* [in_time ~start_mib n f x] computes [f x] under the Lean Entry Timeout of
+   [n] s; [start_mib] is the size of the major heap at the entry's start, in
+   MiB, for the refusal. *)
+let in_time ~start_mib n f x =
+  match Control.timeout (float_of_int n) f x with
+  | Ok v -> v
+  | Error info -> Exninfo.iraise (EntryTimedOut (n, start_mib), info)
+
+(* Keep an observed outer [Control.Timeout] or [Sys.Break] not raised by
+   the watch. If asynchronous exceptions replace each other during unwinding,
+   only the surviving exception is visible here. A [Sys.Break] from the
+   watch does not show whether an independent interrupt also occurred. *)
+let add_entry_limited entry =
+  match (!entry_timeout, !entry_memory_limit) with
+  | None, None -> add_entry entry
+  | Some n, None -> in_time ~start_mib:(heap_words () / words_per_mib) n add_entry entry
+  | timeout, Some gib ->
+    let start = heap_words () in
+    let start_mib = start / words_per_mib in
+    let t0 = Unix.gettimeofday () in
+    let w = { stopped_at = None; raised = false } in
+    let watched = watching_memory ~limit:(gib_words gib) ~start w add_entry in
+    let scoped_timer = ref None in
+    let remaining () = (Unix.getitimer Unix.ITIMER_REAL).it_value in
+    let declare () =
+      match timeout with
+      | None -> watched entry
+      | Some n when Sys.os_type = "Unix" || Sys.os_type = "Cygwin" ->
+        let before = Unix.gettimeofday () in
+        let outer = remaining () in
+        (* [Control.unix_timeout] leaves an earlier timer in place. Compare
+           a lower bound on its deadline with an upper bound on the deadline
+           inside the scope. If they overlap, do not infer timer ownership. *)
+        in_time ~start_mib n
+          (fun entry ->
+            let left = remaining () in
+            let deadline = Unix.gettimeofday () +. left in
+            scoped_timer := Some (deadline, outer = 0. || deadline < before +. outer);
+            watched entry)
+          entry
+      | Some n -> in_time ~start_mib n watched entry
+    in
+    (* The watch ends before [Control.timeout] restores a timer it replaced. *)
+    let memory_limit_reached info = Exninfo.iraise (EntryMemoryLimit (gib, start_mib), info) in
+    (match declare () with
+    | () ->
+      (* The limit was passed, but the entry ended before a sample stopped it. *)
+      if Option.has_some w.stopped_at then memory_limit_reached Exninfo.null
+    | exception e ->
+      let ((e, info) as exn) = Exninfo.capture e in
+      let deadline_passed at n =
+        match !scoped_timer with
+        | Some (deadline, _) -> at >= deadline
+        | None -> at >= t0 +. float_of_int n
+      in
+      (match (w.stopped_at, e) with
+      | None, _ -> Exninfo.iraise exn
+      | Some at, EntryTimedOut (n, _) when deadline_passed at n -> Exninfo.iraise exn
+      | Some _, Control.Timeout -> Exninfo.iraise exn
+      | Some _, Sys.Break when not w.raised -> Exninfo.iraise exn
+      | Some at, Sys.Break ->
+        (* An allocation callback can replace an entry timeout with its break.
+           Infer the earlier time limit only for a known entry timer. *)
+        (match (timeout, !scoped_timer) with
+        | Some n, Some (deadline, true) when at >= deadline ->
+          Exninfo.iraise (EntryTimedOut (n, start_mib), info)
+        | _ -> memory_limit_reached info)
+      | Some _, _ -> memory_limit_reached info))
+
+(* Parse the line [l]: for its metadata, names, levels and expressions only
+   when [prefix], a line before the first line to import (see [import]); the
+   old text format reads nothing from such a line. *)
+let do_line ~prefix state l =
   let do_line () =
     match state.pstate with
+    | OldParser _ when prefix -> (state, None)
     | OldParser pstate ->
       let pstate, oentry = LeanParse.do_line pstate ~lcnt:!lcnt l in
       ({ state with pstate = OldParser pstate }, oentry)
+    | NdjsonParser pstate when prefix ->
+      ({ state with pstate = NdjsonParser (LeanParseNdjson.do_prefix_line pstate ~lcnt:!lcnt l) }, None)
     | NdjsonParser pstate ->
       let pstate, oentry = LeanParseNdjson.do_line pstate ~lcnt:!lcnt l in
       ({ state with pstate = NdjsonParser pstate }, oentry)
@@ -1937,38 +2495,9 @@ let do_line state l =
     | Ok v -> v
     | Error info -> Exninfo.iraise (TimedOut, info))
 
-let do_line state l =
+let do_line ~prefix state l =
   let t0 = System.get_time () in
-  match do_line state l with
-  | state ->
-    let t1 = System.get_time () in
-    prtime t0 t1;
-    state
-  | exception e ->
-    let e = Exninfo.capture e in
-    (if fst e <> TimedOut then
-       let t1 = System.get_time () in
-       prtime t0 t1);
-    Exninfo.iraise e
-
-let do_prefix_line state l =
-  let do_prefix_line () =
-    match state.pstate with
-    | OldParser _ -> state
-    | NdjsonParser pstate ->
-      let pstate = LeanParseNdjson.do_prefix_line pstate ~lcnt:!lcnt l in
-      { state with pstate = NdjsonParser pstate }
-  in
-  match !timeout with
-  | None -> do_prefix_line ()
-  | Some t ->
-    (match Control.timeout (float_of_int t) do_prefix_line () with
-    | Ok v -> v
-    | Error info -> Exninfo.iraise (TimedOut, info))
-
-let do_prefix_line state l =
-  let t0 = System.get_time () in
-  match do_prefix_line state l with
+  match do_line ~prefix state l with
   | state ->
     let t1 = System.get_time () in
     prtime t0 t1;
@@ -1987,6 +2516,24 @@ let unfreeze (lib, sum) =
   Lib.Interp.unfreeze lib;
   Summary.Interp.unfreeze_summaries sum
 
+(* The refusal of the current line [l]: [name] is what the line declares, [e]
+   why it is refused. *)
+let refusal ~name l e =
+  Pp.(
+    str "Error at line " ++ int !lcnt ++ str " (for " ++ name ++ str ")"
+    ++ str (": " ^ l)
+    ++ fnl () ++ CErrors.iprint e)
+
+(* The name of a refused line that declares no entry the parser read. *)
+let line_name () = Pp.(str "line-" ++ int !lcnt)
+
+(* Whether failing to parse a line refuses it. The Lean Line Timeout's
+   [TimedOut] and the asynchronous exceptions (an outer [Timeout], an
+   interrupt) end the import instead. *)
+let refuses_line = function
+  | TimedOut -> false
+  | e -> not (CErrors.is_async e)
+
 let rec do_input state ~from ~until ch =
   if until = Some !lcnt then begin
     close_in ch;
@@ -2000,62 +2547,90 @@ let rec do_input state ~from ~until ch =
       finish state;
       if not (until = None) then CErrors.user_err Pp.(str "unexpected EOF!");
       state
-    | l when before_from from ->
-      (match state.pstate with
-      | OldParser _ ->
-        incr lcnt;
-        do_input state ~from ~until ch
-      | NdjsonParser _ ->
-        let state = do_prefix_line state l in
-        incr lcnt;
-        do_input state ~from ~until ch)
     | l ->
-      let state, oentry = do_line state l in
-      (match (just_parse (), oentry) with
-      | true, _ | false, None ->
-        incr lcnt;
-        do_input state ~from ~until ch
-      | false, Some (Nota _) ->
-        (* notations not yet implemented *)
-        incr lcnt;
-        do_input state ~from ~until ch
-      | false, Some (Entry entry) ->
-        (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
-        let st = freeze () in
-        (match add_entry entry with
-        | () ->
+      (match do_line ~prefix:(before_from from) state l with
+      | exception LeanParseNdjson.Refused { state = pstate; entry; error } ->
+        let name = match entry with Some n -> N.pp n | None -> line_name () in
+        refuse { state with pstate = NdjsonParser pstate } ~from ~until ch
+          (fst error) (refusal ~name l error)
+      | exception LeanParse.Refused { state = pstate; error } ->
+        refuse { state with pstate = OldParser pstate } ~from ~until ch
+          (fst error) (refusal ~name:(line_name ()) l error)
+      | exception e when refuses_line e ->
+        let e = Exninfo.capture e in
+        refuse state ~from ~until ch (fst e) (refusal ~name:(line_name ()) l e)
+      | state, oentry ->
+        (match (just_parse (), oentry) with
+        | true, _ | false, None ->
           incr lcnt;
           do_input state ~from ~until ch
-        | exception e ->
-          let e = Exninfo.capture e in
-          let n = entry_name entry in
-          let epp =
-            Pp.(
-              str "Error at line " ++ int !lcnt ++ str " (for " ++ N.pp n
-              ++ str ")"
-              ++ str (": " ^ l)
-              ++ fnl () ++ CErrors.iprint e)
-          in
-          unfreeze st;
-          (* without this unfreeze, the global state.declared and the
-             global env are out of sync *)
-          (match error_mode (fst e) with
-          | Skip ->
-            Feedback.msg_info Pp.(str "Skipping: " ++ epp);
+        | false, Some (Nota _) ->
+          (* notations not yet implemented *)
+          incr lcnt;
+          do_input state ~from ~until ch
+        | false, Some (Entry entry) ->
+          (* The path (with the Lean version) the export's metadata gave before
+             its first entry. *)
+          current_path :=
+            (match state.pstate with
+            | OldParser _ -> LeanParseNdjson.Legacy
+            | NdjsonParser pstate -> LeanParseNdjson.path pstate);
+          (* freeze is actually pretty costly, so make sure we don't run it for non sideffect lines. *)
+          let st = freeze () in
+          (match add_entry_limited entry with
+          | () ->
             incr lcnt;
-            do_input { state with skips = state.skips + 1 } ~from ~until ch
-          | Stop ->
-            close_in ch;
-            finish state;
-            Feedback.msg_info epp;
-            state
-          | Fail ->
-            close_in ch;
-            finish state;
-            CErrors.user_err epp)))
+            do_input state ~from ~until ch
+          | exception e ->
+            (* Every exception refuses the entry, an asynchronous one too: the
+               Lean Entry Timeout reaches here as [EntryTimedOut], the Lean
+               Entry Memory Limit as [EntryMemoryLimit], and an outer
+               [Timeout] or an interrupt that fires while the entry is being
+               declared refuses it like any other error (see Lean Error Mode
+               in README.md). *)
+            let e = Exninfo.capture e in
+            let msg = refusal ~name:(N.pp (entry_name entry)) l e in
+            unfreeze st;
+            (* without this unfreeze, the global state.declared and the
+               global env are out of sync *)
+            (* An entry stopped by a limit can leave a large heap: compact it
+               now that the entry's state is undone, so that the space it held
+               is given back before the next entry. *)
+            (match fst e with EntryTimedOut _ | EntryMemoryLimit _ -> Gc.compact () | _ -> ());
+            refuse state ~from ~until ch (fst e) msg)))
+
+(* The Error Mode's answer to the refusal [msg] of the current line, refused
+   because of [exn]. *)
+and refuse state ~from ~until ch exn msg =
+  match error_mode exn with
+  | Skip ->
+    Feedback.msg_info Pp.(str "Skipping: " ++ msg);
+    incr lcnt;
+    do_input { state with skips = state.skips + 1 } ~from ~until ch
+  | Stop ->
+    close_in ch;
+    finish state;
+    Feedback.msg_info msg;
+    state
+  | Fail ->
+    close_in ch;
+    finish state;
+    CErrors.user_err msg
 
 let pstate = Summary.ref ~name:"lean-parse-state" LeanParse.empty_state
 
+(* The importer's state as one library object: [import] adds it at the end of each import, and it is written in the
+   .vo (Keep) and restored by [cache] when it is added and when the library is loaded. The Summary.refs it restores
+   are frozen and unfrozen in memory only. rocqchk reads the object with the rest of the .vo, and its reader
+   (checker/analyze.ml of the cut) reads an OCaml custom block only when it is an Int64 (identifier "_j"). Zarith
+   writes a number of 2^62 or more as a custom block with code 0x18 (CODE_CUSTOM_LEN), which that reader refuses:
+   Job zchk-c83d7e3a-20261127t101628 ran the cut's rocqchk (ci/build-9.2-cut.sh --check) on tests/core.vo and
+   tests/lean434_bigint.vo, whose state then held literals of 2^64 as Zarith numbers, and it printed "Unhandled code
+   0018" and stopped at the assert of line 420 of checker/analyze.ml. So the object holds no Zarith number: a
+   natural literal is the decimal string of its value ([LeanExpr.Nat], written by [LeanParseShared.nat_lit]). The
+   tuple holds the text parser's state, [sets], [declared], [entries], [squash_info] and [height_cache], that is
+   names (string lists), strings, ints, bools, Rocq's Level, Universe and GlobRef values, and maps, sets, lists and
+   ranges of these. *)
 let lean_obj =
   let cache (pstatev, setsv, declaredv, entriesv, squash_infov, heightv) =
     pstate := pstatev;
@@ -2098,10 +2673,18 @@ let import ~from ~until f =
       close_in_noerr ch;
       raise e
   in
-  (* silence the definition messages from Coq *)
+  (* silence the definition messages from Coq. [do_input] closes [ch] where it
+     ends; when it raises instead, [ch] is closed here. *)
+  let ch = open_in f in
   let { pstate = pstatev } =
-    Flags.silently (fun () ->
-        do_input { pstate = initial_pstate; skips = 0 } ~from ~until (open_in f)) ()
+    match
+      Flags.silently (fun () -> do_input { pstate = initial_pstate; skips = 0 } ~from ~until ch) ()
+    with
+    | state -> state
+    | exception e ->
+      let e = Exninfo.capture e in
+      close_in_noerr ch;
+      Exninfo.iraise e
   in
   let old_pstatev =
     match pstatev with OldParser pstatev -> pstatev | NdjsonParser _ -> !pstate

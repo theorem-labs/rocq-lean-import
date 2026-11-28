@@ -1,0 +1,14 @@
+# Log file, polarity, literal substring (tab-separated).
+path_deferred_legacy_saved.log.out	+	Done!
+path_deferred_legacy_saved.log.out	-	Error at line
+path_deferred_legacy_saved.log.out	-	Nat_pow is predeclared
+path_deferred_legacy.log.out	+	Nat_pow is predeclared
+path_deferred_legacy.log.out	+	line 202: RLIV.mix
+path_deferred_legacy.log.out	+	line 223: RLIV.mix_eq
+path_deferred_legacy.log.out	-	Error at line
+path_deferred_legacy.log.out	+	Done!
+path_deferred_legacy_pow.log.out	+	LeanImport.Lean.Nat_pow
+path_deferred_legacy_pow.log.out	-	Test.path_deferred_legacy.Nat_pow
+path_deferred_legacy_mix.log.out	+	Nat_pow
+path_deferred_legacy_mix.log.out	+	Char_ofNat
+path_deferred_legacy_mix.log.out	-	reflective

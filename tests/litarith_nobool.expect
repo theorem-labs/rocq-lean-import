@@ -1,0 +1,17 @@
+# Log file, polarity, literal substring (tab-separated).
+litarith_nobool_lib.log.out	+	Done!
+litarith_nobool_lib.log.out	-	the transport pass fails
+litarith_nobool_own.log.out	+	line 23889: RLI434L.own_mul: 1 argument(s) transported (
+litarith_nobool_own.log.out	-	(for RLI434L.own_mul)
+litarith_nobool_own.log.out	+	Done!
+litarith_nobool_own.log.out	-	the transport pass fails
+litarith_nobool_beq.log.out	+	line 24395: RLI434L.beq_small_t
+litarith_nobool_beq.log.out	-	RLI434L.beq_small_t: 
+litarith_nobool_beq.log.out	-	(for RLI434L.beq_small_t)
+litarith_nobool_beq.log.out	+	Done!
+litarith_nobool_beq.log.out	-	the transport pass fails
+litarith_nobool_dvd.log.out	+	line 24570: RLI434L.dvd_256
+litarith_nobool_dvd.log.out	-	RLI434L.dvd_256: 
+litarith_nobool_dvd.log.out	+	(for RLI434L.dvd_256)
+litarith_nobool_dvd.log.out	+	Done!
+litarith_nobool_dvd.log.out	-	the transport pass fails

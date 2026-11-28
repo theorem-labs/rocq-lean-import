@@ -1,0 +1,535 @@
+# Log file, polarity, literal substring (tab-separated).
+relcast_lib.log.out	+	Done!
+relcast_lib.log.out	-	Error at line
+relcast_lib.log.out	-	relevant argument(s) cast
+relcast_lib.log.out	-	the relevant pass
+relcast_theorem.log.out	+	RLI434RC.theorem_closed: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_theorem.log.out	-	the relevant pass
+relcast_theorem.log.out	-	the transport pass stops
+relcast_theorem.log.out	-	is refused
+relcast_theorem.log.out	-	Error at line
+relcast_theorem.log.out	+	Done!
+relcast_again.log.out	+	RLI434RC.again: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_again.log.out	-	RLI434RC_again__rel_eq_
+relcast_again.log.out	-	Error at line
+relcast_again.log.out	+	Done!
+relcast_data.log.out	+	(for RLI434RC.data_closed)
+relcast_data.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_data.log.out	-	relevant argument(s) cast
+relcast_data.log.out	-	the relevant pass
+relcast_data.log.out	+	Done!
+relcast_aux_closed.log.out	+	RLI434RC.aux_closed: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_aux_closed.log.out	-	the relevant pass
+relcast_aux_closed.log.out	-	is refused
+relcast_aux_closed.log.out	-	Error at line
+relcast_aux_closed.log.out	+	Done!
+relcast_aux_user.log.out	-	RLI434RC.aux_user: 
+relcast_aux_user.log.out	-	Error at line
+relcast_aux_user.log.out	+	Done!
+relcast_reverse_closed.log.out	+	RLI434RC.reverse_closed: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_reverse_closed__rel_eq_1)
+relcast_reverse_closed.log.out	-	the relevant pass
+relcast_reverse_closed.log.out	-	is refused
+relcast_reverse_closed.log.out	-	Error at line
+relcast_reverse_closed.log.out	+	Done!
+relcast_keep_sprop.log.out	+	RLI434RC.keep_sprop: 1 argument(s) transported (RLI434RC_keep_sprop__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_keep_sprop.log.out	-	the relevant pass
+relcast_keep_sprop.log.out	-	is refused
+relcast_keep_sprop.log.out	-	Error at line
+relcast_keep_sprop.log.out	+	Done!
+relcast_body_type.log.out	+	RLI434RC.body_type: 0 argument(s) transported (); 3 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_body_type.log.out	-	the relevant pass
+relcast_body_type.log.out	-	is refused
+relcast_body_type.log.out	-	Error at line
+relcast_body_type.log.out	+	Done!
+relcast_beta_visible.log.out	+	RLI434RC.beta_visible: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_beta_visible.log.out	-	the relevant pass
+relcast_beta_visible.log.out	-	is refused
+relcast_beta_visible.log.out	-	Error at line
+relcast_beta_visible.log.out	+	Done!
+relcast_beta_only.log.out	+	(for RLI434RC.beta_only)
+relcast_beta_only.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_beta_only.log.out	-	relevant argument(s) cast
+relcast_beta_only.log.out	-	the relevant pass
+relcast_beta_only.log.out	+	Done!
+relcast_beta_erased.log.out	-	RLI434RC.beta_erased: 
+relcast_beta_erased.log.out	-	Error at line
+relcast_beta_erased.log.out	+	Done!
+relcast_bare_domain.log.out	-	RLI434RC.bare_domain: 
+relcast_bare_domain.log.out	-	Error at line
+relcast_bare_domain.log.out	+	Done!
+relcast_no_fin.log.out	-	RLI434RC.no_fin: 
+relcast_no_fin.log.out	-	Error at line
+relcast_no_fin.log.out	+	Done!
+relcast_literal_only.log.out	-	RLI434RC.literal_only: 
+relcast_literal_only.log.out	-	Error at line
+relcast_literal_only.log.out	+	Done!
+relcast_over_double.log.out	-	RLI434RC.over_double: 
+relcast_over_double.log.out	-	Error at line
+relcast_over_double.log.out	+	Done!
+relcast_ofnat_2047.log.out	-	RLI434RC.ofnat_2047: 
+relcast_ofnat_2047.log.out	-	Error at line
+relcast_ofnat_2047.log.out	+	Done!
+relcast_ofnat_65535.log.out	-	RLI434RC.ofnat_65535: 
+relcast_ofnat_65535.log.out	-	Error at line
+relcast_ofnat_65535.log.out	+	Done!
+relcast_under_succ.log.out	+	(for RLI434RC.under_succ)
+relcast_under_succ.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_under_succ.log.out	-	relevant argument(s) cast
+relcast_under_succ.log.out	-	the relevant pass
+relcast_under_succ.log.out	+	Done!
+relcast_domain_product.log.out	+	(for RLI434RC.domain_product)
+relcast_domain_product.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_domain_product.log.out	-	relevant argument(s) cast
+relcast_domain_product.log.out	-	the relevant pass
+relcast_domain_product.log.out	+	Done!
+relcast_domain_var.log.out	+	(for RLI434RC.domain_var)
+relcast_domain_var.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_domain_var.log.out	-	relevant argument(s) cast
+relcast_domain_var.log.out	-	the relevant pass
+relcast_domain_var.log.out	+	Done!
+relcast_domain_alias.log.out	+	(for RLI434RC.domain_alias)
+relcast_domain_alias.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_domain_alias.log.out	-	relevant argument(s) cast
+relcast_domain_alias.log.out	-	the relevant pass
+relcast_domain_alias.log.out	+	Done!
+relcast_opaque_fun_type.log.out	+	(for RLI434RC.opaque_fun_type)
+relcast_opaque_fun_type.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_opaque_fun_type.log.out	-	relevant argument(s) cast
+relcast_opaque_fun_type.log.out	-	the relevant pass
+relcast_opaque_fun_type.log.out	+	Done!
+relcast_unreadable_argument.log.out	+	(for RLI434RC.unreadable_argument)
+relcast_unreadable_argument.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_unreadable_argument.log.out	-	relevant argument(s) cast
+relcast_unreadable_argument.log.out	-	the relevant pass
+relcast_unreadable_argument.log.out	+	Done!
+relcast_unreadable_prop_sort.log.out	+	(for RLI434RC.unreadable_prop_sort)
+relcast_unreadable_prop_sort.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_unreadable_prop_sort.log.out	-	relevant argument(s) cast
+relcast_unreadable_prop_sort.log.out	-	the relevant pass
+relcast_unreadable_prop_sort.log.out	+	Done!
+relcast_prop_alias.log.out	+	RLI434RC.prop_alias: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_theorem_closed__rel_eq_1)
+relcast_prop_alias.log.out	-	the relevant pass
+relcast_prop_alias.log.out	-	is refused
+relcast_prop_alias.log.out	-	Error at line
+relcast_prop_alias.log.out	+	Done!
+relcast_data_alias.log.out	+	(for RLI434RC.data_alias)
+relcast_data_alias.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_data_alias.log.out	-	relevant argument(s) cast
+relcast_data_alias.log.out	-	the relevant pass
+relcast_data_alias.log.out	+	Done!
+relcast_open_actual.log.out	+	(for RLI434RC.open_actual)
+relcast_open_actual.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_open_actual.log.out	-	relevant argument(s) cast
+relcast_open_actual.log.out	-	the relevant pass
+relcast_open_actual.log.out	+	Done!
+relcast_open_expected.log.out	+	(for RLI434RC.open_expected)
+relcast_open_expected.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_open_expected.log.out	-	relevant argument(s) cast
+relcast_open_expected.log.out	-	the relevant pass
+relcast_open_expected.log.out	+	Done!
+relcast_same_instance.log.out	-	RLI434RC.same_instance: 
+relcast_same_instance.log.out	-	Error at line
+relcast_same_instance.log.out	+	Done!
+relcast_same_head.log.out	-	RLI434RC.same_head: 
+relcast_same_head.log.out	-	Error at line
+relcast_same_head.log.out	+	Done!
+relcast_not_fin.log.out	-	RLI434RC.not_fin: 
+relcast_not_fin.log.out	-	Error at line
+relcast_not_fin.log.out	+	Done!
+relcast_nat_only.log.out	+	(for RLI434RC.nat_only)
+relcast_nat_only.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_nat_only.log.out	-	relevant argument(s) cast
+relcast_nat_only.log.out	-	the relevant pass
+relcast_nat_only.log.out	+	Done!
+relcast_mixed_holes.log.out	+	(for RLI434RC.mixed_holes)
+relcast_mixed_holes.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_mixed_holes.log.out	-	relevant argument(s) cast
+relcast_mixed_holes.log.out	-	the relevant pass
+relcast_mixed_holes.log.out	+	Done!
+relcast_fin_65536.log.out	+	(for RLI434RC.fin_65536)
+relcast_fin_65536.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_fin_65536.log.out	-	relevant argument(s) cast
+relcast_fin_65536.log.out	-	the relevant pass
+relcast_fin_65536.log.out	+	Done!
+relcast_fin_65537.log.out	+	(for RLI434RC.fin_65537)
+relcast_fin_65537.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_fin_65537.log.out	-	relevant argument(s) cast
+relcast_fin_65537.log.out	-	the relevant pass
+relcast_fin_65537.log.out	+	Done!
+relcast_h_pair.log.out	+	RLI434RC.h_pair: 1 argument(s) transported (RLI434RC_h_pair__nat_eq_1); 2 relevant argument(s) cast ()
+relcast_h_pair.log.out	-	the relevant pass
+relcast_h_pair.log.out	-	is refused
+relcast_h_pair.log.out	-	Error at line
+relcast_h_pair.log.out	+	Done!
+relcast_relhole_reverse.log.out	+	RLI434RC.relhole_reverse: 1 argument(s) transported (RLI434RC_relhole_reverse__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_h_pair__nat_eq_1)
+relcast_relhole_reverse.log.out	-	the relevant pass
+relcast_relhole_reverse.log.out	-	is refused
+relcast_relhole_reverse.log.out	-	Error at line
+relcast_relhole_reverse.log.out	+	Done!
+relcast_relhole_no_fin.log.out	+	RLI434RC.relhole_no_fin: the relevant pass keeps 0 of the SProp pass's 1 cast sites; no relevant argument is cast
+relcast_relhole_no_fin.log.out	+	RLI434RC.relhole_no_fin: 1 argument(s) transported (RLI434RC_relhole_no_fin__nat_eq_1)
+relcast_relhole_no_fin.log.out	-	relevant argument(s) cast
+relcast_relhole_no_fin.log.out	-	Error at line
+relcast_relhole_no_fin.log.out	+	Done!
+relcast_declared_B.log.out	+	RLI434RC.declared_B: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_declared_B.log.out	-	the relevant pass
+relcast_declared_B.log.out	-	is refused
+relcast_declared_B.log.out	-	Error at line
+relcast_declared_B.log.out	+	Done!
+relcast_no_trigger.log.out	-	RLI434RC.no_trigger: 
+relcast_no_trigger.log.out	-	Error at line
+relcast_no_trigger.log.out	+	Done!
+relcast_higher_domain.log.out	+	RLI434RC.higher_domain: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_higher_domain.log.out	-	the relevant pass
+relcast_higher_domain.log.out	-	is refused
+relcast_higher_domain.log.out	-	Error at line
+relcast_higher_domain.log.out	+	Done!
+relcast_universe_max.log.out	+	RLI434RC.universe_max: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_universe_max.log.out	-	the relevant pass
+relcast_universe_max.log.out	-	is refused
+relcast_universe_max.log.out	-	Error at line
+relcast_universe_max.log.out	+	Done!
+relcast_lemma_absent.log.out	+	RLI434RC.lemma_absent: 1 argument(s) transported (RLI434RC_lemma_absent__nat_eq_1)
+relcast_lemma_absent.log.out	-	relevant argument(s) cast
+relcast_lemma_absent.log.out	-	the relevant pass
+relcast_lemma_absent.log.out	-	Error at line
+relcast_lemma_absent.log.out	+	Done!
+relcast_two_holes_one_absent.log.out	+	RLI434RC.two_holes_one_absent: 1 argument(s) transported (RLI434RC_lemma_absent__nat_eq_1)
+relcast_two_holes_one_absent.log.out	-	relevant argument(s) cast
+relcast_two_holes_one_absent.log.out	-	the relevant pass
+relcast_two_holes_one_absent.log.out	-	Error at line
+relcast_two_holes_one_absent.log.out	+	Done!
+relcast_candidate_limit.log.out	+	(for RLI434RC.candidate_limit)
+relcast_candidate_limit.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_candidate_limit.log.out	-	relevant argument(s) cast
+relcast_candidate_limit.log.out	-	the relevant pass
+relcast_candidate_limit.log.out	+	Done!
+relcast_cap_mul_lo.log.out	+	RLI434RC.cap_mul: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_h_pair__nat_eq_1)
+relcast_cap_mul_lo.log.out	-	the relevant pass
+relcast_cap_mul_lo.log.out	-	is refused
+relcast_cap_mul_lo.log.out	-	Error at line
+relcast_cap_mul_lo.log.out	+	Done!
+relcast_cap_mul_at.log.out	+	RLI434RC.cap_mul: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_h_pair__nat_eq_1)
+relcast_cap_mul_at.log.out	-	the relevant pass
+relcast_cap_mul_at.log.out	-	is refused
+relcast_cap_mul_at.log.out	-	Error at line
+relcast_cap_mul_at.log.out	+	Done!
+relcast_cap_mul_hi.log.out	+	RLI434RC.cap_mul: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_h_pair__nat_eq_1)
+relcast_cap_mul_hi.log.out	-	the relevant pass
+relcast_cap_mul_hi.log.out	-	is refused
+relcast_cap_mul_hi.log.out	-	Error at line
+relcast_cap_mul_hi.log.out	+	Done!
+relcast_rel_arg_lo.log.out	+	RLI434RC.rel_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_rel_arg__rel_eq_1)
+relcast_rel_arg_lo.log.out	-	the relevant pass
+relcast_rel_arg_lo.log.out	-	Error at line
+relcast_rel_arg_lo.log.out	+	Done!
+relcast_rel_arg_at.log.out	+	RLI434RC.rel_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_rel_arg__rel_eq_1)
+relcast_rel_arg_at.log.out	-	the relevant pass
+relcast_rel_arg_at.log.out	-	Error at line
+relcast_rel_arg_at.log.out	+	Done!
+relcast_rel_arg_hi.log.out	+	RLI434RC.rel_arg: the relevant pass stops: it needs more than 107300 steps or a nesting deeper than 10000; no relevant argument is cast
+relcast_rel_arg_hi.log.out	+	RLI434RC.rel_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_rel_arg_hi.log.out	-	relevant argument(s) cast
+relcast_rel_arg_hi.log.out	-	Error at line
+relcast_rel_arg_hi.log.out	+	Done!
+relcast_rel_arg.log.out	+	RLI434RC.rel_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_rel_arg__rel_eq_1)
+relcast_rel_arg.log.out	-	the relevant pass
+relcast_rel_arg.log.out	-	is refused
+relcast_rel_arg.log.out	-	Error at line
+relcast_rel_arg.log.out	+	Done!
+relcast_rel_own_lib.log.out	+	RLI434RC.rel_own_lib: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_rel_own_lib__rel_eq_1)
+relcast_rel_own_lib.log.out	-	the relevant pass
+relcast_rel_own_lib.log.out	-	is refused
+relcast_rel_own_lib.log.out	-	Error at line
+relcast_rel_own_lib.log.out	+	Done!
+relcast_rel_own_lo.log.out	+	RLI434RC.rel_own: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 40 relevant argument(s) cast (RLI434RC_rel_own_lib__rel_eq_1)
+relcast_rel_own_lo.log.out	-	the relevant pass
+relcast_rel_own_lo.log.out	-	Error at line
+relcast_rel_own_lo.log.out	+	Done!
+relcast_rel_own_at.log.out	+	RLI434RC.rel_own: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 40 relevant argument(s) cast (RLI434RC_rel_own_lib__rel_eq_1)
+relcast_rel_own_at.log.out	-	the relevant pass
+relcast_rel_own_at.log.out	-	Error at line
+relcast_rel_own_at.log.out	+	Done!
+relcast_rel_own_hi.log.out	+	RLI434RC.rel_own: the relevant pass stops: it needs more than 9535 steps or a nesting deeper than 10000; no relevant argument is cast
+relcast_rel_own_hi.log.out	+	RLI434RC.rel_own: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_rel_own_hi.log.out	-	relevant argument(s) cast
+relcast_rel_own_hi.log.out	-	Error at line
+relcast_rel_own_hi.log.out	+	Done!
+relcast_rel_own.log.out	+	RLI434RC.rel_own: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 40 relevant argument(s) cast (RLI434RC_rel_own_lib__rel_eq_1)
+relcast_rel_own.log.out	-	the relevant pass
+relcast_rel_own.log.out	-	is refused
+relcast_rel_own.log.out	-	Error at line
+relcast_rel_own.log.out	+	Done!
+relcast_rel_total_hi.log.out	+	RLI434RC.rel_total_hi: the relevant pass stops: it needs more than 1500000 steps in total; no relevant argument is cast
+relcast_rel_total_hi.log.out	+	RLI434RC.rel_total_hi: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_rel_total_hi.log.out	-	relevant argument(s) cast
+relcast_rel_total_hi.log.out	-	Error at line
+relcast_rel_total_hi.log.out	+	Done!
+relcast_detect_arg_lo.log.out	+	RLI434RC.detect_arg: the relevant pass stops: it needs more than 6400 steps or a nesting deeper than 10000; no relevant argument is cast
+relcast_detect_arg_lo.log.out	+	RLI434RC.detect_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_detect_arg_lo.log.out	-	relevant argument(s) cast
+relcast_detect_arg_lo.log.out	-	Error at line
+relcast_detect_arg_lo.log.out	+	Done!
+relcast_detect_arg_at.log.out	+	RLI434RC.detect_arg: the relevant pass stops: it needs more than 6399 steps or a nesting deeper than 10000; no relevant argument is cast
+relcast_detect_arg_at.log.out	+	RLI434RC.detect_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_detect_arg_at.log.out	-	relevant argument(s) cast
+relcast_detect_arg_at.log.out	-	Error at line
+relcast_detect_arg_at.log.out	+	Done!
+relcast_detect_arg_hi.log.out	+	RLI434RC.detect_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1)
+relcast_detect_arg_hi.log.out	-	the relevant pass
+relcast_detect_arg_hi.log.out	-	relevant argument(s) cast
+relcast_detect_arg_hi.log.out	-	Error at line
+relcast_detect_arg_hi.log.out	+	Done!
+relcast_detect_arg.log.out	+	RLI434RC.detect_arg: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_detect_arg.log.out	-	the relevant pass
+relcast_detect_arg.log.out	-	is refused
+relcast_detect_arg.log.out	-	Error at line
+relcast_detect_arg.log.out	+	Done!
+relcast_detect_total_hi.log.out	+	RLI434RC.detect_total_hi: 1 argument(s) transported (RLI434RC_rel_arg__nat_eq_1); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_detect_total_hi.log.out	-	the relevant pass
+relcast_detect_total_hi.log.out	-	is refused
+relcast_detect_total_hi.log.out	-	Error at line
+relcast_detect_total_hi.log.out	+	Done!
+relcast_cache_after.log.out	+	RLI434RC.cache_after: 1 argument(s) transported (RLI434RC_cache_after__nat_eq_1)
+relcast_cache_after.log.out	-	relevant argument(s) cast
+relcast_cache_after.log.out	-	the relevant pass
+relcast_cache_after.log.out	-	Error at line
+relcast_cache_after.log.out	+	Done!
+relcast_param_mismatch.log.out	-	RLI434RC.param_mismatch: 
+relcast_param_mismatch.log.out	-	Error at line
+relcast_param_mismatch.log.out	+	Done!
+relcast_param_match.log.out	+	RLI434RC.param_match: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_param_match__rel_eq_1)
+relcast_param_match.log.out	-	the relevant pass
+relcast_param_match.log.out	-	is refused
+relcast_param_match.log.out	-	Error at line
+relcast_param_match.log.out	+	Done!
+relcast_bound_mismatch.log.out	-	RLI434RC.bound_mismatch: 
+relcast_bound_mismatch.log.out	-	Error at line
+relcast_bound_mismatch.log.out	+	Done!
+relcast_bound_match.log.out	+	RLI434RC.bound_match: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_bound_match__rel_eq_1)
+relcast_bound_match.log.out	-	the relevant pass
+relcast_bound_match.log.out	-	is refused
+relcast_bound_match.log.out	-	Error at line
+relcast_bound_match.log.out	+	Done!
+relcast_opaque_value.log.out	-	RLI434RC.opaque_value: 
+relcast_opaque_value.log.out	-	Error at line
+relcast_opaque_value.log.out	+	Done!
+relcast_readable_value.log.out	+	RLI434RC.readable_value: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_readable_value__rel_eq_1)
+relcast_readable_value.log.out	-	the relevant pass
+relcast_readable_value.log.out	-	is refused
+relcast_readable_value.log.out	-	Error at line
+relcast_readable_value.log.out	+	Done!
+relcast_sortpoly.log.out	+	RLI434RC.sortpoly: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_sortpoly.log.out	-	Error at line
+relcast_sortpoly.log.out	+	Done!
+relcast_sortpoly_data.log.out	-	rel_transport
+relcast_sortpoly_data.log.out	+	RLI434RC_decLeW
+relcast_sortpoly_prop.log.out	+	rel_transport
+relcast_record_mismatch.log.out	-	RLI434RC.record_mismatch: 
+relcast_record_mismatch.log.out	-	Error at line
+relcast_record_mismatch.log.out	+	Done!
+relcast_record_match.log.out	+	RLI434RC.record_match: 0 argument(s) transported (); 1 relevant argument(s) cast (RLI434RC_relhole_no_fin__rel_eq_1)
+relcast_record_match.log.out	-	the relevant pass
+relcast_record_match.log.out	-	is refused
+relcast_record_match.log.out	-	Error at line
+relcast_record_match.log.out	+	Done!
+relcast_head_stop.log.out	+	RLI434RC.head_stop_hit: the transport pass stops: it needs more than 2700 steps or a nesting deeper than 10000; the value is left as Lean's
+relcast_head_stop.log.out	+	(for RLI434RC.head_stop_hit)
+relcast_head_stop.log.out	+	Timed out after 10 s (Lean Entry Timeout)
+relcast_head_stop.log.out	-	the relevant pass
+relcast_head_stop.log.out	-	relevant argument(s) cast
+relcast_head_stop.log.out	+	Done!
+relcast_type_theorem_closed.log.out	+	RLI434RC_theorem_closed
+relcast_type_theorem_closed.log.out	+	     : Char -> True
+relcast_type_theorem_closed.log.out	-	rel_transport
+relcast_type_theorem_closed.log.out	-	sprop_transport
+relcast_type_declared_B.log.out	+	RLI434RC_declared_B
+relcast_type_declared_B.log.out	+	     : forall x : RLI434RC_W,
+relcast_type_declared_B.log.out	+	       eq
+relcast_type_declared_B.log.out	+	         (ite Nat
+relcast_type_declared_B.log.out	+	            (LE_le_inst1 RLI434RC_W RLI434RC_instLEW x
+relcast_type_declared_B.log.out	+	               (RLI434RC_mkW (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))))
+relcast_type_declared_B.log.out	+	            (RLI434RC_decLeW x
+relcast_type_declared_B.log.out	+	               (RLI434RC_wk (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))
+relcast_type_declared_B.log.out	+	                  RLI434RC_lw3))
+relcast_type_declared_B.log.out	+	            (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1))
+relcast_type_declared_B.log.out	+	            (OfNat_ofNat_inst1 Nat 2 (instOfNatNat 2)))
+relcast_type_declared_B.log.out	+	         (ite Nat
+relcast_type_declared_B.log.out	+	            (LE_le_inst1 RLI434RC_W RLI434RC_instLEW x
+relcast_type_declared_B.log.out	+	               (RLI434RC_mkW (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))))
+relcast_type_declared_B.log.out	+	            (RLI434RC_decLeW x
+relcast_type_declared_B.log.out	+	               (RLI434RC_wk (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))
+relcast_type_declared_B.log.out	+	                  RLI434RC_lw3))
+relcast_type_declared_B.log.out	+	            (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1))
+relcast_type_declared_B.log.out	+	            (OfNat_ofNat_inst1 Nat 2 (instOfNatNat 2)))
+relcast_type_declared_B.log.out	-	rel_transport
+relcast_type_declared_B.log.out	-	sprop_transport
+relcast_type_kind_axiom.log.out	+	RLI434RC_kind_axiom
+relcast_type_kind_axiom.log.out	+	     : forall x : RLI434RC_W,
+relcast_type_kind_axiom.log.out	+	       eq
+relcast_type_kind_axiom.log.out	+	         (ite Nat
+relcast_type_kind_axiom.log.out	+	            (LE_le_inst1 RLI434RC_W RLI434RC_instLEW x
+relcast_type_kind_axiom.log.out	+	               (RLI434RC_mkW (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))))
+relcast_type_kind_axiom.log.out	+	            (RLI434RC_decLeW x
+relcast_type_kind_axiom.log.out	+	               (RLI434RC_wk (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))
+relcast_type_kind_axiom.log.out	+	                  RLI434RC_lw3))
+relcast_type_kind_axiom.log.out	+	            (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1))
+relcast_type_kind_axiom.log.out	+	            (OfNat_ofNat_inst1 Nat 2 (instOfNatNat 2)))
+relcast_type_kind_axiom.log.out	+	         (ite Nat
+relcast_type_kind_axiom.log.out	+	            (LE_le_inst1 RLI434RC_W RLI434RC_instLEW x
+relcast_type_kind_axiom.log.out	+	               (RLI434RC_mkW (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))))
+relcast_type_kind_axiom.log.out	+	            (RLI434RC_decLeW x
+relcast_type_kind_axiom.log.out	+	               (RLI434RC_wk (OfNat_ofNat_inst1 Nat 3 (instOfNatNat 3))
+relcast_type_kind_axiom.log.out	+	                  RLI434RC_lw3))
+relcast_type_kind_axiom.log.out	+	            (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1))
+relcast_type_kind_axiom.log.out	+	            (OfNat_ofNat_inst1 Nat 2 (instOfNatNat 2)))
+relcast_type_kind_axiom.log.out	-	rel_transport
+relcast_type_kind_axiom.log.out	-	sprop_transport
+relcast_type_KindInd.log.out	+	Variant RLI434RC_KindInd@{} : SProp :=
+relcast_type_KindInd.log.out	+	    RLI434RC_KindInd_mk : forall x : RLI434RC_W,
+relcast_type_KindInd.log.out	+	                          eq
+relcast_type_KindInd.log.out	+	                            (ite Nat
+relcast_type_KindInd.log.out	+	                               (LE_le_inst1 RLI434RC_W RLI434RC_instLEW x
+relcast_type_KindInd.log.out	+	                                  (RLI434RC_mkW
+relcast_type_KindInd.log.out	+	                                     (OfNat_ofNat_inst1 Nat 3
+relcast_type_KindInd.log.out	+	                                        (instOfNatNat 3))))
+relcast_type_KindInd.log.out	+	                               (RLI434RC_decLeW x
+relcast_type_KindInd.log.out	+	                                  (RLI434RC_wk
+relcast_type_KindInd.log.out	+	                                     (OfNat_ofNat_inst1 Nat 3
+relcast_type_KindInd.log.out	+	                                        (instOfNatNat 3))
+relcast_type_KindInd.log.out	+	                                     RLI434RC_lw3))
+relcast_type_KindInd.log.out	+	                               (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1))
+relcast_type_KindInd.log.out	+	                               (OfNat_ofNat_inst1 Nat 2 (instOfNatNat 2)))
+relcast_type_KindInd.log.out	+	                            (OfNat_ofNat_inst1 Nat 1 (instOfNatNat 1)) ->
+relcast_type_KindInd.log.out	+	                          RLI434RC_KindInd.
+relcast_type_KindInd.log.out	+	Arguments RLI434RC_KindInd_mk x a____at____internal__hyg0
+relcast_type_KindInd.log.out	-	rel_transport
+relcast_type_KindInd.log.out	-	sprop_transport
+relcast_pa_theorem.log.out	+	Axioms:
+relcast_pa_theorem.log.out	+	eq relies on definitional UIP.
+relcast_pa_theorem.log.out	-	 :
+relcast_pa_again.log.out	+	Axioms:
+relcast_pa_again.log.out	+	eq relies on definitional UIP.
+relcast_pa_again.log.out	-	 :
+relcast_pa_aux_closed.log.out	+	Axioms:
+relcast_pa_aux_closed.log.out	+	eq relies on definitional UIP.
+relcast_pa_aux_closed.log.out	-	 :
+relcast_pa_aux_user.log.out	+	Axioms:
+relcast_pa_aux_user.log.out	+	eq relies on definitional UIP.
+relcast_pa_aux_user.log.out	-	 :
+relcast_pa_reverse_closed.log.out	+	Axioms:
+relcast_pa_reverse_closed.log.out	+	eq relies on definitional UIP.
+relcast_pa_reverse_closed.log.out	-	 :
+relcast_pa_keep_sprop.log.out	+	Axioms:
+relcast_pa_keep_sprop.log.out	+	eq relies on definitional UIP.
+relcast_pa_keep_sprop.log.out	-	 :
+relcast_pa_body_type.log.out	+	Axioms:
+relcast_pa_body_type.log.out	+	eq relies on definitional UIP.
+relcast_pa_body_type.log.out	-	 :
+relcast_pa_beta_visible.log.out	+	Axioms:
+relcast_pa_beta_visible.log.out	+	eq relies on definitional UIP.
+relcast_pa_beta_visible.log.out	-	 :
+relcast_pa_beta_erased.log.out	+	Axioms:
+relcast_pa_beta_erased.log.out	+	eq relies on definitional UIP.
+relcast_pa_beta_erased.log.out	-	 :
+relcast_pa_bare_domain.log.out	+	Axioms:
+relcast_pa_bare_domain.log.out	+	eq relies on definitional UIP.
+relcast_pa_bare_domain.log.out	-	 :
+relcast_pa_no_fin.log.out	+	Axioms:
+relcast_pa_no_fin.log.out	+	eq relies on definitional UIP.
+relcast_pa_no_fin.log.out	-	 :
+relcast_pa_literal_only.log.out	+	Axioms:
+relcast_pa_literal_only.log.out	+	eq relies on definitional UIP.
+relcast_pa_literal_only.log.out	-	 :
+relcast_pa_over_double.log.out	+	Axioms:
+relcast_pa_over_double.log.out	+	eq relies on definitional UIP.
+relcast_pa_over_double.log.out	-	 :
+relcast_pa_ofnat_2047.log.out	+	Axioms:
+relcast_pa_ofnat_2047.log.out	+	eq relies on definitional UIP.
+relcast_pa_ofnat_2047.log.out	-	 :
+relcast_pa_ofnat_65535.log.out	+	Axioms:
+relcast_pa_ofnat_65535.log.out	+	eq relies on definitional UIP.
+relcast_pa_ofnat_65535.log.out	-	 :
+relcast_pa_prop_alias.log.out	+	Axioms:
+relcast_pa_prop_alias.log.out	+	eq relies on definitional UIP.
+relcast_pa_prop_alias.log.out	-	 :
+relcast_pa_same_instance.log.out	+	Axioms:
+relcast_pa_same_instance.log.out	+	eq relies on definitional UIP.
+relcast_pa_same_instance.log.out	-	 :
+relcast_pa_same_head.log.out	+	Axioms:
+relcast_pa_same_head.log.out	+	eq relies on definitional UIP.
+relcast_pa_same_head.log.out	-	 :
+relcast_pa_not_fin.log.out	+	Axioms:
+relcast_pa_not_fin.log.out	+	eq relies on definitional UIP.
+relcast_pa_not_fin.log.out	-	 :
+relcast_pa_h_pair.log.out	+	Axioms:
+relcast_pa_h_pair.log.out	+	eq relies on definitional UIP.
+relcast_pa_h_pair.log.out	-	 :
+relcast_pa_relhole_reverse.log.out	+	Axioms:
+relcast_pa_relhole_reverse.log.out	+	eq relies on definitional UIP.
+relcast_pa_relhole_reverse.log.out	-	 :
+relcast_pa_relhole_no_fin.log.out	+	Axioms:
+relcast_pa_relhole_no_fin.log.out	+	eq relies on definitional UIP.
+relcast_pa_declared_B.log.out	+	Axioms:
+relcast_pa_declared_B.log.out	+	eq relies on definitional UIP.
+relcast_pa_declared_B.log.out	-	 :
+relcast_pa_no_trigger.log.out	+	Axioms:
+relcast_pa_no_trigger.log.out	+	eq relies on definitional UIP.
+relcast_pa_no_trigger.log.out	-	 :
+relcast_pa_higher_domain.log.out	+	Axioms:
+relcast_pa_higher_domain.log.out	+	eq relies on definitional UIP.
+relcast_pa_higher_domain.log.out	-	 :
+relcast_pa_universe_max.log.out	+	Axioms:
+relcast_pa_universe_max.log.out	+	eq relies on definitional UIP.
+relcast_pa_universe_max.log.out	-	 :
+relcast_pa_lemma_absent.log.out	+	Axioms:
+relcast_pa_lemma_absent.log.out	+	eq relies on definitional UIP.
+relcast_pa_lemma_absent.log.out	-	 :
+relcast_pa_two_holes_one_absent.log.out	+	Axioms:
+relcast_pa_two_holes_one_absent.log.out	+	eq relies on definitional UIP.
+relcast_pa_two_holes_one_absent.log.out	-	 :
+relcast_pa_rel_arg.log.out	+	Axioms:
+relcast_pa_rel_arg.log.out	+	eq relies on definitional UIP.
+relcast_pa_rel_arg.log.out	-	 :
+relcast_pa_rel_own_lib.log.out	+	Axioms:
+relcast_pa_rel_own_lib.log.out	+	eq relies on definitional UIP.
+relcast_pa_rel_own_lib.log.out	-	 :
+relcast_pa_rel_own.log.out	+	Axioms:
+relcast_pa_rel_own.log.out	+	eq relies on definitional UIP.
+relcast_pa_rel_own.log.out	-	 :
+relcast_pa_rel_total_hi.log.out	+	Axioms:
+relcast_pa_rel_total_hi.log.out	+	eq relies on definitional UIP.
+relcast_pa_rel_total_hi.log.out	-	 :
+relcast_pa_detect_arg.log.out	+	Axioms:
+relcast_pa_detect_arg.log.out	+	eq relies on definitional UIP.
+relcast_pa_detect_arg.log.out	-	 :
+relcast_pa_detect_total_hi.log.out	+	Axioms:
+relcast_pa_detect_total_hi.log.out	+	eq relies on definitional UIP.
+relcast_pa_detect_total_hi.log.out	-	 :
+relcast_pa_cache_after.log.out	+	Axioms:
+relcast_pa_cache_after.log.out	+	eq relies on definitional UIP.
+relcast_pa_cache_after.log.out	-	 :
+relcast_pa_param_mismatch.log.out	+	Axioms:
+relcast_pa_param_mismatch.log.out	+	eq relies on definitional UIP.
+relcast_pa_param_mismatch.log.out	-	 :
+relcast_pa_param_match.log.out	+	Axioms:
+relcast_pa_param_match.log.out	+	eq relies on definitional UIP.
+relcast_pa_param_match.log.out	-	 :
+relcast_pa_bound_mismatch.log.out	+	Axioms:
+relcast_pa_bound_mismatch.log.out	+	eq relies on definitional UIP.
+relcast_pa_bound_mismatch.log.out	-	 :
+relcast_pa_bound_match.log.out	+	Axioms:
+relcast_pa_bound_match.log.out	+	eq relies on definitional UIP.
+relcast_pa_bound_match.log.out	-	 :
+relcast_pa_opaque_value.log.out	+	Axioms:
+relcast_pa_opaque_value.log.out	+	eq relies on definitional UIP.
+relcast_pa_opaque_value.log.out	-	 :
+relcast_pa_readable_value.log.out	+	Axioms:
+relcast_pa_readable_value.log.out	+	eq relies on definitional UIP.
+relcast_pa_readable_value.log.out	-	 :
+relcast_pa_record_mismatch.log.out	+	Axioms:
+relcast_pa_record_mismatch.log.out	+	eq relies on definitional UIP.
+relcast_pa_record_mismatch.log.out	-	 :
+relcast_pa_record_match.log.out	+	Axioms:
+relcast_pa_record_match.log.out	+	eq relies on definitional UIP.
+relcast_pa_record_match.log.out	-	 :

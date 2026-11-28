@@ -2,5 +2,7 @@ LeanName
 LeanParseShared
 LeanParse
 LeanParseNdjson
+LeanChargedTerm
+LeanNatTransport
 Lean
 G_lean

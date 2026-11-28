@@ -1,0 +1,31 @@
+# Log file, polarity, literal substring (tab-separated).
+# A repeated or second id field: the record is refused and the next record of its kind is read at that id.
+parse_unclear_id.log.out	+	Skipping: Error at line 132 (for line-132)
+parse_unclear_id.log.out	+	NDJSON parse error at line 132: more than one id field: in, in
+parse_unclear_id.log.out	-	Error at line 133 (
+parse_unclear_id.log.out	+	NDJSON parse error at line 134: more than one id field: il, ie
+parse_unclear_id.log.out	-	Error at line 135 (
+parse_unclear_id.log.out	+	NDJSON parse error at line 136: more than one id field: ie, ie
+parse_unclear_id.log.out	-	Error at line 137 (
+# No payload tag and no clear next id: unsupported.
+parse_unclear_id.log.out	+	NDJSON parse error at line 138: unsupported NDJSON record
+parse_unclear_id.log.out	+	NDJSON parse error at line 139: unsupported NDJSON record
+parse_unclear_id.log.out	+	NDJSON parse error at line 140: unsupported NDJSON record
+parse_unclear_id.log.out	+	NDJSON parse error at line 141: unsupported NDJSON record
+# A tagged record whose id is not an integer or out of sequence.
+parse_unclear_id.log.out	+	NDJSON parse error at line 142: field il must be an integer
+parse_unclear_id.log.out	+	NDJSON parse error at line 143: field ie must be an integer
+parse_unclear_id.log.out	+	NDJSON parse error at line 144: expression id 95 is not the next expected id 91
+parse_unclear_id.log.out	+	NDJSON parse error at line 145: name id 77 is not the next expected id 33
+parse_unclear_id.log.out	+	NDJSON parse error at line 146: unsupported NDJSON record
+# The next name, level and expression after them, and the axioms.
+parse_unclear_id.log.out	-	Error at line 147 (
+parse_unclear_id.log.out	-	Error at line 148 (
+parse_unclear_id.log.out	-	Error at line 149 (
+parse_unclear_id.log.out	+	line 150: RLIUnclear
+parse_unclear_id.log.out	-	Error at line 150 (
+parse_unclear_id.log.out	+	line 151: RLIUnclearNext
+parse_unclear_id.log.out	-	Error at line 151 (
+parse_unclear_id.log.out	-	of a refused line
+parse_unclear_id.log.out	+	Done!
+parse_unclear_id.log.out	+	Skipped 12

@@ -1,0 +1,8 @@
+# Log file, polarity, literal substring (tab-separated).
+utf8size_transport_one.log.out	+	line 11238: Char.utf8Size_eq_one_iff: 4 argument(s) transported (Char_utf8Size_eq_one_iff__nat_eq_1, Char_utf8Size_eq_one_iff__nat_eq_2)
+utf8size_transport_one.log.out	-	Error at line
+utf8size_transport_one.log.out	+	Done!
+# The generated lemma relies on the definitional UIP of Lean's eq and of what it is built from, and on nothing else:
+# the whole Print Assumptions output (an axiom would add "name : type", an unchecked elimination "X relies on
+# unchecked sort eliminations.").
+utf8size_transport_one_lemma.log.out	=	Axioms:\neq_inst1 relies on definitional UIP.\neq relies on definitional UIP.\nTrue relies on definitional UIP.\nHEq_inst1 relies on definitional UIP.\n
